@@ -1,0 +1,52 @@
+{
+    "name": "C++ Development",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": ".."
+    },
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
+    "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+    "runArgs": [
+        "--gpus=all"
+    ],
+    "hostRequirements": {
+        "gpu": true
+    },
+    "remoteUser": "vscode",
+    "containerEnv": {
+        "CODEX_HOME": "${containerWorkspaceFolder}/.codex-logs",
+        "TZ": "Asia/Tokyo",
+        "NVIDIA_VISIBLE_DEVICES": "all",
+        "NVIDIA_DRIVER_CAPABILITIES": "compute,utility"
+    },
+    "customizations": {
+        "vscode": { 
+            "extensions": [ 
+                "ms-vscode.cpptools", 
+                "ms-vscode.cmake-tools", 
+                "nvidia.nsight-vscode-edition" 
+            ], 
+            "settings": { 
+                "terminal.integrated.defaultProfile.linux": "bash", 
+                "cmake.generator": "Ninja", 
+                "cmake.buildDirectory": "${workspaceFolder}/build/debug", 
+                "C_Cpp.default.cppStandard": "c++20", 
+                "C_Cpp.default.cStandard": "c17", 
+                "C_Cpp.default.includePath": [ 
+                    "${workspaceFolder}/include", 
+                    "${workspaceFolder}/include/**", 
+                    "/usr/local/cuda/targets/x86_64-linux/include" 
+                ] 
+            }
+        }
+    },
+    "postCreateCommand": {
+        "createDirs": "mkdir -p ${containerWorkspaceFolder}/.vscode ${containerWorkspaceFolder}/.codex-logs ${containerWorkspaceFolder}/include ${containerWorkspaceFolder}/src ${containerWorkspaceFolder}/build/debug",
+
+        "checkCuda": "nvcc --version",
+        "checkCodex": "codex --version",
+        "checkGit": "git --version",
+
+        "initGit": "cd ${containerWorkspaceFolder} && if [ ! -d .git ]; then git init -b main; fi"
+    }
+}
