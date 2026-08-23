@@ -3,10 +3,10 @@
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 
-class cuCUBLAS{
+class cuCublas{
 public:
-    cuCUBLAS()  {cublasCreate( &_hCuda );}
-    ~cuCUBLAS() {cublasDestroy( _hCuda );}
+    cuCublas()  {cublasCreate( &_hCuda );}
+    ~cuCublas() {cublasDestroy( _hCuda );}
 
     cublasHandle_t get() const  {return _hCuda;}
 private:
@@ -15,6 +15,6 @@ private:
 
 cublasHandle_t getCublasHandle()
 {
-    static cuCUBLAS cuCublas;
+    static cuCublas cuCublas;
     return cuCublas.get();
 }
