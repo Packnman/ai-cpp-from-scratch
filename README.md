@@ -12,3 +12,76 @@ U^{(i+1)} = \boldsymbol{W}^{(i)}\boldsymbol{Z}^{(i)} + \boldsymbol{b}^{(i)}
 \\
 \frac{\partial E_p}{\partial b} = \Delta^{(i)}\boldsymbol{v}^T
 $$
+
+# ReLU
+$$
+max(0,x)
+$$
+
+# GeLU
+順伝播
+$$
+x\Phi(x)
+\\
+\Phi(x) = \frac{1}{2}
+\left(
+1+erf\left(\frac{x}{\sqrt{2}}\right)
+\right)
+$$
+\
+近似式は
+$$
+\frac{1}{2}x
+\left[
+1+tanh
+\left(
+\sqrt{\frac{2}{\pi}}(x+0.0447115x^3)
+\right)
+\right]
+$$
+整理すると
+$$
+\\
+y=\frac{1}{2}x(1+tanh(u))
+\\
+u=c(x+0.044715x^3)
+$$
+\
+逆伝播
+$$
+\left(
+x\Phi(x)
+\right)'
+=
+\Phi(x) + x\phi(x)
+\\
+=\frac{1}{2}
+\left(
+1+erf\left(\frac{x}{\sqrt{2}}\right)
+\right)
++
+\frac{x}{\sqrt{2\pi}}e^{-x^2/2}
+$$
+近似式は、
+$$
+\frac{dy}{dx}=\frac{1}{2}x(1+tanh(u))+\frac{1}{2}x(1-tanh^2(u))c(1+3・0.044715x^2)
+$$
+
+# Softmax/CrossEntropy
+順伝播
+\
+| 記号 | 意味 |
+| -- | :-- |
+| $B$ | バッチ数 |
+| $L$ | 誤差関数 |
+$$
+p_{ib}  = \frac{e^{z_{ib}}}{\sum_je^{z_{jb}}}
+\\
+L=-\frac{1}{B}\sum_b\sum_it_{ib}\log{p_{ib}}
+\\
+$$
+\
+逆伝播
+$$
+\frac{\partial L}{\partial z}=\frac{p-t}{B}
+$$

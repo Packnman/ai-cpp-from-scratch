@@ -4,22 +4,32 @@
 #include <stdexcept>
 #include <string>
 
-cuMat::cuMat(int nRows,int nCols)
-    :_nRows( nRows ),
-     _nCols( nCols ),
-     _lpfDevice( nullptr )
+cuMat::cuMat()
 {
+    this->_nRows        =0;
+    this->_nCols        =0;
+    this->_lpfDevice    =nullptr;
+}
+cuMat::cuMat(int nRows,int nCols)
+{
+    this->_nRows        =nRows;
+    this->_nCols        =nCols;
     // GPU VRAM
-    cudaMalloc( reinterpret_cast<void**>(&_lpfDevice),_nRows*_nCols*sizeof(float) );
+    cudaMalloc(
+        reinterpret_cast<void**>(&this->_lpfDevice),
+        nRows*nCols*sizeof(float)
+    );
 }
 
 cuMat::cuMat(const cuMat& val)
-    :_nRows( val._nRows ),
-     _nCols( val._nCols ),
-     _lpfDevice( nullptr )
 {
+    this->_nRows        =val._nRows;
+    this->_nCols        =val._nCols;
     // GPU VRAM
-    cudaMalloc( reinterpret_cast<void**>(&_lpfDevice),_nRows*_nCols*sizeof(float) );
+    cudaMalloc(
+        reinterpret_cast<void**>(&this->_lpfDevice),
+        val._nRows*val._nCols*sizeof(float)
+    );
 
     // 
     cudaError_t err =cudaMemcpy(
@@ -43,7 +53,8 @@ cuMat::cuMat(const cuMat& val)
 cuMat::~cuMat()
 {
     // メモリ解放
-    cudaFree( _lpfDevice ); _lpfDevice  =nullptr;
+    cudaFree( _lpfDevice );
+    _lpfDevice  =nullptr;
 }
 cuMat& cuMat::operator=(const cuMat& val)
 {

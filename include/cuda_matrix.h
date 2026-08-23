@@ -7,6 +7,7 @@ class Mat;
 
 class cuMat{
 public:
+    cuMat();
     cuMat(int nRows,int nCols);
     cuMat(const cuMat& val);
     ~cuMat();
@@ -43,4 +44,21 @@ void cuda_ReLU_backward(
     cuMat& rst,         // 求める勾配 ∂L/∂x を加算する先
     const cuMat& data,  // ReLUへの入力 x
     const cuMat& grad   // 上流から来た勾配 ∂L/∂y
+);
+void cuda_GELU_forward(cuMat& rst,const cuMat& value);
+void cuda_GELU_backward(
+    cuMat& rst,
+    const cuMat& data,
+    const cuMat& grad
+);
+void cuda_SoftmaxCrossEntropy_forward(
+    cuMat& rst,
+    const cuMat& logits,
+    const cuMat& target
+);
+void cuda_SoftmaxCrossEntropy_backward(
+    cuMat& logitsGrad,
+    const cuMat& logits,
+    const cuMat& target,
+    const cuMat& grad
 );

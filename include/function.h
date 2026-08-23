@@ -2,7 +2,7 @@
 
 #include <vector>
 #include <memory>
-#include "cuMat.h"
+#include "cuda_matrix.h"
 
 class Tensor;
 
@@ -14,9 +14,6 @@ public:
     Function();
     virtual ~Function();
 private:
-protected:
-    std::vector<std::shared_ptr<Tensor>>  _spInputs;
-    std::vector<std::shared_ptr<Tensor>>  _spOutputs;
 public:
     virtual void backward(
         cuMat& grad,
@@ -27,6 +24,26 @@ public:
         std::vector<std::shared_ptr<Tensor>>& inputs,
         std::vector<std::shared_ptr<Tensor>>& outputs
     );
+    //
+    std::shared_ptr<Tensor> operator()(
+        std::vector<std::shared_ptr<Tensor>>& inputs
+    );
+};
+
+// --------------------------
+// Context
+// --------------------------
+class Context{
+public:
+    Context();
+    virtual ~Context();
+private:
+protected:
+public:
+    Function* _lpFunc;
+
+    std::vector<std::shared_ptr<Tensor>> _spInputs;
+    std::vector<std::weak_ptr<Tensor>>   _wpOutputs;
 };
 
 // --------------------------
@@ -60,6 +77,7 @@ public:
     Linear(Tensor* lpWeight,Tensor* lpBias);
     ~Linear();
 protected:
+public:
     Tensor* _lpmWeight;
     Tensor* _lpmBias;
     cuMat   _mTmp;
@@ -76,13 +94,35 @@ public:
 };
 
 // --------------------------
-// GeRU
+// GELU
 // --------------------------
-class GeRU: public Function
+class GELU: public Function
 {
 public:
-    GeRU();
-    ~GeRU();
+    GELU();
+    ~GELU();
+protected:
+
+public:
+    virtual void backward(
+        cuMat& grad,
+        std::vector<std::shared_ptr<Tensor>>& inputs,
+        std::vector<std::shared_ptr<Tensor>>& outputs
+    );
+    virtual std::shared_ptr<Tensor> forward(
+        std::vector<std::shared_ptr<Tensor>>& inputs,
+        std::vector<std::shared_ptr<Tensor>>& outputs
+    );
+};
+
+// --------------------------
+// SoftmaxCrossEntropy
+// --------------------------
+class SoftmaxCrossEntropy: public Function
+{
+public:
+    SoftmaxCrossEntropy();
+    ~SoftmaxCrossEntropy();
 protected:
 
 public:
