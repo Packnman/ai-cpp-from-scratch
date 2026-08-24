@@ -106,7 +106,7 @@ cuMat& cuMat::operator=(cuMat&& val) noexcept
 
     return *this;
 }
-void cuMat::upload(Mat& host)
+void cuMat::upload(Mat& host) const
 {
     cudaMemcpy(
         host._lpfHost,
@@ -220,10 +220,10 @@ void cuda_geam(cuMat& rst,float alpha,const cuMat& A,float beta,const cuMat& B)
 
 // R = α*op(A)*op(B) + β*op(B)
 void cuda_gemm(cuMat& rst,const cuMat& A,const cuMat& B,
-               bool trpA=false,
-               bool trpB=false,
-               float alpha=1.0f,
-               float beta=0.0f
+               bool trpA,
+               bool trpB,
+               float alpha,
+               float beta
 )
 {
     // cublasSgemm

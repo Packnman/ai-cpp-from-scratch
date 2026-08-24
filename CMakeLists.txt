@@ -2,32 +2,40 @@ cmake_minimum_required(VERSION 3.18)
 
 project(ai_cpp LANGUAGES CXX CUDA)
 
-# C++ / CUDA standard
+find_package(CUDAToolkit REQUIRED)
+include(CTest)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CUDA_STANDARD 20)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+set(CMAKE_CUDA_EXTENSIONS OFF)
 
-# RTX 3060 Ti = Compute Capability 8.6
-set(CMAKE_CUDA_ARCHITECTURES 86)
+set(AI_CPP_CUDA_ARCHITECTURES "86" CACHE STRING
+    "CUDA architectures to build for (for example: 86 or 86;89)")
 
-# 実行ファイル
-add_executable(ai_cpp
-    tests/main.cpp
+add_library(ai_cpp STATIC
+    src/cuda_matrix.cpp
+    src/cuda_matrix.cu
+    src/function.cpp
+    src/graph.cpp
+    src/matrix.cpp
+    src/optimizer.cpp
+    src/tensor.cpp
+)
+target_include_directories(ai_cpp PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(ai_cpp PUBLIC CUDA::cudart CUDA::cublas)
+set_target_properties(ai_cpp PROPERTIES
+    CUDA_ARCHITECTURES "${AI_CPP_CUDA_ARCHITECTURES}"
 )
 
-# include/
-target_include_directories(ai_cpp
-    PRIVATE
-    ${PROJECT_SOURCE_DIR}/include
+add_executable(cuda_check tests/cuda_check.cu)
+target_link_libraries(cuda_check PRIVATE CUDA::cudart)
+set_target_properties(cuda_check PROPERTIES
+    CUDA_ARCHITECTURES "${AI_CPP_CUDA_ARCHITECTURES}"
 )
 
-# CUDAライブラリ
-find_package(CUDAToolkit REQUIRED)
-
-target_link_libraries(ai_cpp
-    PRIVATE
-    CUDA::cudart
-    CUDA::cublas
-)
+if(BUILD_TESTING)
+    add_test(NAME cuda_check COMMAND cuda_check)
+endif()

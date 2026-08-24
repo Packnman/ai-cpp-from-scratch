@@ -174,12 +174,5 @@ std::shared_ptr<Tensor> Model::forward(
 // モデル全体の学習パラメータを返す
 std::vector<Tensor*> Model::getParams()
 {
-    std::vector<Tensor*> lpmParams    =getParams();
-
-    for( int i=0;i<static_cast<int>(lpmParams.size());i++ )
-    {
-        if( lpmParams[i]==nullptr )   {continue;}
-        //
-        cuda_fill( lpmParams[i]->_mGrad,0.0f );
-    }
+    return {};
 }
