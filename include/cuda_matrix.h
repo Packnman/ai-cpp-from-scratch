@@ -17,7 +17,7 @@ public:
     int     _nRows;
     int     _nCols;
 public:
-    void upload(Mat& host);
+    void upload(Mat& host) const;
     void download(const Mat& host);
     void ones();
     
@@ -39,6 +39,9 @@ void cuda_fill(cuMat& rst,float value); // R[:] = value
 void cuda_transpose(cuMat& rst,const cuMat& A); // R = A^T
 void cuda_scale(cuMat& rst,float value);    // R *= value
 void cuda_mul_elementwise(cuMat& rst,const cuMat& A,const cuMat& B);  // R = A ⦿ B
+
+
+
 void cuda_ReLU_forward(cuMat& rst,const cuMat& value);
 void cuda_ReLU_backward(
     cuMat& rst,         // 求める勾配 ∂L/∂x を加算する先
@@ -61,4 +64,17 @@ void cuda_SoftmaxCrossEntropy_backward(
     const cuMat& logits,
     const cuMat& target,
     const cuMat& grad
+);
+
+void cuda_Adam_update(
+    cuMat& data,
+    const cuMat& grad,
+    cuMat& m,
+    cuMat& v,
+    float learningRate,
+    float beta1,
+    float beta2,
+    float beta1Correction,
+    float beta2Correction,
+    float epsiolon
 );

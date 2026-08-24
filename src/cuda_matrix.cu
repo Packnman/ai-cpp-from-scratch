@@ -12,7 +12,7 @@ __global__ void kernel_GELU_forward(float* rst,const float* value,int size);
 __global__ void kernel_GELU_backward(float* rst,const float* data,const float* grad,int size);
 __global__ void kernel_SoftmaxCrossEntropy_forward(float* rst,const float* logits,const float* target,int nClass,int nBatch);
 __global__ void kernel_SoftmaxCrossEntropy_backward(float* rst,const float* logits,const float* target,const float* grad,int nClass,int nBatch);
-
+__global__ void kernel_Adam_update(float* data,const float* grad,float* m,float* v,float learningRate,float beta1,float beta2,float beta1Correction,float beta2Correction,float epsilon,int size);
 
 void cuMat::ones()
 {
@@ -304,6 +304,56 @@ void cuda_SoftmaxCrossEntropy_backward(
         );
     }
 }
+void cuda_Adam_update(
+    cuMat& data,
+    const cuMat& grad,
+    cuMat& m,
+    cuMat& v,
+    float learningRate,
+    float beta1,
+    float beta2,
+    float beta1Correction,
+    float beta2Correction,
+    float epsilon
+)
+{
+    if( (data._nRows!=grad._nRows)||(data._nCols!=grad._nCols)||
+        (data._nRows!=m._nRows)||(data._nCols!=m._nCols)||
+        (data._nRows!=v._nRows)||(data._nCols!=v._nCols) )
+    {
+        throw std::runtime_error(
+            "cuda_Adam_update: matrix size mismatch"
+        );
+    }
+
+    int nSize       =data._nRows*data._nCols;
+    int nThreads    =256;
+    int nBlocks     =(nSize+nThreads-1)/nThreads;
+    if( nSize<=0 )  {return;}
+    //
+    kernel_Adam_update<<<nBlocks,nThreads>>>(
+        data._lpfDevice,
+        grad._lpfDevice,
+        m._lpfDevice,
+        v._lpfDevice,
+        learningRate,
+        beta1,
+        beta2,
+        beta1Correction,
+        beta2Correction,
+        epsilon,
+        nSize
+    );
+
+    cudaError_t error   =cudaGetLastError();
+    if( error!=cudaSuccess )
+    {
+        throw std::runtime_error(
+            "cuda_Adam_update: kernel launch failed"
+        );
+    }
+}
+
 
 __global__ void kernel_fill(float* rst,float value,int size)
 {
@@ -445,5 +495,24 @@ __global__ void kernel_SoftmaxCrossEntropy_backward(float* rst,const float* logi
 
             rst[idx]    +=grad[0]*(fSoftmax-target[idx])/static_cast<float>(nBatch);
         }
+    }
+}
+__global__ void kernel_Adam_update(float* data,const float* grad,float* m,float* v,float learningRate,float beta1,float beta2,float beta1Correction,float beta2Correction,float epsilon,int size)
+{
+    int i   =blockIdx.x * blockDim.x + threadIdx.x;
+
+    if( i<size )
+    {
+        float fGrad =grad[i];
+
+        // 1次モーメント
+        m[i]    =beta1*m[i] + (1.0f-beta1)*fGrad;
+        // 2次モーメント
+        v[i]    =beta2*v[i] + (1.0f-beta2)*fGrad*fGrad;
+        // Bias Correction
+        float mHat  =m[i]/beta1Correction;
+        float vHat  =v[i]/beta2Correction;
+        // Parameter update
+        data[i] -=learningRate*mHat/(sqrtf(vHat)+epsilon);
     }
 }

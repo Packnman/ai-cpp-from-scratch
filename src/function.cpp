@@ -60,6 +60,19 @@ std::shared_ptr<Tensor> Function::operator()(
 }
 
 // --------------------------
+// Context
+// --------------------------
+Context::Context()
+{
+    _lpFunc =nullptr;
+}
+Context::~Context()
+{
+
+}
+
+
+// --------------------------
 // ReLU
 // --------------------------
 ReLU::ReLU()
@@ -105,7 +118,6 @@ std::shared_ptr<Tensor> ReLU::forward(
     }
     //
     Tensor* lpTensor    =new Tensor(
-        this,
         inputs[0]->_mData._nRows,
         inputs[0]->_mData._nCols
     );
@@ -212,7 +224,6 @@ std::shared_ptr<Tensor> Linear::forward(
     }
     //
     Tensor* lpTensor    =new Tensor(
-        this,
         _lpmWeight->_mData._nRows,
         inputs[0]->_mData._nCols
     );
@@ -285,7 +296,6 @@ std::shared_ptr<Tensor> GELU::forward(
     }
 
     Tensor* lpTensor    =new Tensor(
-        this,
         inputs[0]->_mData._nRows,
         inputs[0]->_mData._nCols
     );
@@ -365,7 +375,6 @@ std::shared_ptr<Tensor> SoftmaxCrossEntropy::forward(
     }
     //
     Tensor* lpTensor    =new Tensor(
-        this,
         1,
         1
     );
