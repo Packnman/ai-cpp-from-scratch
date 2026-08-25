@@ -10,6 +10,7 @@ public:
     cuMat();
     cuMat(int nRows,int nCols);
     cuMat(const cuMat& val);
+    cuMat(cuMat&& val) noexcept;
     ~cuMat();
 private:
 public:

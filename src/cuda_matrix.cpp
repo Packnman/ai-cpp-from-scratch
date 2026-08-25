@@ -49,7 +49,16 @@ cuMat::cuMat(const cuMat& val)
         );
     }
 }
+cuMat::cuMat(cuMat&& val) noexcept
+{
+    _nRows        =val._nRows;
+    _nCols        =val._nCols;
+    _lpfDevice    =val._lpfDevice;
 
+    val._nRows      =0;
+    val._nCols      =0;
+    val._lpfDevice  =nullptr;
+}
 cuMat::~cuMat()
 {
     // メモリ解放
