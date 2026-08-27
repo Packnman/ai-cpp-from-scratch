@@ -15,6 +15,8 @@ class OptimizerParams{
 public:
     OptimizerParams();
     virtual ~OptimizerParams();
+    virtual std::vector<cuMat*> stateMatrices();
+    virtual std::vector<const cuMat*> stateMatrices() const;
 };
 
 // --------------------------
@@ -31,6 +33,7 @@ public:
     virtual ~Optimizer();
 private:
 protected:
+    bool _initialized;
     Model*  _lpModel;
     float   _fLearningRate;
     int     _nStep;         // update回数
@@ -40,12 +43,15 @@ protected:
 
 public:
     virtual void init();
+    void save_checkpoint(const char* path) const;
+    void load_checkpoint(const char* path);
     virtual void update();
     virtual void zero_grads();
 
 protected:
     virtual std::shared_ptr<OptimizerParams> createOptimizerParams(Tensor* lpTensor);
     virtual void update_param(Tensor* lpTensor,OptimizerParams* lpOptimizerParams);
+    virtual int optimizerKind() const;
 };
 
 // --------------------------
@@ -67,6 +73,7 @@ public:
 protected:
     std::shared_ptr<OptimizerParams> createOptimizerParams(Tensor* lpTensor) override;
     void update_param(Tensor* lpTensor,OptimizerParams* lpOptimizerParams) override;
+    int optimizerKind() const override;
 };
 
 
@@ -77,6 +84,8 @@ class AdamParams : public OptimizerParams{
 public:
     AdamParams(int nRows,int nCols);
     ~AdamParams();
+    std::vector<cuMat*> stateMatrices() override;
+    std::vector<const cuMat*> stateMatrices() const override;
 public:
     cuMat   _mM;
     cuMat   _mV;
@@ -92,4 +101,5 @@ public:
 protected:
     std::shared_ptr<OptimizerParams> createOptimizerParams(Tensor* lpTensor) override;
     void update_param(Tensor* lpTensor,OptimizerParams* lpOptimizerParams) override;
+    int optimizerKind() const override;
 };

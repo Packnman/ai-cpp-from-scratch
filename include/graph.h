@@ -50,7 +50,7 @@ public:
     virtual ~Model();
 
 public:
-    virtual void save(const char* szFName);
+    virtual void save(const char* szFName) const;
     virtual void load(const char* szFName);
     virtual void zero_grads();
     virtual void reset_state();
