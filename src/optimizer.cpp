@@ -29,14 +29,6 @@ OptimizerParams::~OptimizerParams()
 //  ・各Tensorの勾配を使ってパラメータを更新する
 //  ・Optimizer固有の状態を管理する
 // --------------------------
-std::vector<cuMat*> OptimizerParams::stateMatrices()
-{
-    return {};
-}
-std::vector<const cuMat*> OptimizerParams::stateMatrices() const
-{
-    return {};
-}
 Optimizer::Optimizer(Model* lpModel,float fLearningRate)
 {
     if( lpModel==nullptr )
@@ -45,11 +37,9 @@ Optimizer::Optimizer(Model* lpModel,float fLearningRate)
             "Optimizer: model is null"
         );
     }
-
     _lpModel        =lpModel;
     _fLearningRate  =fLearningRate;
     _nStep          =0;
-    _initialized    =false;
 }
 Optimizer::~Optimizer()
 {
@@ -66,7 +56,6 @@ void Optimizer::init()
         std::shared_ptr<OptimizerParams> spParams   =createOptimizerParams( _lpParams[i] );
         _spOptimizerParams.push_back( spParams );
     }
-    _initialized =true;
 }
 void Optimizer::update()
 {
@@ -123,14 +112,6 @@ SGD::~SGD()
 {
 
 }
-int Optimizer::optimizerKind()const
-{
-    return 0;
-}
-int SGD::optimizerKind()const
-{
-    return 0;
-}
 std::shared_ptr<OptimizerParams>
 SGD::createOptimizerParams(Tensor* lpTensor)
 {
@@ -168,20 +149,6 @@ AdamParams::~AdamParams()
 // --------------------------
 // Adam
 // --------------------------
-std::vector<cuMat*> AdamParams::stateMatrices()
-{
-    return {
-        &_mM,
-        &_mV
-    };
-}
-std::vector<const cuMat*> AdamParams::stateMatrices() const
-{
-    return {
-        &_mM,
-        &_mV
-    };
-}
 Adam::Adam(Model* lpModel,float fLearningRate)
     :Optimizer(lpModel,fLearningRate)
 {
@@ -233,8 +200,4 @@ void Adam::update_param(Tensor* lpTensor,OptimizerParams* lpOptimizerParams)
         fBeta2Correction,
         fEpsilon
     );
-}
-int Adam::optimizerKind()const
-{
-    return 1;
 }
