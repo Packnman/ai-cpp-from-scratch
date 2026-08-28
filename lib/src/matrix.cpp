@@ -16,7 +16,7 @@ Mat::Mat(int nRows,int nCols)
 Mat::Mat(const Mat& val)
     :_nRows( val._nRows ),
      _nCols( val._nCols ),
-     _lpfHost( (float*)malloc( val._nRows*val._nCols*sizeof(float) )
+     _lpfHost( (float*)malloc(val._nRows*val._nCols*sizeof(float)) )
 {
     memcpy( _lpfHost,val._lpfHost,_nRows*_nCols*sizeof(float) );
 }

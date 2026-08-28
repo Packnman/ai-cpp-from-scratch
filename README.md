@@ -57,10 +57,13 @@ CUDA 確認ターゲットだけをビルドしてテストする場合は次を
 
 ```text
 .
-├── include/   公開ヘッダー
-├── src/       C++/CUDA 実装
-├── tests/     CUDA 動作確認プログラム
-└── scripts/   ビルド・テスト用スクリプト
+├── include/       MNISTアプリケーション用ヘッダー
+├── src/           MNISTアプリケーション実装
+├── lib/
+│   ├── include/   行列・Tensor・Graph・Optimizerの公開ヘッダー
+│   └── src/       C++/CUDAライブラリ実装
+├── tests/         CUDA動作確認プログラム
+└── scripts/       ビルド・テスト用スクリプト
 ```
 
 ## 数式・実装メモ

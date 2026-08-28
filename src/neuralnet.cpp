@@ -154,6 +154,14 @@ NeuralNet::~NeuralNet()
 {
 
 }
+void NeuralNet::save(const char* szFName)
+{
+    Model::save( szFName );
+}
+void NeuralNet::load(const char* szFName)
+{
+    Model::load( szFName );
+}
 std::shared_ptr<Tensor> NeuralNet::forward(
     std::vector<std::shared_ptr<Tensor>>& inputs
 )

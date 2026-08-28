@@ -56,7 +56,7 @@ int main(int argc,char** argv)
             << accuracy*100.0f
             << "%\n";
 
-        model.Model::save( "mnist_model.bin" );
+        model.save( "mnist_model.bin" );
     }
     catch( const std::exception& error )
     {
