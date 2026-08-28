@@ -1,5 +1,5 @@
 #pragma once
-
+#include <random>
 #include <memory>
 #include "cuda_tensor.h"
 #include "cuda_function.h"

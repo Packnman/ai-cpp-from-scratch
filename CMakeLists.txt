@@ -22,6 +22,7 @@ add_library(ai_cpp STATIC
     src/cuda_tensor.cpp
     src/graph.cpp
     src/matrix.cpp
+    src/mnist.cpp
     src/optimizer.cpp
     src/neuralnet.cpp
 )
@@ -36,6 +37,9 @@ target_link_libraries(cuda_check PRIVATE CUDA::cudart)
 set_target_properties(cuda_check PROPERTIES
     CUDA_ARCHITECTURES "${AI_CPP_CUDA_ARCHITECTURES}"
 )
+
+add_executable(mnist_train src/main.cpp)
+target_link_libraries(mnist_train PRIVATE ai_cpp)
 
 if(BUILD_TESTING)
     add_test(NAME cuda_check COMMAND cuda_check)

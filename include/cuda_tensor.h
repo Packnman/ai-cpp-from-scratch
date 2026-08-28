@@ -10,10 +10,10 @@ public:
     ~Tensor();
 private:
 public:
-    cuMat       _mData;
-    cuMat       _mGrad;
+    cuMat   _mData; // 行列内容
+    cuMat   _mGrad; // 微分値
 
-    std::shared_ptr<Context> _spContexts;
+    std::shared_ptr<Context> _spContexts;   // 使用関数
 public:
     void backward();
 private:
