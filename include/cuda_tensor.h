@@ -2,7 +2,7 @@
 #include <vector>
 #include <unordered_set>
 #include "cuda_matrix.h"
-#include "function.h"
+#include "cuda_function.h"
 
 class Tensor{
 public:

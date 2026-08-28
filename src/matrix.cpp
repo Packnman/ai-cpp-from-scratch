@@ -7,25 +7,24 @@
 
 
 Mat::Mat(int nRows,int nCols)
+    :_nRows( nRows ),
+     _nCols( nCols ),
+     _lpfHost( (float*)malloc(nRows*nCols*sizeof(float)) )
 {
-    _nRows      =nRows;
-    _nCols      =nCols;
-    _lpfHost    =(float*)malloc( _nRows*_nCols*sizeof(float) );
+    
 }
 Mat::Mat(const Mat& val)
+    :_nRows( val._nRows ),
+     _nCols( val._nCols ),
+     _lpfHost( (float*)malloc( val._nRows*val._nCols*sizeof(float) )
 {
-    _nRows      =val._nRows;
-    _nCols      =val._nCols;
-    _lpfHost    =(float*)malloc( _nRows*_nCols*sizeof(float) );
-
     memcpy( _lpfHost,val._lpfHost,_nRows*_nCols*sizeof(float) );
 }
 Mat::Mat(Mat&& val) noexcept
+    :_nRows( val._nRows ),
+     _nCols( val._nCols ),
+     _lpfHost( val._lpfHost )
 {
-    _nRows      =val._nRows;
-    _nCols      =val._nCols;
-    _lpfHost    =val._lpfHost;
-
     val._nRows      =0;
     val._nCols      =0;
     val._lpfHost    =nullptr;

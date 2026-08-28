@@ -2,8 +2,8 @@
 
 #include <vector>
 #include <memory>
-#include "function.h"
-#include "tensor.h"
+#include "cuda_function.h"
+#include "cuda_tensor.h"
 
 // --------------------------
 // Graph

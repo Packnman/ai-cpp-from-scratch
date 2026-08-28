@@ -2,7 +2,7 @@
 #include <math.h>
 
 #include "graph.h"
-#include "tensor.h"
+#include "cuda_tensor.h"
 #include "optimizer.h"
 
 
@@ -30,6 +30,9 @@ OptimizerParams::~OptimizerParams()
 //  ・Optimizer固有の状態を管理する
 // --------------------------
 Optimizer::Optimizer(Model* lpModel,float fLearningRate)
+    :_lpModel( lpModel ),
+     _fLearningRate( fLearningRate ),
+     _nStep( 0 )
 {
     if( lpModel==nullptr )
     {
@@ -37,9 +40,6 @@ Optimizer::Optimizer(Model* lpModel,float fLearningRate)
             "Optimizer: model is null"
         );
     }
-    _lpModel        =lpModel;
-    _fLearningRate  =fLearningRate;
-    _nStep          =0;
 }
 Optimizer::~Optimizer()
 {
@@ -137,9 +137,11 @@ void SGD::update_param(Tensor* lpTensor,OptimizerParams* lpOptimizerParams)
 // AdamParams
 // --------------------------
 AdamParams::AdamParams(int nRows,int nCols)
+    :_mM( nRows,nCols ),
+     _mV( nRows,nCols )
 {
-    _mM =cuMat( nRows,nCols );  cuda_fill( _mM,0.0f );
-    _mV =cuMat( nRows,nCols );  cuda_fill( _mV,0.0f );
+    cuda_fill( _mM,0.0f );
+    cuda_fill( _mV,0.0f );
 }
 AdamParams::~AdamParams()
 {

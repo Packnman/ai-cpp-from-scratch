@@ -18,9 +18,9 @@ public:
     ~Mat();
 private:
 public:
-    float*  _lpfHost;
     int     _nRows;
     int     _nCols;
+    float*  _lpfHost;
 public:
     void ones();
     float tri() const;

@@ -1,7 +1,7 @@
 #include <iostream>
 #include <stdexcept>
 #include "matrix.h"
-#include "tensor.h"
+#include "cuda_tensor.h"
 #include "graph.h"
 
 

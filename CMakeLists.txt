@@ -18,11 +18,12 @@ set(AI_CPP_CUDA_ARCHITECTURES "86" CACHE STRING
 add_library(ai_cpp STATIC
     src/cuda_matrix.cpp
     src/cuda_matrix.cu
-    src/function.cpp
+    src/cuda_function.cpp
+    src/cuda_tensor.cpp
     src/graph.cpp
     src/matrix.cpp
     src/optimizer.cpp
-    src/tensor.cpp
+    src/neuralnet.cpp
 )
 target_include_directories(ai_cpp PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(ai_cpp PUBLIC CUDA::cudart CUDA::cublas)

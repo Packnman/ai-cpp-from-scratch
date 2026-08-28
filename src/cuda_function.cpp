@@ -1,8 +1,8 @@
 #include <iostream>
 #include <stdio.h>
 #include "cuda_matrix.h"
-#include "tensor.h"
-#include "function.h"
+#include "cuda_tensor.h"
+#include "cuda_function.h"
 
 // --------------------------
 // Function
@@ -136,9 +136,10 @@ std::shared_ptr<Tensor> ReLU::forward(
 // Linear
 // --------------------------
 Linear::Linear(Tensor* lpWeight,Tensor* lpBias)
+    :_lpmWeight( lpWeight ),
+     _lpmBias( lpBias )
 {
-    this->_lpmWeight    =lpWeight;
-    this->_lpmBias      =lpBias;
+    
 }
 Linear::~Linear()
 {

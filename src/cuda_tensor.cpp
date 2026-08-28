@@ -1,16 +1,15 @@
 #include <iostream>
 #include <stdio.h>
-#include "function.h"
-#include "tensor.h"
+#include "cuda_function.h"
+#include "cuda_tensor.h"
 
 
 Tensor::Tensor(int rows,int cols)
+    :_mData( rows,cols ),
+     _mGrad( rows,cols ),
+     _spContexts( nullptr )
 {
-    _mData      =cuMat( rows,cols );
-    _mGrad      =cuMat( rows,cols );
     cuda_fill( _mGrad,0.0f );
-    //
-    _spContexts =nullptr;
 }
 Tensor::~Tensor()
 {

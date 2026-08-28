@@ -5,29 +5,32 @@
 #include <string>
 
 cuMat::cuMat()
+    :_nRows( 0 ),
+     _nCols( 0 ),
+     _lpfDevice( nullptr )
 {
-    this->_nRows        =0;
-    this->_nCols        =0;
-    this->_lpfDevice    =nullptr;
+    
 }
 cuMat::cuMat(int nRows,int nCols)
+    :_nRows( nRows ),
+     _nCols( nCols ),
+     _lpfDevice( nullptr )
 {
-    this->_nRows        =nRows;
-    this->_nCols        =nCols;
     // GPU VRAM
     cudaMalloc(
-        reinterpret_cast<void**>(&this->_lpfDevice),
+        reinterpret_cast<void**>(&_lpfDevice),
         nRows*nCols*sizeof(float)
     );
 }
 
 cuMat::cuMat(const cuMat& val)
+    :_nRows( val._nRows ),
+     _nCols( val._nCols ),
+     _lpfDevice( nullptr )
 {
-    this->_nRows        =val._nRows;
-    this->_nCols        =val._nCols;
     // GPU VRAM
     cudaMalloc(
-        reinterpret_cast<void**>(&this->_lpfDevice),
+        reinterpret_cast<void**>(&_lpfDevice),
         val._nRows*val._nCols*sizeof(float)
     );
 
@@ -50,11 +53,10 @@ cuMat::cuMat(const cuMat& val)
     }
 }
 cuMat::cuMat(cuMat&& val) noexcept
+    :_nRows( val._nRows ),
+     _nCols( val._nCols ),
+     _lpfDevice( val._lpfDevice )
 {
-    _nRows        =val._nRows;
-    _nCols        =val._nCols;
-    _lpfDevice    =val._lpfDevice;
-
     val._nRows      =0;
     val._nCols      =0;
     val._lpfDevice  =nullptr;
