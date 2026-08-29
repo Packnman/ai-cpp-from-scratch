@@ -21,7 +21,7 @@ add_library(ai_cpp STATIC
     lib/src/cuda_matrix.cu
     lib/src/cuda_function.cpp
     lib/src/cuda_tensor.cpp
-    lib/src/graph.cpp
+    lib/src/module.cpp
     lib/src/matrix.cpp
     lib/src/optimizer.cpp
 )
@@ -49,5 +49,23 @@ target_include_directories(mnist_train PRIVATE
 target_link_libraries(mnist_train PRIVATE ai_cpp)
 
 if(BUILD_TESTING)
+    add_executable(multi_output_check tests/multi_output_check.cpp)
+    target_include_directories(multi_output_check PRIVATE
+        ${PROJECT_SOURCE_DIR}/lib/include
+    )
+    target_link_libraries(multi_output_check PRIVATE ai_cpp)
+
+    add_executable(model_state_check
+        tests/model_state_check.cpp
+        src/neuralnet.cpp
+    )
+    target_include_directories(model_state_check PRIVATE
+        ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/lib/include
+    )
+    target_link_libraries(model_state_check PRIVATE ai_cpp)
+
     add_test(NAME cuda_check COMMAND cuda_check)
+    add_test(NAME multi_output_check COMMAND multi_output_check)
+    add_test(NAME model_state_check COMMAND model_state_check)
 endif()

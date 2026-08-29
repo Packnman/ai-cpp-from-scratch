@@ -1,9 +1,22 @@
 #pragma once
-#include <vector>
+
+#include <cstdint>
 #include <memory>
+#include <string>
+#include <vector>
+
 #include "cuda_matrix.h"
+
 class Model;
 class Tensor;
+
+template<class ParameterState>
+struct OptimizerState
+{
+    float _fLearningRate =0.0f;
+    std::uint64_t _nStep =0;
+    std::vector<ParameterState> _prmParameters;
+};
 
 // --------------------------
 // OptimizerParams
@@ -33,7 +46,7 @@ private:
 protected:
     Model*  _lpModel;
     float   _fLearningRate;
-    int     _nStep;         // update回数
+    std::uint64_t _nStep;   // update回数
     
     std::vector<Tensor*>    _lpParams;
     std::vector<std::shared_ptr<OptimizerParams>>   _spOptimizerParams;
@@ -44,8 +57,8 @@ public:
     virtual void zero_grads();
 
 protected:
-    virtual std::shared_ptr<OptimizerParams> createOptimizerParams(Tensor* lpTensor);
-    virtual void update_param(Tensor* lpTensor,OptimizerParams* lpOptimizerParams);
+    virtual std::shared_ptr<OptimizerParams> createOptimizerParams(Tensor* lpTensor) =0;
+    virtual void update_param(Tensor* lpTensor,OptimizerParams* lpOptimizerParams) =0;
 };
 
 // --------------------------
@@ -71,6 +84,17 @@ protected:
 
 
 // --------------------------
+// Adamのパラメータごとの状態を名前付きで参照する。
+// --------------------------
+struct NamedAdamState
+{
+    std::string _strName;
+    cuMat* _lpmFirstMoment =nullptr;
+    cuMat* _lpmSecondMoment =nullptr;
+};
+
+using AdamState =OptimizerState<NamedAdamState>;
+// --------------------------
 // AdamParams
 // --------------------------
 class AdamParams : public OptimizerParams{
@@ -78,8 +102,8 @@ public:
     AdamParams(int nRows,int nCols);
     ~AdamParams();
 public:
-    cuMat   _mM;
-    cuMat   _mV;
+    cuMat   _mM;    // 勾配の移動平均
+    cuMat   _mV;    // 勾配二乗の移動平均
 };
 
 // --------------------------

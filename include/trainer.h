@@ -15,53 +15,59 @@
 #include "optimizer.h"
 
 struct TrainConfig {
-    int             epochs;
-    int             batchSize;
-    std::uint32_t   seed;
+    int             _nEpochs;
+    int             _nBatchSize;
+    std::uint32_t   _nSeed;
 };
 
 struct SupervisedBatch {
-    std::shared_ptr<Tensor> input;
-    std::shared_ptr<Tensor> target;
-    std::size_t             size;
+    std::shared_ptr<Tensor> _spmInput;
+    std::shared_ptr<Tensor> _spmTarget;
+    std::size_t             _nSize;
+};
+
+struct TrainingState
+{
+    int _nEpoch =0;
+    std::uint64_t _nGlobalStep =0;
 };
 
 namespace trainer_detail {
 
-inline std::vector<std::size_t> makeIndices(std::size_t size)
+inline std::vector<std::size_t> makeIndices(std::size_t nSize)
 {
-    std::vector<std::size_t> indices( size );
-    std::iota( indices.begin(),indices.end(),0 );
+    std::vector<std::size_t> nIndices( nSize );
+    std::iota( nIndices.begin(),nIndices.end(),0 );
 
-    return indices;
+    return nIndices;
 }
 
-inline float readScalar(const std::shared_ptr<Tensor>& tensor)
+inline float readScalar(const std::shared_ptr<Tensor>& c_spmTensor)
 {
-    if( (tensor==nullptr)||
-        (tensor->_mData._nRows!=1)||
-        (tensor->_mData._nCols!=1) )
+    if( (c_spmTensor==nullptr)||
+        (c_spmTensor->_mData._nRows!=1)||
+        (c_spmTensor->_mData._nCols!=1) )
     {
         throw std::runtime_error(
             "trainer: loss tensor must have shape 1 x 1"
         );
     }
 
-    Mat host( 1,1 );
-    tensor->_mData.upload( host );
+    Mat mHost( 1,1 );
+    c_spmTensor->_mData.upload( mHost );
 
-    return host( 0,0 );
+    return mHost( 0,0 );
 }
 
-inline void validateConfig(const TrainConfig& config)
+inline void validateConfig(const TrainConfig& c_cfgConfig)
 {
-    if( config.epochs<=0 )
+    if( c_cfgConfig._nEpochs<=0 )
     {
         throw std::runtime_error(
             "trainer: epochs must be positive"
         );
     }
-    if( config.batchSize<=0 )
+    if( c_cfgConfig._nBatchSize<=0 )
     {
         throw std::runtime_error(
             "trainer: batch size must be positive"
@@ -73,136 +79,138 @@ inline void validateConfig(const TrainConfig& config)
 
 template<class ModelType,class DatasetType>
 void train(
-    ModelType& model,
-    Optimizer& optimizer,
-    const DatasetType& dataset,
-    const TrainConfig& config
+    ModelType& mdlModel,
+    Optimizer& optOptimizer,
+    const DatasetType& c_dtsDataset,
+    const TrainConfig& c_cfgConfig
 )
 {
-    trainer_detail::validateConfig( config );
-    if( dataset.size()==0 )
+    trainer_detail::validateConfig( c_cfgConfig );
+    if( c_dtsDataset.size()==0 )
     {
         throw std::runtime_error(
             "train: dataset is empty"
         );
     }
 
-    std::vector<std::size_t> indices    =trainer_detail::makeIndices( dataset.size() );
-    std::mt19937 random( config.seed );
+    std::vector<std::size_t> nIndices =trainer_detail::makeIndices(
+        c_dtsDataset.size()
+    );
+    std::mt19937 rngRandom( c_cfgConfig._nSeed );
 
-    optimizer.init();
+    optOptimizer.init();
 
-    for( int epoch=0;epoch<config.epochs;epoch++ )
+    for( int nEpoch=0;nEpoch<c_cfgConfig._nEpochs;++nEpoch )
     {
-        std::shuffle( indices.begin(),indices.end(),random );
+        std::shuffle( nIndices.begin(),nIndices.end(),rngRandom );
 
-        double lossSum =0.0;
-        std::size_t sampleCount =0;
+        double dblLossSum =0.0;
+        std::size_t nSampleCount =0;
 
-        for( std::size_t begin=0;
-             begin<indices.size();
-             begin+=static_cast<std::size_t>(config.batchSize) )
+        for( std::size_t nBegin=0;
+             nBegin<nIndices.size();
+             nBegin+=static_cast<std::size_t>(c_cfgConfig._nBatchSize) )
         {
-            std::size_t count   =std::min<std::size_t>(
-                static_cast<std::size_t>(config.batchSize),
-                indices.size()-begin
+            std::size_t nCount =std::min<std::size_t>(
+                static_cast<std::size_t>(c_cfgConfig._nBatchSize),
+                nIndices.size()-nBegin
             );
-            SupervisedBatch batch   =dataset.makeBatch(
-                indices,    // inputs
-                begin,      // targets
-                count       // size
+            SupervisedBatch batBatch =c_dtsDataset.makeBatch(
+                nIndices,
+                nBegin,
+                nCount
             );
-            if( (batch.input==nullptr)||
-                (batch.target==nullptr)||
-                (batch.size!=count) )
+            if( (batBatch._spmInput==nullptr)||
+                (batBatch._spmTarget==nullptr)||
+                (batBatch._nSize!=nCount) )
             {
                 throw std::runtime_error(
                     "train: dataset returned an invalid batch"
                 );
             }
 
-            optimizer.zero_grads();
+            optOptimizer.zero_grads();
 
-            std::shared_ptr<Tensor> loss =model.loss(
-                batch.input,
-                batch.target
+            std::shared_ptr<Tensor> spmLoss =mdlModel.loss(
+                batBatch._spmInput,
+                batBatch._spmTarget
             );
-            loss->backward();
+            spmLoss->backward();
 
-            float batchLoss =trainer_detail::readScalar( loss );
-            optimizer.update();
+            float fBatchLoss =trainer_detail::readScalar( spmLoss );
+            optOptimizer.update();
 
-            lossSum +=static_cast<double>(batchLoss)*batch.size;
-            sampleCount +=batch.size;
+            dblLossSum +=static_cast<double>(fBatchLoss)*batBatch._nSize;
+            nSampleCount +=batBatch._nSize;
         }
 
         printf(
             "epoch %d/%d  loss=%.6f\n",
-            epoch + 1,
-            config.epochs,
-            lossSum / (double)sampleCount
+            nEpoch + 1,
+            c_cfgConfig._nEpochs,
+            dblLossSum /static_cast<double>(nSampleCount)
         );
     }
 }
 
 template<class ModelType,class DatasetType,class MetricType>
 float evaluate(
-    ModelType& model,
-    const DatasetType& dataset,
-    int batchSize,
-    MetricType metric
+    ModelType& mdlModel,
+    const DatasetType& c_dtsDataset,
+    int nBatchSize,
+    MetricType metMetric
 )
 {
-    if( batchSize<=0 )
+    if( nBatchSize<=0 )
     {
         throw std::runtime_error(
             "evaluate: batch size must be positive"
         );
     }
-    if( dataset.size()==0 )
+    if( c_dtsDataset.size()==0 )
     {
         throw std::runtime_error(
             "evaluate: dataset is empty"
         );
     }
 
-    std::vector<std::size_t> indices =
-        trainer_detail::makeIndices( dataset.size() );
+    std::vector<std::size_t> nIndices =
+        trainer_detail::makeIndices( c_dtsDataset.size() );
     std::size_t nCorrect =0;
 
-    for( std::size_t begin=0;
-         begin<indices.size();
-         begin+=static_cast<std::size_t>(batchSize) )
+    for( std::size_t nBegin=0;
+         nBegin<nIndices.size();
+         nBegin+=static_cast<std::size_t>(nBatchSize) )
     {
-        std::size_t count =std::min<std::size_t>(
-            static_cast<std::size_t>(batchSize),
-            indices.size()-begin
+        std::size_t nCount =std::min<std::size_t>(
+            static_cast<std::size_t>(nBatchSize),
+            nIndices.size()-nBegin
         );
-        SupervisedBatch batch =dataset.makeBatch(
-            indices,
-            begin,
-            count
+        SupervisedBatch batBatch =c_dtsDataset.makeBatch(
+            nIndices,
+            nBegin,
+            nCount
         );
-        if( (batch.input==nullptr)||
-            (batch.target==nullptr)||
-            (batch.size!=count) )
+        if( (batBatch._spmInput==nullptr)||
+            (batBatch._spmTarget==nullptr)||
+            (batBatch._nSize!=nCount) )
         {
             throw std::runtime_error(
                 "evaluate: dataset returned an invalid batch"
             );
         }
 
-        std::vector<std::shared_ptr<Tensor>> inputs{
-            batch.input
+        std::vector<std::shared_ptr<Tensor>> spmInputs{
+            batBatch._spmInput
         };
-        std::shared_ptr<Tensor> output =model.forward( inputs );
+        std::shared_ptr<Tensor> spmOutput =mdlModel.forward( spmInputs );
 
-        nCorrect +=metric(
-            output,
-            batch.target
+        nCorrect +=metMetric(
+            spmOutput,
+            batBatch._spmTarget
         );
     }
 
     return static_cast<float>(nCorrect)/
-           static_cast<float>(dataset.size());
+           static_cast<float>(c_dtsDataset.size());
 }

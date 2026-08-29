@@ -1,7 +1,7 @@
 #include <iostream>
 #include <math.h>
 
-#include "graph.h"
+#include "module.h"
 #include "cuda_tensor.h"
 #include "optimizer.h"
 
@@ -51,18 +51,23 @@ void Optimizer::init()
     _lpParams   =_lpModel->getParams();
     _spOptimizerParams.clear();
 
-    for( int i=0;i<static_cast<int>(_lpParams.size());i++ )
+    for( int nParam=0;nParam<static_cast<int>(_lpParams.size());++nParam )
     {
-        std::shared_ptr<OptimizerParams> spParams   =createOptimizerParams( _lpParams[i] );
+        std::shared_ptr<OptimizerParams> spParams =createOptimizerParams(
+            _lpParams[nParam]
+        );
         _spOptimizerParams.push_back( spParams );
     }
 }
 void Optimizer::update()
 {
     _nStep++;
-    for( int i=0;i<static_cast<int>(_lpParams.size());i++ )
+    for( int nParam=0;nParam<static_cast<int>(_lpParams.size());++nParam )
     {
-        update_param( _lpParams[i],_spOptimizerParams[i].get() );
+        update_param(
+            _lpParams[nParam],
+            _spOptimizerParams[nParam].get()
+        );
     }
 }
 void Optimizer::zero_grads()
@@ -115,6 +120,7 @@ SGD::~SGD()
 std::shared_ptr<OptimizerParams>
 SGD::createOptimizerParams(Tensor* lpTensor)
 {
+    (void)lpTensor;
     SGDParams* lpParamsSGD  =new SGDParams(
         // Non
     );
@@ -124,6 +130,7 @@ SGD::createOptimizerParams(Tensor* lpTensor)
 }
 void SGD::update_param(Tensor* lpTensor,OptimizerParams* lpOptimizerParams)
 {
+    (void)lpOptimizerParams;
     // W = W - LearingRate * grad
     cuda_axpy(
         lpTensor->_mData,
@@ -183,12 +190,18 @@ void Adam::update_param(Tensor* lpTensor,OptimizerParams* lpOptimizerParams)
         );
     }
 
-    const float fBeta1      =0.9f;
-    const float fBeta2      =0.999f;
-    const float fEpsilon    =1.0e-8f;
+    const float c_fBeta1      =0.9f;
+    const float c_fBeta2      =0.999f;
+    const float c_fEpsilon    =1.0e-8f;
 
-    float fBeta1Correction  =1.0f - powf(fBeta1,static_cast<float>(_nStep));
-    float fBeta2Correction  =1.0f - powf(fBeta2,static_cast<float>(_nStep));
+    float fBeta1Correction =1.0f -powf(
+        c_fBeta1,
+        static_cast<float>(_nStep)
+    );
+    float fBeta2Correction =1.0f -powf(
+        c_fBeta2,
+        static_cast<float>(_nStep)
+    );
 
     cuda_Adam_update(
         lpTensor->_mData,
@@ -196,10 +209,10 @@ void Adam::update_param(Tensor* lpTensor,OptimizerParams* lpOptimizerParams)
         lpAdamParams->_mM,
         lpAdamParams->_mV,
         _fLearningRate,
-        fBeta1,
-        fBeta2,
+        c_fBeta1,
+        c_fBeta2,
         fBeta1Correction,
         fBeta2Correction,
-        fEpsilon
+        c_fEpsilon
     );
 }

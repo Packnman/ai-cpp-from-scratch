@@ -6,20 +6,20 @@
 
 class Tensor{
 public:
-    Tensor(int rows,int cols);
+    Tensor(int nRows,int nCols);
     ~Tensor();
 private:
 public:
     cuMat   _mData; // 行列内容
     cuMat   _mGrad; // 微分値
 
-    std::shared_ptr<Context> _spContexts;   // 使用関数
+    std::shared_ptr<Context> _spContext;   // 使用関数
 public:
     void backward();
 private:
     void buildBackwardGraph(
-        Tensor* value,
-        std::vector<Context*>& contexts,
-        std::unordered_set<Context*>& visited
+        Tensor* lpValue,
+        std::vector<Context*>& lpContexts,
+        std::unordered_set<Context*>& lpVisited
     );
 };

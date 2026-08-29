@@ -4,10 +4,10 @@
 #include "cuda_tensor.h"
 
 
-Tensor::Tensor(int rows,int cols)
-    :_mData( rows,cols ),
-     _mGrad( rows,cols ),
-     _spContexts( nullptr )
+Tensor::Tensor(int nRows,int nCols)
+    :_mData( nRows,nCols ),
+     _mGrad( nRows,nCols ),
+     _spContext( nullptr )
 {
     cuda_fill( _mGrad,0.0f );
 }
@@ -22,63 +22,73 @@ void Tensor::backward()
     //
     cuda_fill( _mGrad,1.0f );   // seed
 
-    std::vector<Context*> contexts;
-    std::unordered_set<Context*> visited;
+    std::vector<Context*> lpContexts;
+    std::unordered_set<Context*> lpVisited;
 
-    buildBackwardGraph( this,contexts,visited );
+    buildBackwardGraph( this,lpContexts,lpVisited );
 
     // 出力側 -> 入力側
-    for( int i=static_cast<int>(contexts.size())-1;i>=0;i-- )
+    for( int nContext=static_cast<int>(lpContexts.size())-1;
+         nContext>=0;
+         --nContext )
     {
-        Context* lpContext  =contexts[i];
+        Context* lpContext  =lpContexts[nContext];
 
-        // Functionの出力Tensorのgradを取得する
-        // 1出力FUnctionを前提とするなら_wpOutputs[0]でよい
-        //
         if( lpContext->_lpFunc==nullptr )   {continue;}
-        // weak_ptr → shared_ptr
-        std::vector<std::shared_ptr<Tensor>> spOutputs;
-        for( int j=0;j<static_cast<int>(lpContext->_wpOutputs.size());j++ )
+
+        // 出力番号を保ったまま、それぞれの出力勾配をFunctionへ渡す。
+        // 破棄済みの出力はnullptrとなり、勾配なしとして扱う。
+        TensorList spmOutputs( lpContext->_wpmOutputs.size() );
+        TensorGradList lpmOutputGrads(
+            lpContext->_wpmOutputs.size(),
+            nullptr
+        );
+        bool isOutputAvailable =false;
+        for( std::size_t nOutput=0;
+             nOutput<lpContext->_wpmOutputs.size();
+             ++nOutput )
         {
-            std::shared_ptr<Tensor> spOutput  =lpContext->_wpOutputs[j].lock();
-            if( spOutput!=nullptr )
+            spmOutputs[nOutput] =lpContext->_wpmOutputs[nOutput].lock();
+            if( spmOutputs[nOutput]!=nullptr )
             {
-                spOutputs.push_back( spOutput );
+                lpmOutputGrads[nOutput] =&spmOutputs[nOutput]->_mGrad;
+                isOutputAvailable =true;
             }
         }
-        //
-        if( !spOutputs.empty() )
+        if( isOutputAvailable )
         {
             lpContext->_lpFunc->backward(
-                spOutputs[0]->_mGrad,
-                lpContext->_spInputs,
-                spOutputs
+                lpmOutputGrads,
+                lpContext->_spmInputs,
+                spmOutputs
             );
         }
     }
 }
 void Tensor::buildBackwardGraph(
-    Tensor* value,
-    std::vector<Context*>& contexts,
-    std::unordered_set<Context*>& visited
+    Tensor* lpValue,
+    std::vector<Context*>& lpContexts,
+    std::unordered_set<Context*>& lpVisited
 )
 {
-    if( value==nullptr )                        {return;}
+    if( lpValue==nullptr )                        {return;}
 
-    Context* lpContext  =value->_spContexts.get();
+    Context* lpContext  =lpValue->_spContext.get();
     if( lpContext==nullptr )                    {return;}
-    if( visited.find(lpContext)!=visited.end() ){return;}   // 同じFunitonを二重登録しない
+    if( lpVisited.find(lpContext)!=lpVisited.end() ){return;} // 同じFunctionを二重登録しない
     //
-    visited.insert( lpContext );
+    lpVisited.insert( lpContext );
     // 入力側をたどる
-    for( int i=0;i<lpContext->_spInputs.size();i++ )
+    for( std::size_t nInput=0;
+         nInput<lpContext->_spmInputs.size();
+         ++nInput )
     {
         buildBackwardGraph(
-            lpContext->_spInputs[i].get(),
-            contexts,
-            visited
+            lpContext->_spmInputs[nInput].get(),
+            lpContexts,
+            lpVisited
         );
     }
     // 入力側を登録した後で自分を登録
-    contexts.push_back( lpContext );
+    lpContexts.push_back( lpContext );
 }

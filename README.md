@@ -2,7 +2,7 @@
 
 CUDA と C++ を使い、ニューラルネットワークの基本要素を低レベルから実装する開発中のプロジェクトです。行列演算、Tensor の自動微分、活性化関数、損失関数、Optimizer など、学習基盤を構成する部品を実装しています。
 
-Graph と Model は派生クラスでネットワーク構造やパラメータを定義することを前提とした基盤です。エンドツーエンドで学習を実行するプログラムはまだ実装されておらず、このリポジトリは完成済みの学習アプリケーションではありません。
+Module と Model は派生クラスでネットワーク構造やパラメータを定義することを前提とした基盤です。エンドツーエンドで学習を実行するプログラムはまだ実装されておらず、このリポジトリは完成済みの学習アプリケーションではありません。
 
 ## 実装済みの主な機能
 
@@ -11,7 +11,7 @@ Graph と Model は派生クラスでネットワーク構造やパラメータ�
 - `Tensor`、`Function`、`Context` による逆伝播の基盤
 - Linear、ReLU、GELU、Softmax Cross Entropy
 - SGD、Adam
-- Graph/Model の保存、読み込み、勾配初期化のための基底 API
+- Module/Model の保存、読み込み、勾配初期化のための基底 API
 - CUDA デバイス検出と簡単な kernel 実行を確認する `cuda_check`
 
 ## 必要環境
@@ -60,7 +60,7 @@ CUDA 確認ターゲットだけをビルドしてテストする場合は次を
 ├── include/       MNISTアプリケーション用ヘッダー
 ├── src/           MNISTアプリケーション実装
 ├── lib/
-│   ├── include/   行列・Tensor・Graph・Optimizerの公開ヘッダー
+│   ├── include/   行列・Tensor・Module・Optimizerの公開ヘッダー
 │   └── src/       C++/CUDAライブラリ実装
 ├── tests/         CUDA動作確認プログラム
 └── scripts/       ビルド・テスト用スクリプト
@@ -169,3 +169,21 @@ v_t = \beta_2 v_{t-1} + (1-\beta_2) g_t^2
 \\
 W_t = W_{t-1} - \eta\frac{\hat{m}_t}{\sqrt{\hat{v}_t}+\epsilon}
 $$
+
+# 変数表記
+| 優先度 | prefix | 対象 | 備考 |
+| -- | :-- | -- | -- |
+| 1 | g_-- | global関数/変数 |  |
+| 2 | _-- | メンバー変数 | |
+| 3 | c_-- | const | globalで宣言した場合は、prefixはつけず、すべて大文字にすることor defineで宣言すること |
+| 4 | lp-- | pointer | |
+| 5 | sp-- | shared_ptr | |
+| 6 | wp-- | weak_ptr | |
+| 7 | n-- | int | |
+| 8 | f-- | float | |
+| 9 | dbl-- | double | |
+| 10 | is/can-- | bool | |
+| 11 | str-- | string | |
+| 12 | 3文字略省-- | クラス名 | |
+| 13 | --複数形 | vector | 本体を複数形にする |
+※変数名本体は意味ごとに大文字から始めること

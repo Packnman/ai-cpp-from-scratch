@@ -7,15 +7,20 @@
 #include "neuralnet.h"
 
 namespace {
-    void init_Weight(Tensor& t,int fan,std::mt19937& rng)
+    void init_Weight(Tensor& mTensor,int nFan,std::mt19937& rngRandom)
     {
-        Mat m( t._mData._nRows,t._mData._nCols );
-        std::normal_distribution<float>     dist( 0,sqrtf(2.0f/fan) );
-        for( int i=0;i<t._mData._nRows*t._mData._nCols;++i )
+        Mat mHost( mTensor._mData._nRows,mTensor._mData._nCols );
+        std::normal_distribution<float> dstNormal(
+            0,
+            sqrtf(2.0f/nFan)
+        );
+        for( int nIndex=0;
+             nIndex<mTensor._mData._nRows*mTensor._mData._nCols;
+             ++nIndex )
         {
-            m._lpfHost[i]   =dist( rng );
+            mHost._lpfHost[nIndex] =dstNormal( rngRandom );
         }
-        t._mData.download( m );
+        mTensor._mData.download( mHost );
     }
 }
 
@@ -26,7 +31,7 @@ namespace {
 //  ・前処理
 // --------------------------
 LayerInput::LayerInput()
-    :Graph()
+    :Module()
 {
 
 }
@@ -34,23 +39,17 @@ LayerInput::~LayerInput()
 {
 
 }
-void LayerInput::init(std::mt19937& random)
+void LayerInput::init(std::mt19937& rngRandom)
 {
-    (void)random;
+    (void)rngRandom;
     // Non
 }
 std::shared_ptr<Tensor> LayerInput::forward(
-    std::vector<std::shared_ptr<Tensor>>& inputs
+    std::vector<std::shared_ptr<Tensor>>& spmInputs
 )
 {
-    return inputs[0];
+    return spmInputs[0];
 }
-std::vector<Tensor*> LayerInput::getParams()
-{
-    return {};
-}
-
-
 // --------------------------
 // LayerHidden
 // --------------------------
@@ -58,42 +57,35 @@ std::vector<Tensor*> LayerInput::getParams()
 //  ・1層目からn-1層目までの処理
 // --------------------------
 LayerHidden::LayerHidden(int nInput,int nOutput)
-    :Graph(),
+    :Module(),
      _spmWeight( std::make_shared<Tensor>(nOutput,nInput) ),
      _spmBias( std::make_shared<Tensor>(nOutput,1) ),
-     _linear( _spmWeight.get(),_spmBias.get() )
+     _lnrLinear( _spmWeight.get(),_spmBias.get() )
 {
-    
+    registerParameter( "weight",_spmWeight.get() );
+    registerParameter( "bias",_spmBias.get() );
 }
 LayerHidden::~LayerHidden()
 {
 
 }
-void LayerHidden::init(std::mt19937& random)
+void LayerHidden::init(std::mt19937& rngRandom)
 {
-    init_Weight( *_spmWeight,_spmWeight->_mData._nCols,random );
+    init_Weight( *_spmWeight,_spmWeight->_mData._nCols,rngRandom );
     cuda_fill( _spmBias.get()->_mData,0 );
 }
 std::shared_ptr<Tensor> LayerHidden::forward(
-    std::vector<std::shared_ptr<Tensor>>& inputs
+    std::vector<std::shared_ptr<Tensor>>& spmInputs
 )
 {
     // Linear
-    std::shared_ptr<Tensor> x   =_linear( inputs );
+    std::shared_ptr<Tensor> spmOutput =_lnrLinear( spmInputs );
     // ReLU
-    std::vector<std::shared_ptr<Tensor>> v{x};
-    x   =_relu( v );
+    std::vector<std::shared_ptr<Tensor>> spmOutputs{spmOutput};
+    spmOutput =_rluReLU( spmOutputs );
 
-    return x;
+    return spmOutput;
 }
-std::vector<Tensor*> LayerHidden::getParams()
-{
-    return {
-        _spmWeight.get(),
-        _spmBias.get()
-    };
-}
-
 // --------------------------
 // LayerOutput
 // --------------------------
@@ -101,147 +93,107 @@ std::vector<Tensor*> LayerHidden::getParams()
 //  ・n層目の処理
 // --------------------------
 LayerOutput::LayerOutput(int nInput,int nOutput)
-    :Graph(),
+    :Module(),
      _spmWeight( std::make_shared<Tensor>(nOutput,nInput) ),
      _spmBias( std::make_shared<Tensor>(nOutput,1) ),
-     _linear( _spmWeight.get(),_spmBias.get() )
+     _lnrLinear( _spmWeight.get(),_spmBias.get() )
 {
-
+    registerParameter( "weight",_spmWeight.get() );
+    registerParameter( "bias",_spmBias.get() );
 }
 LayerOutput::~LayerOutput()
 {
 
 }
-void LayerOutput::init(std::mt19937& random)
+void LayerOutput::init(std::mt19937& rngRandom)
 {
-    init_Weight( *_spmWeight,_spmWeight->_mData._nCols,random );
+    init_Weight( *_spmWeight,_spmWeight->_mData._nCols,rngRandom );
     cuda_fill( _spmBias.get()->_mData,0 );
 }
 std::shared_ptr<Tensor> LayerOutput::forward(
-    std::vector<std::shared_ptr<Tensor>>& inputs
+    std::vector<std::shared_ptr<Tensor>>& spmInputs
 )
 {
-    return _linear( inputs );
+    return _lnrLinear( spmInputs );
 }
-std::vector<Tensor*> LayerOutput::getParams()
-{
-    return {
-        _spmWeight.get(),
-        _spmBias.get()
-    };
-}
-
 // --------------------------
 // NeuralNet
 // --------------------------
 // 役割：
 //  ・
 // --------------------------
-NeuralNet::NeuralNet(std::uint32_t seed)
+NeuralNet::NeuralNet(std::uint32_t nSeed)
     :Model(),
      _lyrInput(),
      _lyrHidden1(784,256),
      _lyrHidden2(256,128),
      _lyrOutput(128,10)
 {
-    std::mt19937    random( seed );
-    _lyrInput.init( random );
-    _lyrHidden1.init( random );
-    _lyrHidden2.init( random );
-    _lyrOutput.init( random );
+    registerModule( "input",&_lyrInput );
+    registerModule( "hidden1",&_lyrHidden1 );
+    registerModule( "hidden2",&_lyrHidden2 );
+    registerModule( "output",&_lyrOutput );
+
+    std::mt19937 rngRandom( nSeed );
+    _lyrInput.init( rngRandom );
+    _lyrHidden1.init( rngRandom );
+    _lyrHidden2.init( rngRandom );
+    _lyrOutput.init( rngRandom );
 }
 NeuralNet::~NeuralNet()
 {
 
 }
-void NeuralNet::save(const char* szFName)
-{
-    Model::save( szFName );
-}
-void NeuralNet::load(const char* szFName)
-{
-    Model::load( szFName );
-}
 std::shared_ptr<Tensor> NeuralNet::forward(
-    std::vector<std::shared_ptr<Tensor>>& inputs
+    std::vector<std::shared_ptr<Tensor>>& spmInputs
 )
 {
-    if( (inputs.size()!=1)||(inputs[0]==nullptr) )
+    if( (spmInputs.size()!=1)||(spmInputs[0]==nullptr) )
     {
         throw std::runtime_error(
             "NeuralNet::forward: exactly one non-null input is required"
         );
     }
-    if( (inputs[0]->_mData._nRows!=784)||(inputs[0]->_mData._nCols<=0) )
+    if( (spmInputs[0]->_mData._nRows!=784)||
+        (spmInputs[0]->_mData._nCols<=0) )
     {
         throw std::runtime_error(
             "NeuralNet::forward: input must have shape 784 x batch"
         );
     }
     //
-    std::vector<std::shared_ptr<Tensor>>    v{inputs[0]};
-    std::shared_ptr<Tensor> x   =_lyrInput.forward( v );
-    v   ={x};
-    x   =_lyrHidden1.forward( v );
-    v   ={x};
-    x   =_lyrHidden2.forward( v );
-    v   ={x};
+    std::vector<std::shared_ptr<Tensor>> spmOutputs{spmInputs[0]};
+    std::shared_ptr<Tensor> spmOutput =_lyrInput.forward( spmOutputs );
+    spmOutputs ={spmOutput};
+    spmOutput =_lyrHidden1.forward( spmOutputs );
+    spmOutputs ={spmOutput};
+    spmOutput =_lyrHidden2.forward( spmOutputs );
+    spmOutputs ={spmOutput};
     //
-    return _lyrOutput.forward( v );
+    return _lyrOutput.forward( spmOutputs );
 }
 std::shared_ptr<Tensor> NeuralNet::loss(
-    const std::shared_ptr<Tensor>& input,
-    const std::shared_ptr<Tensor>& target
+    const std::shared_ptr<Tensor>& c_spmInput,
+    const std::shared_ptr<Tensor>& c_spmTarget
 )
 {
-    if( (input==nullptr)||(target==nullptr) )
+    if( (c_spmInput==nullptr)||(c_spmTarget==nullptr) )
     {
         throw std::runtime_error(
             "NeuralNet::loss: input and target must be non-null"
         );
     }
-    if( (target->_mData._nRows!=10)||
-        (target->_mData._nCols!=input->_mData._nCols) )
+    if( (c_spmTarget->_mData._nRows!=10)||
+        (c_spmTarget->_mData._nCols!=c_spmInput->_mData._nCols) )
     {
         throw std::runtime_error(
             "NeuralNet::loss: target must have shape 10 x batch"
         );
     }
     //
-    std::vector<std::shared_ptr<Tensor>>    inputs{input};
-    std::shared_ptr<Tensor>                 logits  =forward( inputs );
-    std::vector<std::shared_ptr<Tensor>>    args{ logits,target };
+    std::vector<std::shared_ptr<Tensor>> spmInputs{c_spmInput};
+    std::shared_ptr<Tensor> spmLogits =forward( spmInputs );
+    std::vector<std::shared_ptr<Tensor>> spmArgs{spmLogits,c_spmTarget};
 
-    return _entropy( args );
-}
-std::vector<Tensor*> NeuralNet::getParams()
-{
-    std::vector<Tensor*> rsts;
-    std::vector<Tensor*> tmp;
-
-    tmp =_lyrInput.getParams();
-    for( int i=0;i<(int)tmp.size();i++ )
-    {
-        rsts.push_back( tmp[i] );
-    }
-
-    tmp =_lyrHidden1.getParams();
-    for( int i=0;i<(int)tmp.size();i++ )
-    {
-        rsts.push_back( tmp[i] );
-    }
-    
-    tmp =_lyrHidden2.getParams();
-    for( int i=0;i<(int)tmp.size();i++ )
-    {
-        rsts.push_back( tmp[i] );
-    }
-    
-    tmp =_lyrOutput.getParams();
-    for( int i=0;i<(int)tmp.size();i++ )
-    {
-        rsts.push_back( tmp[i] );
-    }
-
-    return rsts;
+    return _sceEntropy( spmArgs );
 }

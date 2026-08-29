@@ -8,11 +8,11 @@
 namespace {
     // 関数オブジェクトの宣言（unique_ptrでのdeleteをカスタマイズした際の定石）
     struct FileCloser {
-        void operator()(FILE* fp) const
+        void operator()(FILE* lpFile) const
         {
-            if( fp!=nullptr )
+            if( lpFile!=nullptr )
             {
-                fclose( fp );
+                fclose( lpFile );
             }
         }
     };
@@ -29,167 +29,167 @@ namespace {
     >;
 
     std::uint32_t readUint32BigEndian(
-        FILE* fp,
-        const std::string& path
+        FILE* lpFile,
+        const std::string& c_strPath
     )
     {
-        std::uint8_t bytes[4];
+        std::uint8_t nBytes[4];
         std::size_t nRead =fread(
-            bytes,
+            nBytes,
             1,
-            sizeof(bytes),
-            fp
+            sizeof(nBytes),
+            lpFile
         );
-        if( nRead!=sizeof(bytes) )
+        if( nRead!=sizeof(nBytes) )
         {
             throw std::runtime_error(
-                "MnistDataset::load: invalid IDX header: " + path
+                "MnistDataset::load: invalid IDX header: " + c_strPath
             );
         }
 
         return
-            (static_cast<std::uint32_t>(bytes[0])<<24)|
-            (static_cast<std::uint32_t>(bytes[1])<<16)|
-            (static_cast<std::uint32_t>(bytes[2])<<8) |
-             static_cast<std::uint32_t>(bytes[3]);
+            (static_cast<std::uint32_t>(nBytes[0])<<24)|
+            (static_cast<std::uint32_t>(nBytes[1])<<16)|
+            (static_cast<std::uint32_t>(nBytes[2])<<8) |
+             static_cast<std::uint32_t>(nBytes[3]);
     }
 
     void readBytes(
-        FILE* fp,
-        std::vector<std::uint8_t>& values,
-        const std::string& path
+        FILE* lpFile,
+        std::vector<std::uint8_t>& nValues,
+        const std::string& c_strPath
     )
     {
         std::size_t nRead =fread(
-            values.data(),
+            nValues.data(),
             1,
-            values.size(),
-            fp
+            nValues.size(),
+            lpFile
         );
-        if( nRead!=values.size() )
+        if( nRead!=nValues.size() )
         {
             throw std::runtime_error(
-                "MnistDataset::load: truncated IDX data: " + path
+                "MnistDataset::load: truncated IDX data: " + c_strPath
             );
         }
     }
 }
 
 MnistDataset MnistDataset::load(
-    const std::string& imagePath,
-    const std::string& labelPath
+    const std::string& c_strImagePath,
+    const std::string& c_strLabelPath
 )
 {
-    FilePtr imageFile(
-        fopen( imagePath.c_str(),"rb" )
+    FilePtr filImageFile(
+        fopen( c_strImagePath.c_str(),"rb" )
     );
-    if( imageFile==nullptr )
+    if( filImageFile==nullptr )
     {
         throw std::runtime_error(
             "MnistDataset::load: failed to open image file: "
-            + imagePath
+            + c_strImagePath
         );
     }
 
-    FilePtr labelFile(
-        fopen( labelPath.c_str(),"rb" )
+    FilePtr filLabelFile(
+        fopen( c_strLabelPath.c_str(),"rb" )
     );
-    if( labelFile==nullptr )
+    if( filLabelFile==nullptr )
     {
         throw std::runtime_error(
             "MnistDataset::load: failed to open label file: "
-            + labelPath
+            + c_strLabelPath
         );
     }
 
-    std::uint32_t imageMagic =readUint32BigEndian(
-        imageFile.get(),
-        imagePath
+    std::uint32_t nImageMagic =readUint32BigEndian(
+        filImageFile.get(),
+        c_strImagePath
     );
-    std::uint32_t imageCount =readUint32BigEndian(
-        imageFile.get(),
-        imagePath
+    std::uint32_t nImageCount =readUint32BigEndian(
+        filImageFile.get(),
+        c_strImagePath
     );
-    std::uint32_t imageRows =readUint32BigEndian(
-        imageFile.get(),
-        imagePath
+    std::uint32_t nImageRows =readUint32BigEndian(
+        filImageFile.get(),
+        c_strImagePath
     );
-    std::uint32_t imageCols =readUint32BigEndian(
-        imageFile.get(),
-        imagePath
-    );
-
-    std::uint32_t labelMagic =readUint32BigEndian(
-        labelFile.get(),
-        labelPath
-    );
-    std::uint32_t labelCount =readUint32BigEndian(
-        labelFile.get(),
-        labelPath
+    std::uint32_t nImageCols =readUint32BigEndian(
+        filImageFile.get(),
+        c_strImagePath
     );
 
-    if( imageMagic!=2051 )
+    std::uint32_t nLabelMagic =readUint32BigEndian(
+        filLabelFile.get(),
+        c_strLabelPath
+    );
+    std::uint32_t nLabelCount =readUint32BigEndian(
+        filLabelFile.get(),
+        c_strLabelPath
+    );
+
+    if( nImageMagic!=2051 )
     {
         throw std::runtime_error(
             "MnistDataset::load: invalid image magic"
         );
     }
-    if( labelMagic!=2049 )
+    if( nLabelMagic!=2049 )
     {
         throw std::runtime_error(
             "MnistDataset::load: invalid label magic"
         );
     }
-    if( (imageRows!=28)||(imageCols!=28) )
+    if( (nImageRows!=28)||(nImageCols!=28) )
     {
         throw std::runtime_error(
             "MnistDataset::load: image size must be 28 x 28"
         );
     }
-    if( imageCount==0 )
+    if( nImageCount==0 )
     {
         throw std::runtime_error(
             "MnistDataset::load: dataset is empty"
         );
     }
-    if( imageCount!=labelCount )
+    if( nImageCount!=nLabelCount )
     {
         throw std::runtime_error(
             "MnistDataset::load: image and label count mismatch"
         );
     }
 
-    constexpr std::size_t imageSize =28*28;
-    if( static_cast<std::size_t>(imageCount)>
-        std::numeric_limits<std::size_t>::max()/imageSize )
+    constexpr std::size_t c_nImageSize =28*28;
+    if( static_cast<std::size_t>(nImageCount)>
+        std::numeric_limits<std::size_t>::max()/c_nImageSize )
     {
         throw std::runtime_error(
             "MnistDataset::load: image data is too large"
         );
     }
 
-    MnistDataset dataset;
-    dataset._images.resize(
-        static_cast<std::size_t>(imageCount)*imageSize
+    MnistDataset mnsDataset;
+    mnsDataset._nImages.resize(
+        static_cast<std::size_t>(nImageCount)*c_nImageSize
     );
-    dataset._labels.resize(
-        static_cast<std::size_t>(labelCount)
+    mnsDataset._nLabels.resize(
+        static_cast<std::size_t>(nLabelCount)
     );
 
     readBytes(
-        imageFile.get(),
-        dataset._images,
-        imagePath
+        filImageFile.get(),
+        mnsDataset._nImages,
+        c_strImagePath
     );
     readBytes(
-        labelFile.get(),
-        dataset._labels,
-        labelPath
+        filLabelFile.get(),
+        mnsDataset._nLabels,
+        c_strLabelPath
     );
 
-    for( std::uint8_t label : dataset._labels )
+    for( std::uint8_t nLabel : mnsDataset._nLabels )
     {
-        if( label>=10 )
+        if( nLabel>=10 )
         {
             throw std::runtime_error(
                 "MnistDataset::load: label must be between 0 and 9"
@@ -197,73 +197,81 @@ MnistDataset MnistDataset::load(
         }
     }
 
-    return dataset;
+    return mnsDataset;
 }
 
 std::size_t MnistDataset::size() const
 {
-    return _labels.size();
+    return _nLabels.size();
 }
 
 SupervisedBatch MnistDataset::makeBatch(
-    const std::vector<std::size_t>& indices,
-    std::size_t begin,
-    std::size_t count
+    const std::vector<std::size_t>& c_nIndices,
+    std::size_t nBegin,
+    std::size_t nCount
 ) const
 {
     // 1. Tensor(784,count)とTensor(10,count)を生成する。
     // 2. 画像を0.0～1.0へ正規化して入力Tensorへ転送する。
     // 3. ラベルをone-hotへ変換してtarget Tensorへ転送する。
-    if( begin+count>indices.size() )
+    if( nBegin+nCount>c_nIndices.size() )
     {
         throw std::runtime_error(
             "MnistDataset::makeBatch: invalid range"
         );
     }
 
-    constexpr int imageSize     =28*28;
-    constexpr int classCount    =10;
+    constexpr int c_nImageSize =28*28;
+    constexpr int c_nClassCount =10;
 
-    Mat hostInput(  imageSize ,static_cast<int>(count) );
-    Mat hostTarget( classCount,static_cast<int>(count) );
+    Mat mHostInput( c_nImageSize,static_cast<int>(nCount) );
+    Mat mHostTarget( c_nClassCount,static_cast<int>(nCount) );
 
     // targetをすべて0にする
-    for( int batch=0;batch<static_cast<int>(count);batch++ )
+    for( int nBatch=0;nBatch<static_cast<int>(nCount);++nBatch )
     {
-        for( int label=0;label<classCount;label++ )
+        for( int nLabel=0;nLabel<c_nClassCount;++nLabel )
         {
-            hostTarget(label,batch) =0.0f;
+            mHostTarget(nLabel,nBatch) =0.0f;
         }
     }
 
-    for( int batch=0;batch<static_cast<int>(count);batch++ )
+    for( int nBatch=0;nBatch<static_cast<int>(nCount);++nBatch )
     {
         // シャッフル後の並びから画像番号を取得
-        std::size_t imageIndex  =indices[begin+batch];
+        std::size_t nImageIndex =c_nIndices[nBegin+nBatch];
 
         // 画像の784ピクセルを1列へ入れる
-        for( int pixel=0;pixel<imageSize;pixel++ )
+        for( int nPixel=0;nPixel<c_nImageSize;++nPixel )
         {
-            std::uint8_t value      =_images[imageIndex*imageSize+pixel];
-            hostInput(pixel,batch)  =static_cast<float>(value)/255.0f;
+            std::uint8_t nValue =_nImages[
+                nImageIndex*c_nImageSize+nPixel
+            ];
+            mHostInput(nPixel,nBatch) =static_cast<float>(nValue)/255.0f;
         }
 
         // 正解ラベルをone-hotへ変換
-        std::uint8_t label      =_labels[imageIndex];
-        hostTarget(label,batch) =1.0f;
+        std::uint8_t nLabel =_nLabels[nImageIndex];
+        mHostTarget(nLabel,nBatch) =1.0f;
     }
 
-    std::shared_ptr<Tensor> input   =std::make_shared<Tensor>( imageSize ,static_cast<int>(count) );
-    std::shared_ptr<Tensor> target  =std::make_shared<Tensor>( classCount,static_cast<int>(count) );
+    std::shared_ptr<Tensor> spmInput =std::make_shared<Tensor>(
+        c_nImageSize,
+        static_cast<int>(nCount)
+    );
+    std::shared_ptr<Tensor> spmTarget =std::make_shared<Tensor>(
+        c_nClassCount,
+        static_cast<int>(nCount)
+    );
 
     // CPUからGPUへ転送
-    input->_mData.download(hostInput);
-    target->_mData.download(hostTarget);
+    spmInput->_mData.download( mHostInput );
+    spmTarget->_mData.download( mHostTarget );
 
     return {
-        input,
-        target,
-        count
+        spmInput,
+        spmTarget,
+        nCount
     };
 }
 
@@ -274,58 +282,58 @@ SupervisedBatch MnistDataset::makeBatch(
 //  ・1バッチ内で「予測した数字」と「正解ラベル」が一致した画像数を返す
 // --------------------------
 std::size_t countClassificationCorrect(
-    const std::shared_ptr<Tensor>& output,  // NeuralNetの出力 logits : 10 x batch
-    const std::shared_ptr<Tensor>& target   // 正解one-hot : 10 x batch
+    const std::shared_ptr<Tensor>& c_spmOutput, // NeuralNetの出力 logits
+    const std::shared_ptr<Tensor>& c_spmTarget  // 正解one-hot
 )
 {
-    if( (output==nullptr)||(target==nullptr) )
+    if( (c_spmOutput==nullptr)||(c_spmTarget==nullptr) )
     {
         throw std::runtime_error(
             "countClassificationCorrect: tensor is null"
         );
     }
-    if( (output->_mData._nRows!=target->_mData._nRows)||
-        (output->_mData._nCols!=target->_mData._nCols)||
-        (output->_mData._nRows<=0)||
-        (output->_mData._nCols<=0) )
+    if( (c_spmOutput->_mData._nRows!=c_spmTarget->_mData._nRows)||
+        (c_spmOutput->_mData._nCols!=c_spmTarget->_mData._nCols)||
+        (c_spmOutput->_mData._nRows<=0)||
+        (c_spmOutput->_mData._nCols<=0) )
     {
         throw std::runtime_error(
             "countClassificationCorrect: tensor size mismatch"
         );
     }
 
-    Mat hostOutput(
-        output->_mData._nRows,
-        output->_mData._nCols
+    Mat mHostOutput(
+        c_spmOutput->_mData._nRows,
+        c_spmOutput->_mData._nCols
     );
-    Mat hostTarget(
-        target->_mData._nRows,
-        target->_mData._nCols
+    Mat mHostTarget(
+        c_spmTarget->_mData._nRows,
+        c_spmTarget->_mData._nCols
     );
-    output->_mData.upload( hostOutput );
-    target->_mData.upload( hostTarget );
+    c_spmOutput->_mData.upload( mHostOutput );
+    c_spmTarget->_mData.upload( mHostTarget );
 
     std::size_t nCorrect =0;
 
-    for( int batch=0;batch<hostOutput._nCols;batch++ )
+    for( int nBatch=0;nBatch<mHostOutput._nCols;++nBatch )
     {
-        int predicted   =0;
-        int expected    =0;
+        int nPredicted =0;
+        int nExpected =0;
 
         // 各画像について、outputの値が最も大きい行番号を探します。
-        for( int row=1;row<hostOutput._nRows;row++ )
+        for( int nRow=1;nRow<mHostOutput._nRows;++nRow )
         {
-            if( hostOutput(row,batch)>hostOutput(predicted,batch) )
+            if( mHostOutput(nRow,nBatch)>mHostOutput(nPredicted,nBatch) )
             {
-                predicted   =row;
+                nPredicted =nRow;
             }
-            if( hostTarget(row,batch)>hostTarget(expected,batch) )
+            if( mHostTarget(nRow,nBatch)>mHostTarget(nExpected,nBatch) )
             {
-                expected    =row;
+                nExpected =nRow;
             }
         }
 
-        if( predicted==expected )
+        if( nPredicted==nExpected )
         {
             nCorrect++;
         }

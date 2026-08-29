@@ -13,21 +13,21 @@ Mat::Mat(int nRows,int nCols)
 {
     
 }
-Mat::Mat(const Mat& val)
-    :_nRows( val._nRows ),
-     _nCols( val._nCols ),
-     _lpfHost( (float*)malloc(val._nRows*val._nCols*sizeof(float)) )
+Mat::Mat(const Mat& c_mValue)
+    :_nRows( c_mValue._nRows ),
+     _nCols( c_mValue._nCols ),
+     _lpfHost( (float*)malloc(c_mValue._nRows*c_mValue._nCols*sizeof(float)) )
 {
-    memcpy( _lpfHost,val._lpfHost,_nRows*_nCols*sizeof(float) );
+    memcpy( _lpfHost,c_mValue._lpfHost,_nRows*_nCols*sizeof(float) );
 }
-Mat::Mat(Mat&& val) noexcept
-    :_nRows( val._nRows ),
-     _nCols( val._nCols ),
-     _lpfHost( val._lpfHost )
+Mat::Mat(Mat&& mValue) noexcept
+    :_nRows( mValue._nRows ),
+     _nCols( mValue._nCols ),
+     _lpfHost( mValue._lpfHost )
 {
-    val._nRows      =0;
-    val._nCols      =0;
-    val._lpfHost    =nullptr;
+    mValue._nRows      =0;
+    mValue._nCols      =0;
+    mValue._lpfHost    =nullptr;
 }
 Mat::~Mat()
 {
@@ -36,11 +36,11 @@ Mat::~Mat()
 }
 void Mat::ones()
 {
-    for( int i=0;i<_nRows;i++ )
+    for( int nRow=0;nRow<_nRows;nRow++ )
     {
-        for( int j=0;j<_nCols;j++ )
+        for( int nCol=0;nCol<_nCols;nCol++ )
         {
-            (*this)(i,j)    =1.0f;
+            (*this)(nRow,nCol)    =1.0f;
         }
     }
 }
@@ -53,28 +53,28 @@ float Mat::tri() const
         );
     }
     //
-    float rst   =0.0f;
+    float fResult =0.0f;
 
-    for( int i=0;i<_nRows;i++ )
+    for( int nRow=0;nRow<_nRows;nRow++ )
     {
-        rst +=(*this)(i,i);
+        fResult +=(*this)(nRow,nRow);
     }
 
-    return rst;
+    return fResult;
 }
 Mat Mat::trp() const
 {
-    Mat rst(_nCols,_nRows);
+    Mat mResult(_nCols,_nRows);
     
-    for( int i=0;i<rst._nRows;i++ )
+    for( int nRow=0;nRow<mResult._nRows;++nRow )
     {
-        for( int j=0;j<rst._nCols;j++ )
+        for( int nCol=0;nCol<mResult._nCols;++nCol )
         {
-            rst(i,j)    =(*this)(j,i);
+            mResult(nRow,nCol) =(*this)(nCol,nRow);
         }
     }
 
-    return rst;
+    return mResult;
 }
 Euler Mat::toEul() const
 {
@@ -85,16 +85,16 @@ Euler Mat::toEul() const
         );
     }
     //
-    Euler rst;
-    float sp    =(*this)(0,2);
+    Euler eulResult;
+    float fSinPitch =(*this)(0,2);
 
-    if( sp>1.0f )   {sp =1.0f;}
-    if( sp<-1.0f )  {sp =-1.0f;}
-    rst(1)  =asinf( -sp );
-    rst(2)  =atan2f( (*this)(0,1),(*this)(0,0) );
-    rst(0)  =atan2f( (*this)(1,2),(*this)(2,2) );
+    if( fSinPitch>1.0f )   {fSinPitch =1.0f;}
+    if( fSinPitch<-1.0f )  {fSinPitch =-1.0f;}
+    eulResult(1) =asinf( -fSinPitch );
+    eulResult(2) =atan2f( (*this)(0,1),(*this)(0,0) );
+    eulResult(0) =atan2f( (*this)(1,2),(*this)(2,2) );
 
-    return rst;
+    return eulResult;
 }
 Quaternion Mat::toQtn() const
 {
@@ -105,204 +105,207 @@ Quaternion Mat::toQtn() const
         );
     }
     //
-    Quaternion rst;
+    Quaternion qtnResult;
 
-    float tr    =(*this).tri();
-    float rad   =acosf( (tr-1.0)/2.0 );
-    if( fabsf(sinf(rad))<1.0e-6f )
+    float fTrace =(*this).tri();
+    float fRadians =acosf( (fTrace-1.0f)/2.0f );
+    if( fabsf(sinf(fRadians))<1.0e-6f )
     {
         // 特異点処理
-        rst(0)  =0.0;
-        rst(1)  =0.0;
-        rst(2)  =0.0;
-        rst(3)  =1.0;
+        qtnResult(0) =0.0f;
+        qtnResult(1) =0.0f;
+        qtnResult(2) =0.0f;
+        qtnResult(3) =1.0f;
     }
     else
     {
-        rst(0)  =( (*this)(1,2)-(*this)(2,1) )/(2.0*sinf(rad))*sinf(rad/2.0);
-        rst(1)  =( (*this)(2,0)-(*this)(0,2) )/(2.0*sinf(rad))*sinf(rad/2.0);
-        rst(2)  =( (*this)(0,1)-(*this)(1,0) )/(2.0*sinf(rad))*sinf(rad/2.0);
-        rst(3)  =cosf( rad/2.0 );
+        qtnResult(0) =( (*this)(1,2)-(*this)(2,1) )/
+            (2.0f*sinf(fRadians))*sinf(fRadians/2.0f);
+        qtnResult(1) =( (*this)(2,0)-(*this)(0,2) )/
+            (2.0f*sinf(fRadians))*sinf(fRadians/2.0f);
+        qtnResult(2) =( (*this)(0,1)-(*this)(1,0) )/
+            (2.0f*sinf(fRadians))*sinf(fRadians/2.0f);
+        qtnResult(3) =cosf( fRadians/2.0f );
     }
-    rst.normalized();
+    qtnResult.normalized();
     
-    return rst;
+    return qtnResult;
 }
-Mat& Mat::operator=(const Mat& val)
+Mat& Mat::operator=(const Mat& c_mValue)
 {
-    if( this==&val )    {return *this;}
-    if( (_nRows!=val._nRows)||(_nCols!=val._nCols) )
+    if( this==&c_mValue )    {return *this;}
+    if( (_nRows!=c_mValue._nRows)||(_nCols!=c_mValue._nCols) )
     {
         free( _lpfHost );
         //
-        _nRows      =val._nRows;
-        _nCols      =val._nCols;
+        _nRows      =c_mValue._nRows;
+        _nCols      =c_mValue._nCols;
         _lpfHost    =(float*)malloc( _nRows*_nCols*sizeof(float) );
     }
 
-    memcpy( _lpfHost,val._lpfHost,_nRows*_nCols*sizeof(float) );
+    memcpy( _lpfHost,c_mValue._lpfHost,_nRows*_nCols*sizeof(float) );
 
     return *this;
 }
-Mat& Mat::operator=(Mat&& val) noexcept
+Mat& Mat::operator=(Mat&& mValue) noexcept
 {
-    if( this==&val )    {return *this;}
+    if( this==&mValue )    {return *this;}
 
     free( _lpfHost );
     //
-    _nRows      =val._nRows;
-    _nCols      =val._nCols;
-    _lpfHost    =val._lpfHost;
+    _nRows      =mValue._nRows;
+    _nCols      =mValue._nCols;
+    _lpfHost    =mValue._lpfHost;
 
-    val._nRows      =0;
-    val._nCols      =0;
-    val._lpfHost    =nullptr;
+    mValue._nRows      =0;
+    mValue._nCols      =0;
+    mValue._lpfHost    =nullptr;
     
     return *this;
 }
-Mat operator+(const Mat& L,const Mat& R)
+Mat operator+(const Mat& c_mL,const Mat& c_mR)
 {
     // 行列数の確認
-    if( (L._nRows!=R._nRows)||(L._nCols!=R._nCols) )
+    if( (c_mL._nRows!=c_mR._nRows)||(c_mL._nCols!=c_mR._nCols) )
     {
         throw std::runtime_error(
             std::string( "Mat operator+: matrix size missmatch\n" )
         );
     }
     //
-    Mat rst(L);
-    rst +=R;
+    Mat mResult(c_mL);
+    mResult +=c_mR;
 
-    return rst;
+    return mResult;
 }
-Mat operator-(const Mat& L,const Mat& R)
+Mat operator-(const Mat& c_mL,const Mat& c_mR)
 {
     // 行列数の確認
-    if( (L._nRows!=R._nRows)||(L._nCols!=R._nCols) )
+    if( (c_mL._nRows!=c_mR._nRows)||(c_mL._nCols!=c_mR._nCols) )
     {
         throw std::runtime_error(
             std::string( "Mat operator-: matrix size missmatch\n" )
         );
     }
     //
-    Mat rst(L);
-    rst -=R;
+    Mat mResult(c_mL);
+    mResult -=c_mR;
 
-    return rst;
+    return mResult;
 }
-Mat operator*(const Mat& L,const Mat& R)
+Mat operator*(const Mat& c_mL,const Mat& c_mR)
 {
     // 行列数の確認
-    if( (L._nCols!=R._nRows) )
+    if( (c_mL._nCols!=c_mR._nRows) )
     {
         throw std::runtime_error(
             std::string( "Mat operator*: matrix size missmatch\n" )
         );
     }
     //
-    Mat rst(L._nRows, R._nCols);
-    for (int i = 0; i < L._nRows; i++)
+    Mat mResult(c_mL._nRows,c_mR._nCols);
+    for( int nRow=0;nRow<c_mL._nRows;++nRow )
     {
-        for (int j = 0; j < R._nCols; j++)
+        for( int nCol=0;nCol<c_mR._nCols;++nCol )
         {
-            float sum   =0.0f;
-            for (int k = 0; k < L._nCols; k++)
+            float fSum =0.0f;
+            for( int nInner=0;nInner<c_mL._nCols;++nInner )
             {
-                sum     +=L(i,k) * R(k,j);
+                fSum +=c_mL(nRow,nInner)*c_mR(nInner,nCol);
             }
-            rst(i,j) = sum;
+            mResult(nRow,nCol) =fSum;
         }
     }
 
-    return rst;
+    return mResult;
 }
-Mat& Mat::operator+=(const Mat& val)
+Mat& Mat::operator+=(const Mat& c_mValue)
 {
     // 行列数の確認
-    if( (_nRows!=val._nRows)||(_nCols!=val._nCols) )
+    if( (_nRows!=c_mValue._nRows)||(_nCols!=c_mValue._nCols) )
     {
         throw std::runtime_error(
             std::string( "Mat operator+=: matrix size missmatch\n" )
         );
     }
     //
-    for( int i=0;i<_nRows;i++ )
+    for( int nRow=0;nRow<_nRows;nRow++ )
     {
-        for( int j=0;j<_nCols;j++ )
+        for( int nCol=0;nCol<_nCols;nCol++ )
         {
-            (*this)(i,j) +=val(i,j);
+            (*this)(nRow,nCol) +=c_mValue(nRow,nCol);
         }
     }
 
     return *this;
 }
-Mat& Mat::operator-=(const Mat& val)
+Mat& Mat::operator-=(const Mat& c_mValue)
 {
     // 行列数の確認
-    if( (_nRows!=val._nRows)||(_nCols!=val._nCols) )
+    if( (_nRows!=c_mValue._nRows)||(_nCols!=c_mValue._nCols) )
     {
         throw std::runtime_error(
             std::string( "Mat operator-=: matrix size missmatch\n" )
         );
     }
     //
-    for( int i=0;i<_nRows;i++ )
+    for( int nRow=0;nRow<_nRows;nRow++ )
     {
-        for( int j=0;j<_nCols;j++ )
+        for( int nCol=0;nCol<_nCols;nCol++ )
         {
-            (*this)(i,j) -=val(i,j);
+            (*this)(nRow,nCol) -=c_mValue(nRow,nCol);
         }
     }
 
     return *this;
 }
-Mat& Mat::operator*=(const Mat& val)
+Mat& Mat::operator*=(const Mat& c_mValue)
 {
     // 行列数の確認
-    if( (_nCols!=val._nRows) )
+    if( (_nCols!=c_mValue._nRows) )
     {
         throw std::runtime_error(
             std::string( "Mat operator*: matrix size missmatch\n" )
         );
     }
     //
-    Mat tmp(_nRows,val._nCols);
-    for( int i=0;i<_nRows;i++ )
+    Mat mTemporary(_nRows,c_mValue._nCols);
+    for( int nRow=0;nRow<_nRows;nRow++ )
     {
-        for( int j=0;j<val._nCols;j++ )
+        for( int nCol=0;nCol<c_mValue._nCols;++nCol )
         {
-            float sum   =0.0f;
-            for( int k=0;k<_nCols;k++ )
+            float fSum =0.0f;
+            for( int nInner=0;nInner<_nCols;++nInner )
             {
-                sum +=(*this)(i,k) * val(k,j);
+                fSum +=(*this)(nRow,nInner)*c_mValue(nInner,nCol);
             }
-            tmp(i,j)    =sum;
+            mTemporary(nRow,nCol) =fSum;
         }
     }
 
-    *this = std::move(tmp);
+    *this =std::move(mTemporary);
 
     return *this;
 }
-Mat& Mat::operator*=(float val)
+Mat& Mat::operator*=(float fValue)
 {
-    for( int i=0;i<_nRows;i++ )
+    for( int nRow=0;nRow<_nRows;nRow++ )
     {
-        for( int j=0;j<_nCols;j++ )
+        for( int nCol=0;nCol<_nCols;nCol++ )
         {
-            (*this)(i,j)    *=val;
+            (*this)(nRow,nCol) *=fValue;
         }
     }
 
     return *this;
 }
-float& Mat::operator()(int row,int col)
+float& Mat::operator()(int nRow,int nCol)
 {
-    return _lpfHost[IDX2F(row,col,_nRows)];
+    return _lpfHost[IDX2F(nRow,nCol,_nRows)];
 }
-const float& Mat::operator()(int row,int col) const
+const float& Mat::operator()(int nRow,int nCol) const
 {
-    return _lpfHost[IDX2F(row,col,_nRows)];
+    return _lpfHost[IDX2F(nRow,nCol,_nRows)];
 }
 
 
@@ -314,10 +317,10 @@ Vec::Vec(int nRows)
 {
 
 }
-Vec::Vec(const Mat& val)
-    :Mat(val)
+Vec::Vec(const Mat& c_mValue)
+    :Mat(c_mValue)
 {
-    if( val._nCols!=1 )
+    if( c_mValue._nCols!=1 )
     {
         throw std::runtime_error(
             "Vec::Vec: matrix must have exactly one column"
@@ -337,60 +340,60 @@ Mat Vec::skew() const
         );
     }
     //
-    Mat rst(3,3);
+    Mat mResult(3,3);
 
-    rst(0,0) = 0.0f;
-    rst(0,1) =-(*this)(2);
-    rst(0,2) = (*this)(1);
-    rst(1,0) = (*this)(2);
-    rst(1,1) = 0.0f;
-    rst(1,2) =-(*this)(0);
-    rst(2,0) =-(*this)(1);
-    rst(2,1) = (*this)(0);
-    rst(2,2) = 0.0f;
+    mResult(0,0) = 0.0f;
+    mResult(0,1) =-(*this)(2);
+    mResult(0,2) = (*this)(1);
+    mResult(1,0) = (*this)(2);
+    mResult(1,1) = 0.0f;
+    mResult(1,2) =-(*this)(0);
+    mResult(2,0) =-(*this)(1);
+    mResult(2,1) = (*this)(0);
+    mResult(2,2) = 0.0f;
 
-    return rst;
+    return mResult;
 }
-Vec Vec::cpx(const Vec& val) const
+Vec Vec::cpx(const Vec& c_vValue) const
 {
-    Vec rst(3);
+    Vec vResult(3);
 
-    if( (_nRows!=3)||(val._nRows!=3) )
+    if( (_nRows!=3)||(c_vValue._nRows!=3) )
     {
         throw std::runtime_error(
             "Vec::cpx: vector size missmatch"
         );
     }
     //
-    rst(0)  =(*this)(1)*val(2) - (*this)(2)*val(1);
-    rst(1)  =(*this)(2)*val(0) - (*this)(0)*val(2);
-    rst(2)  =(*this)(0)*val(1) - (*this)(1)*val(0);
+    vResult(0) =(*this)(1)*c_vValue(2)-(*this)(2)*c_vValue(1);
+    vResult(1) =(*this)(2)*c_vValue(0)-(*this)(0)*c_vValue(2);
+    vResult(2) =(*this)(0)*c_vValue(1)-(*this)(1)*c_vValue(0);
 
-    return rst;
+    return vResult;
 }
-float Vec::dot(const Vec& val) const
+float Vec::dot(const Vec& c_vValue) const
 {
-    float rst   =0.0f;
+    float fResult =0.0f;
 
-    if( (_nRows!=val._nRows) )
+    if( (_nRows!=c_vValue._nRows) )
     {
         throw std::runtime_error(
             "Vec::dot: vector size missmatch"
         );
     }
     //
-    for( int i=0;i<_nRows;i++ )
+    for( int nRow=0;nRow<_nRows;nRow++ )
     {
-        rst +=(*this)(i)*val(i);
+        fResult +=(*this)(nRow)*c_vValue(nRow);
     }
 
-    return rst;
+    return fResult;
 }
 float Vec::norm() const
 {
     return sqrtf( (*this).dot((*this)) );
 }
-Quaternion Vec::exp(float dt) const
+Quaternion Vec::exp(float fDt) const
 {
     if( _nRows!=3 )
     {
@@ -399,35 +402,35 @@ Quaternion Vec::exp(float dt) const
         );
     }
     //
-    Quaternion rst;
+    Quaternion qtnResult;
     //
-    float omg   =(*this).norm();
-    Vec rps( *this );
-    rps(0)  /=omg;
-    rps(1)  /=omg;
-    rps(2)  /=omg;
+    float fOmega =(*this).norm();
+    Vec vRps( *this );
+    vRps(0) /=fOmega;
+    vRps(1) /=fOmega;
+    vRps(2) /=fOmega;
     //
-    rst(0)   =rps(0)*sinf( 0.5*omg*dt );
-    rst(1)   =rps(1)*sinf( 0.5*omg*dt );
-    rst(2)   =rps(2)*sinf( 0.5*omg*dt );
-    rst(3)   =cosf( 0.5*omg*dt );
-    rst.normalized();
+    qtnResult(0) =vRps(0)*sinf( 0.5f*fOmega*fDt );
+    qtnResult(1) =vRps(1)*sinf( 0.5f*fOmega*fDt );
+    qtnResult(2) =vRps(2)*sinf( 0.5f*fOmega*fDt );
+    qtnResult(3) =cosf( 0.5f*fOmega*fDt );
+    qtnResult.normalized();
 
-    return rst;
+    return qtnResult;
 }
-float& Vec::operator()(int row)
+float& Vec::operator()(int nRow)
 {
-    return Mat::operator()(row,0);
+    return Mat::operator()(nRow,0);
 }
-const float& Vec::operator()(int row) const
+const float& Vec::operator()(int nRow) const
 {
-    return Mat::operator()(row,0);
+    return Mat::operator()(nRow,0);
 }
-Vec operator*(const Mat& L,const Vec& R)
+Vec operator*(const Mat& c_mL,const Vec& c_vR)
 {
-    const Mat& mR   =static_cast<const Mat&>(R);
+    const Mat& c_mR =static_cast<const Mat&>(c_vR);
 
-    return L*mR;
+    return c_mL*c_mR;
 }
 
 // --------------------------
@@ -438,10 +441,10 @@ Euler::Euler()
 {
 
 }
-Euler::Euler(const Mat& val)
-    :Vec(val)
+Euler::Euler(const Mat& c_mValue)
+    :Vec(c_mValue)
 {
-    if( val._nRows!=3 )
+    if( c_mValue._nRows!=3 )
     {
         throw std::runtime_error(
             "Euler::Euler: vector size must be 3"
@@ -454,31 +457,31 @@ Euler::~Euler()
 }
 Mat Euler::toDCM() const
 {
-    Mat rst(3,3);
+    Mat mResult(3,3);
 
-    rst(0,0)    = cosf((*this)(2))*cosf((*this)(1));
-    rst(0,1)    = sinf((*this)(2))*cosf((*this)(1));
-    rst(0,2)    =-sinf((*this)(1));
-    rst(1,0)    = cosf((*this)(2))*sinf((*this)(1))*sinf((*this)(0))-sinf((*this)(2))*cosf((*this)(0));
-    rst(1,1)    = sinf((*this)(2))*sinf((*this)(1))*sinf((*this)(0))+cosf((*this)(2))*cosf((*this)(0));
-    rst(1,2)    = cosf((*this)(1))*sinf((*this)(0));
-    rst(2,0)    = cosf((*this)(2))*sinf((*this)(1))*cosf((*this)(0))+sinf((*this)(2))*sinf((*this)(0));
-    rst(2,1)    = sinf((*this)(2))*sinf((*this)(1))*cosf((*this)(0))-cosf((*this)(2))*sinf((*this)(0));
-    rst(2,2)    = cosf((*this)(1))*cosf((*this)(0));
+    mResult(0,0) = cosf((*this)(2))*cosf((*this)(1));
+    mResult(0,1) = sinf((*this)(2))*cosf((*this)(1));
+    mResult(0,2) =-sinf((*this)(1));
+    mResult(1,0) = cosf((*this)(2))*sinf((*this)(1))*sinf((*this)(0))-sinf((*this)(2))*cosf((*this)(0));
+    mResult(1,1) = sinf((*this)(2))*sinf((*this)(1))*sinf((*this)(0))+cosf((*this)(2))*cosf((*this)(0));
+    mResult(1,2) = cosf((*this)(1))*sinf((*this)(0));
+    mResult(2,0) = cosf((*this)(2))*sinf((*this)(1))*cosf((*this)(0))+sinf((*this)(2))*sinf((*this)(0));
+    mResult(2,1) = sinf((*this)(2))*sinf((*this)(1))*cosf((*this)(0))-cosf((*this)(2))*sinf((*this)(0));
+    mResult(2,2) = cosf((*this)(1))*cosf((*this)(0));
 
-    return rst;
+    return mResult;
 }
 Quaternion Euler::toQtn() const
 {
     return (*this).toDCM().toQtn();
 }
-Euler operator*(const Euler& e1,const Euler& e2)
+Euler operator*(const Euler& c_eulL,const Euler& c_eulR)
 {
-    return (e1.toDCM()*e2.toDCM()).toEul();
+    return (c_eulL.toDCM()*c_eulR.toDCM()).toEul();
 }
-Vec operator*(const Euler& e,const Vec& v)
+Vec operator*(const Euler& c_eulValue,const Vec& c_vValue)
 {
-    return e.toDCM()*v;
+    return c_eulValue.toDCM()*c_vValue;
 }
 
 // --------------------------
@@ -489,10 +492,10 @@ Quaternion::Quaternion()
 {
 
 }
-Quaternion::Quaternion(const Mat& val)
-    :Vec(val)
+Quaternion::Quaternion(const Mat& c_mValue)
+    :Vec(c_mValue)
 {
-    if( val._nRows!=4 )
+    if( c_mValue._nRows!=4 )
     {
         throw std::runtime_error(
             "Quaternion::Quaternion: vector size must be 4"
@@ -505,113 +508,113 @@ Quaternion::~Quaternion()
 }
 Quaternion Quaternion::cnj() const
 {
-    Quaternion rst;
+    Quaternion qtnResult;
 
-    rst(0)  =-(*this)(0);
-    rst(1)  =-(*this)(1);
-    rst(2)  =-(*this)(2);
-    rst(3)  = (*this)(3);
+    qtnResult(0) =-(*this)(0);
+    qtnResult(1) =-(*this)(1);
+    qtnResult(2) =-(*this)(2);
+    qtnResult(3) = (*this)(3);
 
-    return rst;
+    return qtnResult;
 }
 Vec Quaternion::axis() const
 {
-    Vec rst(3);
+    Vec vResult(3);
 
-    rst(0)  =(*this)(0);
-    rst(1)  =(*this)(1);
-    rst(2)  =(*this)(2);
+    vResult(0) =(*this)(0);
+    vResult(1) =(*this)(1);
+    vResult(2) =(*this)(2);
 
-    return rst;
+    return vResult;
 }
 Mat Quaternion::dot_E() const
 {
-    Mat rst(4,3);
+    Mat mResult(4,3);
 
-    rst(0,0)    = (*this)(3);
-    rst(0,1)    =-(*this)(2);
-    rst(0,2)    = (*this)(1);
-    rst(1,0)    = (*this)(2);
-    rst(1,1)    = (*this)(3);
-    rst(1,2)    =-(*this)(0);
-    rst(2,0)    =-(*this)(1);
-    rst(2,1)    = (*this)(0);
-    rst(2,2)    = (*this)(3);
-    rst(3,0)    = (*this)(0);
-    rst(3,1)    =-(*this)(1);
-    rst(3,2)    =-(*this)(2);
+    mResult(0,0) = (*this)(3);
+    mResult(0,1) =-(*this)(2);
+    mResult(0,2) = (*this)(1);
+    mResult(1,0) = (*this)(2);
+    mResult(1,1) = (*this)(3);
+    mResult(1,2) =-(*this)(0);
+    mResult(2,0) =-(*this)(1);
+    mResult(2,1) = (*this)(0);
+    mResult(2,2) = (*this)(3);
+    mResult(3,0) = (*this)(0);
+    mResult(3,1) =-(*this)(1);
+    mResult(3,2) =-(*this)(2);
 
-    return rst;
+    return mResult;
 }
-Quaternion Quaternion::dot(const Vec& rps) const
+Quaternion Quaternion::dot(const Vec& c_vRps) const
 {
-    Quaternion rst;
+    Quaternion qtnResult;
 
-    Mat Eq =(*this).dot_E();
+    Mat mEquation =(*this).dot_E();
 
-    rst(0)  =Eq(0,0)*rps(0) + Eq(0,1)*rps(1) + Eq(0,2)*rps(2);
-    rst(1)  =Eq(1,0)*rps(0) + Eq(1,1)*rps(1) + Eq(1,2)*rps(2);
-    rst(2)  =Eq(2,0)*rps(0) + Eq(2,1)*rps(1) + Eq(2,2)*rps(2);
-    rst(3)  =Eq(3,0)*rps(0) + Eq(3,1)*rps(1) + Eq(3,2)*rps(2);
+    qtnResult(0) =mEquation(0,0)*c_vRps(0)+mEquation(0,1)*c_vRps(1)+mEquation(0,2)*c_vRps(2);
+    qtnResult(1) =mEquation(1,0)*c_vRps(0)+mEquation(1,1)*c_vRps(1)+mEquation(1,2)*c_vRps(2);
+    qtnResult(2) =mEquation(2,0)*c_vRps(0)+mEquation(2,1)*c_vRps(1)+mEquation(2,2)*c_vRps(2);
+    qtnResult(3) =mEquation(3,0)*c_vRps(0)+mEquation(3,1)*c_vRps(1)+mEquation(3,2)*c_vRps(2);
 
-    return rst;
+    return qtnResult;
 }
 void Quaternion::normalized()
 {
-    float norm  =(*this).norm();
+    float fNorm =(*this).norm();
 
-    if( norm<=0.0f )
+    if( fNorm<=0.0f )
     {
         throw std::runtime_error(
             "Quaternion::normalized: zero norm"
         );
     }
     //
-    (*this)(0)  /=norm;
-    (*this)(1)  /=norm;
-    (*this)(2)  /=norm;
-    (*this)(3)  /=norm;
+    (*this)(0) /=fNorm;
+    (*this)(1) /=fNorm;
+    (*this)(2) /=fNorm;
+    (*this)(3) /=fNorm;
 }
 Mat Quaternion::toDCM() const
 {
-    Mat rst(3,3);
+    Mat mResult(3,3);
 
-    rst(0,0)    =1.0-2.0*((*this)(1)*(*this)(1)+(*this)(2)*(*this)(2));
-    rst(0,1)    =2.0*((*this)(0)*(*this)(1) + (*this)(2)*(*this)(3));
-    rst(0,2)    =2.0*((*this)(2)*(*this)(0) - (*this)(1)*(*this)(3));
-    rst(1,0)    =2.0*((*this)(0)*(*this)(1) - (*this)(2)*(*this)(3));
-    rst(1,1)    =1.0-2.0*((*this)(0)*(*this)(0)+(*this)(2)*(*this)(2));
-    rst(1,2)    =2.0*((*this)(1)*(*this)(2) + (*this)(0)*(*this)(3));
-    rst(2,0)    =2.0*((*this)(2)*(*this)(0) + (*this)(1)*(*this)(3));
-    rst(2,1)    =2.0*((*this)(1)*(*this)(2) - (*this)(0)*(*this)(3));
-    rst(2,2)    =1.0-2.0*((*this)(0)*(*this)(0)+(*this)(1)*(*this)(1));
+    mResult(0,0) =1.0-2.0*((*this)(1)*(*this)(1)+(*this)(2)*(*this)(2));
+    mResult(0,1) =2.0*((*this)(0)*(*this)(1)+(*this)(2)*(*this)(3));
+    mResult(0,2) =2.0*((*this)(2)*(*this)(0)-(*this)(1)*(*this)(3));
+    mResult(1,0) =2.0*((*this)(0)*(*this)(1)-(*this)(2)*(*this)(3));
+    mResult(1,1) =1.0-2.0*((*this)(0)*(*this)(0)+(*this)(2)*(*this)(2));
+    mResult(1,2) =2.0*((*this)(1)*(*this)(2)+(*this)(0)*(*this)(3));
+    mResult(2,0) =2.0*((*this)(2)*(*this)(0)+(*this)(1)*(*this)(3));
+    mResult(2,1) =2.0*((*this)(1)*(*this)(2)-(*this)(0)*(*this)(3));
+    mResult(2,2) =1.0-2.0*((*this)(0)*(*this)(0)+(*this)(1)*(*this)(1));
 
-    return rst;
+    return mResult;
 }
 Euler Quaternion::toEul() const
 {
     return (*this).toDCM().toEul();
 }
-Quaternion operator*(const Quaternion& q1,const Quaternion& q2)
+Quaternion operator*(const Quaternion& c_qtnL,const Quaternion& c_qtnR)
 {
-    Quaternion rst;
+    Quaternion qtnResult;
 
-    Vec qv1         =q1.axis();
-    Vec qv2         =q2.axis();
-    Vec q2qv1       =qv1*q2(3);
-    Vec q1qv2       =qv2*q1(3);
-    Vec qv2xqv1     =qv2.cpx( qv1 );
-    float qv2qv1    =qv2.dot( qv1 );
+    Vec vL =c_qtnL.axis();
+    Vec vR =c_qtnR.axis();
+    Vec vRightLeft =vL*c_qtnR(3);
+    Vec vLeftRight =vR*c_qtnL(3);
+    Vec vCross =vR.cpx( vL );
+    float fDot =vR.dot( vL );
 
-    rst(0)  =q2qv1(0)+q1qv2(0)+qv2xqv1(0);
-    rst(1)  =q2qv1(1)+q1qv2(1)+qv2xqv1(1);
-    rst(2)  =q2qv1(2)+q1qv2(2)+qv2xqv1(2);
-    rst(3)  =q2(3)*q1(3)-qv2qv1;
-    rst.normalized();
+    qtnResult(0) =vRightLeft(0)+vLeftRight(0)+vCross(0);
+    qtnResult(1) =vRightLeft(1)+vLeftRight(1)+vCross(1);
+    qtnResult(2) =vRightLeft(2)+vLeftRight(2)+vCross(2);
+    qtnResult(3) =c_qtnR(3)*c_qtnL(3)-fDot;
+    qtnResult.normalized();
 
-    return rst;
+    return qtnResult;
 }
-Vec operator*(const Quaternion& q,const Vec& v)
+Vec operator*(const Quaternion& c_qtnValue,const Vec& c_vValue)
 {
-    return q.toDCM()*v;
+    return c_qtnValue.toDCM()*c_vValue;
 }

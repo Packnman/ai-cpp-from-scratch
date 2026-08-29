@@ -1,8 +1,25 @@
 #include <iostream>
 #include <stdio.h>
+#include <string>
 #include "cuda_matrix.h"
 #include "cuda_tensor.h"
 #include "cuda_function.h"
+
+namespace {
+    const cuMat& requireSingleOutputGrad(
+        const TensorGradList& c_lpmOutputGrads,
+        const char* c_lpszFunctionName
+    )
+    {
+        if( (c_lpmOutputGrads.size()!=1)||(c_lpmOutputGrads[0]==nullptr) )
+        {
+            throw std::runtime_error(
+                std::string(c_lpszFunctionName)+": exactly one output gradient is required"
+            );
+        }
+        return *c_lpmOutputGrads[0];
+    }
+}
 
 // --------------------------
 // Function
@@ -15,48 +32,45 @@ Function::~Function()
 {
 
 }
-void Function::backward(
-    cuMat& grad,
-    std::vector<std::shared_ptr<Tensor>>& inputs,
-    std::vector<std::shared_ptr<Tensor>>& outputs
-)
+TensorList Function::apply(const TensorList& c_spmInputs)
 {
-    throw std::runtime_error(
-        "Function::backward is not implemented"
-    );
-}
-std::shared_ptr<Tensor> Function::forward(
-    std::vector<std::shared_ptr<Tensor>>& inputs,
-    std::vector<std::shared_ptr<Tensor>>& outputs
-)
-{
-    throw std::runtime_error(
-        "Function::forward is not implemented"
-    );
-}
-std::shared_ptr<Tensor> Function::operator()(
-    std::vector<std::shared_ptr<Tensor>>& inputs
-)
-{
-    std::vector<std::shared_ptr<Tensor>> outputs;
-
-    std::shared_ptr<Tensor> rst =forward( inputs,outputs );
-    outputs.push_back( rst );
-
-    Context* lpContext  =new Context(
-        // Non
-    );
-    std::shared_ptr<Context> context    =std::shared_ptr<Context>(lpContext);
-    context->_lpFunc    =this;
-    context->_spInputs  =inputs;
-    for( int i=0;i<outputs.size();i++ )
+    TensorList spmOutputs =forward( c_spmInputs );
+    if( spmOutputs.empty() )
     {
-        context->_wpOutputs.push_back( outputs[i] );
+        throw std::runtime_error(
+            "Function::apply: forward must return at least one output"
+        );
     }
 
-    rst->_spContexts =context;
+    auto spContext  =std::make_shared<Context>();
+    spContext->_lpFunc      =this;
+    spContext->_spmInputs   =c_spmInputs;
+    for( const auto& c_spmOutput : spmOutputs )
+    {
+        if( c_spmOutput==nullptr )
+        {
+            throw std::runtime_error(
+                "Function::apply: forward returned a null output"
+            );
+        }
+        spContext->_wpmOutputs.push_back( c_spmOutput );
+        c_spmOutput->_spContext =spContext;
+    }
 
-    return rst;
+    return spmOutputs;
+}
+
+TensorPtr Function::operator()(const TensorList& c_spmInputs)
+{
+    TensorList spmOutputs =apply( c_spmInputs );
+    if( spmOutputs.size()!=1 )
+    {
+        throw std::runtime_error(
+            "Function::operator(): use apply() for a multi-output Function"
+        );
+    }
+
+    return spmOutputs[0];
 }
 
 // --------------------------
@@ -84,13 +98,14 @@ ReLU::~ReLU()
     // nothing
 }
 void ReLU::backward(
-    cuMat& grad,
-    std::vector<std::shared_ptr<Tensor>>& inputs,
-    std::vector<std::shared_ptr<Tensor>>& outputs
+    const TensorGradList& c_lpmOutputGrads,
+    const TensorList& c_spmInputs,
+    const TensorList& c_spmOutputs
 )
 {
+    (void)c_spmOutputs;
     // 逆伝播
-    if( inputs.size()!=1 )
+    if( c_spmInputs.size()!=1 )
     {
         throw std::runtime_error(
             "ReLU::backward: ReLU requires exactly one input"
@@ -98,37 +113,33 @@ void ReLU::backward(
     }
     //
     cuda_ReLU_backward(
-        inputs[0]->_mGrad,
-        inputs[0]->_mData,
-        grad
+        c_spmInputs[0]->_mGrad,
+        c_spmInputs[0]->_mData,
+        requireSingleOutputGrad(c_lpmOutputGrads,"ReLU::backward")
     );
 }
 
-std::shared_ptr<Tensor> ReLU::forward(
-    std::vector<std::shared_ptr<Tensor>>& inputs,
-    std::vector<std::shared_ptr<Tensor>>& outputs
-)
+TensorList ReLU::forward(const TensorList& c_spmInputs)
 {
     // ReLU(x) =max(0,x)
-    if( inputs.size()!=1 )
+    if( c_spmInputs.size()!=1 )
     {
         throw std::runtime_error(
             "ReLU::forward: ReLU requires exactly one input"
         );
     }
     //
-    Tensor* lpTensor    =new Tensor(
-        inputs[0]->_mData._nRows,
-        inputs[0]->_mData._nCols
+    auto spmResult =std::make_shared<Tensor>(
+        c_spmInputs[0]->_mData._nRows,
+        c_spmInputs[0]->_mData._nCols
     );
-    std::shared_ptr<Tensor> rst =std::shared_ptr<Tensor>( lpTensor );
     // 順伝播
     cuda_ReLU_forward(
-        rst->_mData,
-        inputs[0]->_mData
+        spmResult->_mData,
+        c_spmInputs[0]->_mData
     );
 
-    return rst;
+    return {spmResult};
 }
 
 
@@ -146,37 +157,42 @@ Linear::~Linear()
 
 }
 void Linear::backward(
-    cuMat& grad,
-    std::vector<std::shared_ptr<Tensor>>& inputs,
-    std::vector<std::shared_ptr<Tensor>>& outputs
+    const TensorGradList& c_lpmOutputGrads,
+    const TensorList& c_spmInputs,
+    const TensorList& c_spmOutputs
 )
 {
+    (void)c_spmOutputs;
     // 損失関数 L が各変数に対してどれくらい変化するかを求めている
     // Y = WX + b
     // grad = dL/dY
-    // inputs[0]->_mGrad = dL/dX
+    // c_spmInputs[0]->_mGrad = dL/dX
     // _lpmWeight->_mGrad = dL/dW
     // _lpmBias->_mGrad = dL/db
     //
     // サイズチェック
-    if( inputs.size()!=1 )
+    if( c_spmInputs.size()!=1 )
     {
         throw std::runtime_error(
             "Linear::backward: Linear requires exactly one input"
         );
     }
+    const cuMat& c_mGrad =requireSingleOutputGrad(
+        c_lpmOutputGrads,
+        "Linear::backward"
+    );
     // 全要素1行列の作成
-    if( (_mTmp._nRows!=1)||(_mTmp._nCols!=inputs[0]->_mData._nCols) )
+    if( (_mTmp._nRows!=1)||(_mTmp._nCols!=c_spmInputs[0]->_mData._nCols) )
     {
-        _mTmp   =cuMat( 1,inputs[0]->_mData._nCols );
+        _mTmp   =cuMat( 1,c_spmInputs[0]->_mData._nCols );
         cuda_fill( _mTmp,1.0f );
     }
 
     // X.grad += W^T * grad
     cuda_gemm(
-        inputs[0]->_mGrad,
+        c_spmInputs[0]->_mGrad,
         _lpmWeight->_mData,
-        grad,
+        c_mGrad,
         true,
         false,
         1.0f,
@@ -186,8 +202,8 @@ void Linear::backward(
     // W.grad += grad * X^T
     cuda_gemm(
         _lpmWeight->_mGrad,
-        grad,
-        inputs[0]->_mData,
+        c_mGrad,
+        c_spmInputs[0]->_mData,
         false,
         true,
         1.0f,
@@ -197,7 +213,7 @@ void Linear::backward(
     // b.grad += grad * ones^T
     cuda_gemm(
         _lpmBias->_mGrad,
-        grad,
+        c_mGrad,
         _mTmp,
         false,
         true,
@@ -205,42 +221,38 @@ void Linear::backward(
         1.0f
     );
 }
-std::shared_ptr<Tensor> Linear::forward(
-    std::vector<std::shared_ptr<Tensor>>& inputs,
-    std::vector<std::shared_ptr<Tensor>>& outputs
-)
+TensorList Linear::forward(const TensorList& c_spmInputs)
 {
     // Y = WX + b
-    if( inputs.size()!=1 )
+    if( c_spmInputs.size()!=1 )
     {
         throw std::runtime_error(
             "Linear::forward: Linear requires exactly one input"
         );
     }
     // 全要素1行列の作成
-    if( (_mTmp._nRows!=1)||(_mTmp._nCols!=inputs[0]->_mData._nCols) )
+    if( (_mTmp._nRows!=1)||(_mTmp._nCols!=c_spmInputs[0]->_mData._nCols) )
     {
-        _mTmp   =cuMat( 1,inputs[0]->_mData._nCols );
+        _mTmp   =cuMat( 1,c_spmInputs[0]->_mData._nCols );
         cuda_fill( _mTmp,1.0f );
     }
     //
-    Tensor* lpTensor    =new Tensor(
+    auto spmResult =std::make_shared<Tensor>(
         _lpmWeight->_mData._nRows,
-        inputs[0]->_mData._nCols
+        c_spmInputs[0]->_mData._nCols
     );
-    std::shared_ptr<Tensor> rst =std::shared_ptr<Tensor>( lpTensor );
     
     // u = W * X
     cuda_gemm(
-        rst->_mData,
+        spmResult->_mData,
         _lpmWeight->_mData,
-        inputs[0]->_mData
+        c_spmInputs[0]->_mData
     );
     // biasを各batchに加える
     // _mTmp = [1 1 1 ... 1]
     // u += b * _mTmp
     cuda_gemm(
-        rst->_mData,
+        spmResult->_mData,
         _lpmBias->_mData,
         _mTmp,
         false,
@@ -249,7 +261,7 @@ std::shared_ptr<Tensor> Linear::forward(
         1.0f
     );
 
-    return rst;
+    return {spmResult};
 }
 
 // --------------------------
@@ -264,13 +276,14 @@ GELU::~GELU()
 
 }
 void GELU::backward(
-    cuMat& grad,
-    std::vector<std::shared_ptr<Tensor>>& inputs,
-    std::vector<std::shared_ptr<Tensor>>& outputs
+    const TensorGradList& c_lpmOutputGrads,
+    const TensorList& c_spmInputs,
+    const TensorList& c_spmOutputs
 )
 {
+    (void)c_spmOutputs;
     // 内容はREADMEを参照すること
-    if( inputs.size()!=1 )
+    if( c_spmInputs.size()!=1 )
     {
         throw std::runtime_error(
             "GELU::backward: GELU requires exactly one input"
@@ -278,36 +291,32 @@ void GELU::backward(
     }
     //
     cuda_GELU_backward(
-        inputs[0]->_mGrad,
-        inputs[0]->_mData,
-        grad
+        c_spmInputs[0]->_mGrad,
+        c_spmInputs[0]->_mData,
+        requireSingleOutputGrad(c_lpmOutputGrads,"GELU::backward")
     );
 }
-std::shared_ptr<Tensor> GELU::forward(
-    std::vector<std::shared_ptr<Tensor>>& inputs,
-    std::vector<std::shared_ptr<Tensor>>& outputs
-)
+TensorList GELU::forward(const TensorList& c_spmInputs)
 {
     // 内容はREADMEを参照すること
-    if( inputs.size()!=1 )
+    if( c_spmInputs.size()!=1 )
     {
         throw std::runtime_error(
             "GELU::forward: GELU requires exactly one input"
         );
     }
 
-    Tensor* lpTensor    =new Tensor(
-        inputs[0]->_mData._nRows,
-        inputs[0]->_mData._nCols
+    auto spmResult =std::make_shared<Tensor>(
+        c_spmInputs[0]->_mData._nRows,
+        c_spmInputs[0]->_mData._nCols
     );
-    std::shared_ptr<Tensor> rst =std::shared_ptr<Tensor>( lpTensor );
     //
     cuda_GELU_forward(
-        rst->_mData,
-        inputs[0]->_mData
+        spmResult->_mData,
+        c_spmInputs[0]->_mData
     );
 
-    return rst;
+    return {spmResult};
 }
 
 // --------------------------
@@ -322,13 +331,14 @@ SoftmaxCrossEntropy::~SoftmaxCrossEntropy()
 
 }
 void SoftmaxCrossEntropy::backward(
-    cuMat& grad,
-    std::vector<std::shared_ptr<Tensor>>& inputs,
-    std::vector<std::shared_ptr<Tensor>>& outputs
+    const TensorGradList& c_lpmOutputGrads,
+    const TensorList& c_spmInputs,
+    const TensorList& c_spmOutputs
 )
 {
-    // inputs[0] = logits
-    // inputs[1] = target(one-hot)
+    (void)c_spmOutputs;
+    // c_spmInputs[0] = logits
+    // c_spmInputs[1] = target(one-hot)
     //
     // L = SoftmaxCrossEntropy(logits, target)
     //
@@ -337,7 +347,7 @@ void SoftmaxCrossEntropy::backward(
     //
     // logits.grad += grad * dL/dlogits
     // 
-    if( inputs.size()!=2 )
+    if( c_spmInputs.size()!=2 )
     {
         throw std::runtime_error(
             "SoftmaxCrossEntropy::backward: "
@@ -346,28 +356,25 @@ void SoftmaxCrossEntropy::backward(
     }
     //
     cuda_SoftmaxCrossEntropy_backward(
-        inputs[0]->_mGrad,
-        inputs[0]->_mData,
-        inputs[1]->_mData,
-        grad
+        c_spmInputs[0]->_mGrad,
+        c_spmInputs[0]->_mData,
+        c_spmInputs[1]->_mData,
+        requireSingleOutputGrad(c_lpmOutputGrads,"SoftmaxCrossEntropy::backward")
     );
 }
-std::shared_ptr<Tensor> SoftmaxCrossEntropy::forward(
-    std::vector<std::shared_ptr<Tensor>>& inputs,
-    std::vector<std::shared_ptr<Tensor>>& outputs
-)
+TensorList SoftmaxCrossEntropy::forward(const TensorList& c_spmInputs)
 {
-    // inputs[0] = logits
-    // inputs[1] = target(one-hot)
-    if( inputs.size()!=2 )
+    // c_spmInputs[0] = logits
+    // c_spmInputs[1] = target(one-hot)
+    if( c_spmInputs.size()!=2 )
     {
         throw std::runtime_error(
             "SoftmaxCrossEntropy::forward: "
             "SoftmaxCrossEntropy requires exactly two inputs"
         );
     }
-    if( (inputs[0]->_mData._nRows!=inputs[1]->_mData._nRows)||
-        (inputs[0]->_mData._nCols!=inputs[1]->_mData._nCols) )
+    if( (c_spmInputs[0]->_mData._nRows!=c_spmInputs[1]->_mData._nRows)||
+        (c_spmInputs[0]->_mData._nCols!=c_spmInputs[1]->_mData._nCols) )
     {
         throw std::runtime_error(
             "SoftmaxCrossEntropy::forward: "
@@ -375,17 +382,13 @@ std::shared_ptr<Tensor> SoftmaxCrossEntropy::forward(
         );
     }
     //
-    Tensor* lpTensor    =new Tensor(
-        1,
-        1
-    );
-    std::shared_ptr<Tensor> rst =std::shared_ptr<Tensor>( lpTensor );
+    auto spmResult =std::make_shared<Tensor>( 1,1 );
 
     cuda_SoftmaxCrossEntropy_forward(
-        rst->_mData,
-        inputs[0]->_mData,
-        inputs[1]->_mData
+        spmResult->_mData,
+        c_spmInputs[0]->_mData,
+        c_spmInputs[1]->_mData
     );
 
-    return rst;
+    return {spmResult};
 }

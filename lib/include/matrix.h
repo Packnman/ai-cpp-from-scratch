@@ -1,7 +1,7 @@
 #pragma once
 
-#define IDX2F(row,col,rows)   ((col)*(rows)+(row))      // column-major(Fortran)
-#define IDX2C(row,col,cols)   ((row)*(cols)+(col))      // row-major(C/C++)
+#define IDX2F(nRow,nCol,nRows)   ((nCol)*(nRows)+(nRow))      // column-major(Fortran)
+#define IDX2C(nRow,nCol,nCols)   ((nRow)*(nCols)+(nCol))      // row-major(C/C++)
 
 class Euler;
 class Quaternion;
@@ -13,8 +13,8 @@ class Quaternion;
 class Mat{
 public:
     Mat(int nRows,int nCols);
-    Mat(const Mat& val);
-    Mat(Mat&& val) noexcept;
+    Mat(const Mat& c_mValue);
+    Mat(Mat&& mValue) noexcept;
     ~Mat();
 private:
 public:
@@ -28,18 +28,18 @@ public:
     virtual Euler toEul() const;
     virtual Quaternion toQtn() const;
 public:
-    Mat& operator=(const Mat& val);         // コピー演算子
-    Mat& operator=(Mat&& val) noexcept;     // ムーブ演算子
-    Mat& operator+=(const Mat& val);
-    Mat& operator-=(const Mat& val);
-    Mat& operator*=(const Mat& val);
-    Mat& operator*=(float val);
-    float& operator()(int row,int col);
-    const float& operator()(int row,int col) const;
+    Mat& operator=(const Mat& c_mValue);         // コピー演算子
+    Mat& operator=(Mat&& mValue) noexcept;       // ムーブ演算子
+    Mat& operator+=(const Mat& c_mValue);
+    Mat& operator-=(const Mat& c_mValue);
+    Mat& operator*=(const Mat& c_mValue);
+    Mat& operator*=(float fValue);
+    float& operator()(int nRow,int nCol);
+    const float& operator()(int nRow,int nCol) const;
 };
-Mat operator+(const Mat& L,const Mat& R);
-Mat operator-(const Mat& L,const Mat& R);
-Mat operator*(const Mat& L,const Mat& R);
+Mat operator+(const Mat& c_mL,const Mat& c_mR);
+Mat operator-(const Mat& c_mL,const Mat& c_mR);
+Mat operator*(const Mat& c_mL,const Mat& c_mR);
 
 // --------------------------
 // Vector
@@ -47,19 +47,19 @@ Mat operator*(const Mat& L,const Mat& R);
 class Vec : public Mat{
 public:
     Vec(int nRows);
-    Vec(const Mat& val);
+    Vec(const Mat& c_mValue);
     ~Vec();
 public:
     Mat skew() const;
-    Vec cpx(const Vec& val) const;
-    float dot(const Vec& val) const;
+    Vec cpx(const Vec& c_vValue) const;
+    float dot(const Vec& c_vValue) const;
     float norm() const;
-    Quaternion exp(float dt) const;
+    Quaternion exp(float fDt) const;
 public:
-    float& operator()(int row);
-    const float& operator()(int row) const;
+    float& operator()(int nRow);
+    const float& operator()(int nRow) const;
 };
-Vec operator*(const Mat& L,const Vec& R);
+Vec operator*(const Mat& c_mL,const Vec& c_vR);
 
 // --------------------------
 // Euler
@@ -67,14 +67,14 @@ Vec operator*(const Mat& L,const Vec& R);
 class Euler : public Vec{
 public:
     Euler();
-    Euler(const Mat& val);
+    Euler(const Mat& c_mValue);
     ~Euler();
 public:
     Mat toDCM() const;
     virtual Quaternion toQtn() const;
 public:
-    friend Euler operator*(const Euler& e1,const Euler& e2);
-    friend Vec operator*(const Euler& e,const Vec& v);
+    friend Euler operator*(const Euler& c_eulL,const Euler& c_eulR);
+    friend Vec operator*(const Euler& c_eulValue,const Vec& c_vValue);
 };
 
 // --------------------------
@@ -83,18 +83,21 @@ public:
 class Quaternion : public Vec{
 public:
     Quaternion();
-    Quaternion(const Mat& val);
+    Quaternion(const Mat& c_mValue);
     ~Quaternion();
 public:
     Quaternion cnj() const;
     Vec axis() const;
     Mat dot_E() const;
-    Quaternion dot(const Vec& rps) const;
+    Quaternion dot(const Vec& c_vRps) const;
     void normalized();
     //
     Mat toDCM() const;
     virtual Euler toEul() const;
 public:
-    friend Quaternion operator*(const Quaternion& q1,const Quaternion& q2);
-    friend Vec operator*(const Quaternion& q,const Vec& v);
+    friend Quaternion operator*(
+        const Quaternion& c_qtnL,
+        const Quaternion& c_qtnR
+    );
+    friend Vec operator*(const Quaternion& c_qtnValue,const Vec& c_vValue);
 };

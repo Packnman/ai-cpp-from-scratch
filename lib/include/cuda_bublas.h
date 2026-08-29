@@ -5,16 +5,16 @@
 
 class cuCublas{
 public:
-    cuCublas()  {cublasCreate( &_hCuda );}
-    ~cuCublas() {cublasDestroy( _hCuda );}
+    cuCublas()  {cublasCreate( &_cblHandle );}
+    ~cuCublas() {cublasDestroy( _cblHandle );}
 
-    cublasHandle_t get() const  {return _hCuda;}
+    cublasHandle_t get() const  {return _cblHandle;}
 private:
-    cublasHandle_t _hCuda;
+    cublasHandle_t _cblHandle;
 };
 
 cublasHandle_t getCublasHandle()
 {
-    static cuCublas cuCublas;
-    return cuCublas.get();
+    static cuCublas cblInstance;
+    return cblInstance.get();
 }

@@ -4,15 +4,15 @@
 #include <iostream>
 #include "cuda_matrix.h"
 
-__global__ void kernel_fill(float* rst,float value,int size);
-__global__ void kernel_mul_elementwise(float* rst,const float* A,const float* B,int size);
-__global__ void kernel_ReLU_forward(float* rst,const float* value,int size);
-__global__ void kernel_ReLU_backward(float* rst,const float* data,const float* grad,int size);
-__global__ void kernel_GELU_forward(float* rst,const float* value,int size);
-__global__ void kernel_GELU_backward(float* rst,const float* data,const float* grad,int size);
-__global__ void kernel_SoftmaxCrossEntropy_forward(float* rst,const float* logits,const float* target,int nClass,int nBatch);
-__global__ void kernel_SoftmaxCrossEntropy_backward(float* rst,const float* logits,const float* target,const float* grad,int nClass,int nBatch);
-__global__ void kernel_Adam_update(float* data,const float* grad,float* m,float* v,float learningRate,float beta1,float beta2,float beta1Correction,float beta2Correction,float epsilon,int size);
+__global__ void kernel_fill(float* lpfResult,float c_fValue,int nSize);
+__global__ void kernel_mul_elementwise(float* lpfResult,const float* c_lpfA,const float* c_lpfB,int nSize);
+__global__ void kernel_ReLU_forward(float* lpfResult,const float* c_lpfValue,int nSize);
+__global__ void kernel_ReLU_backward(float* lpfResult,const float* c_lpfData,const float* c_lpfGrad,int nSize);
+__global__ void kernel_GELU_forward(float* lpfResult,const float* c_lpfValue,int nSize);
+__global__ void kernel_GELU_backward(float* lpfResult,const float* c_lpfData,const float* c_lpfGrad,int nSize);
+__global__ void kernel_SoftmaxCrossEntropy_forward(float* lpfResult,const float* c_lpfLogits,const float* c_lpfTarget,int nClass,int nBatch);
+__global__ void kernel_SoftmaxCrossEntropy_backward(float* lpfResult,const float* c_lpfLogits,const float* c_lpfTarget,const float* c_lpfGrad,int nClass,int nBatch);
+__global__ void kernel_Adam_update(float* lpfData,const float* c_lpfGrad,float* lpfFirstMoment,float* lpfSecondMoment,float fLearningRate,float fBeta1,float fBeta2,float fBeta1Correction,float fBeta2Correction,float fEpsilon,int nSize);
 
 void cuMat::ones()
 {
@@ -27,186 +27,186 @@ void cuMat::ones()
         nSize
     );
     // 
-    cudaError_t err =cudaGetLastError();
-    if( err!=cudaSuccess )
+    cudaError_t cudError =cudaGetLastError();
+    if( cudError!=cudaSuccess )
     {
         throw std::runtime_error(
             std::string( "kernel_fill failed: " )
-            + cudaGetErrorString( err )
+            + cudaGetErrorString( cudError )
         );
     }
 }
-void cuda_fill(cuMat& rst,float value)
+void cuda_fill(cuMat& mResult,float fValue)
 {
-    // R[:] = value
+    // R[:] = fValue
 
-    int nSize       =rst._nRows * rst._nCols;
+    int nSize       =mResult._nRows * mResult._nCols;
     int nThreads    =256;
     int nBlocks     =(nSize + nThreads - 1)/nThreads;
     if( nSize<=0 )    {return;}
     //
     kernel_fill<<<nBlocks,nThreads>>>(
-        rst._lpfDevice,
-        value,nSize
+        mResult._lpfDevice,
+        fValue,nSize
     );
     // 
-    cudaError_t err =cudaGetLastError();
-    if( err!=cudaSuccess )
+    cudaError_t cudError =cudaGetLastError();
+    if( cudError!=cudaSuccess )
     {
         throw std::runtime_error(
             std::string( "kernel_fill failed: " )
-            + cudaGetErrorString( err )
+            + cudaGetErrorString( cudError )
         );
     }
 }
-void cuda_mul_elementwise(cuMat& rst,const cuMat& A,const cuMat& B)
+void cuda_mul_elementwise(cuMat& mResult,const cuMat& c_mA,const cuMat& c_mB)
 {
-    // R = A ⦿ B
+    // R = c_mA ⦿ c_mB
     
     // 行列数の確認
-    if( (A._nRows!=B._nRows)||(A._nCols!=B._nCols) )
+    if( (c_mA._nRows!=c_mB._nRows)||(c_mA._nCols!=c_mB._nCols) )
     {
         throw std::runtime_error(
             "cuda_mul_elementwise: A and B size mismatch"
         );
     }
-    if( (rst._nRows!=A._nRows)||(rst._nCols!=A._nCols) )
+    if( (mResult._nRows!=c_mA._nRows)||(mResult._nCols!=c_mA._nCols) )
     {
         throw std::runtime_error(
             "cuda_mul_elementwise: result size mismatch"
         );
     }
 
-    int nSize    =A._nRows * A._nCols;
+    int nSize    =c_mA._nRows * c_mA._nCols;
     int nThreads =256;
     int nBlocks  =(nSize + nThreads - 1) / nThreads;
     if( nSize<=0 )   {return;}
     //
     kernel_mul_elementwise<<<nBlocks, nThreads>>>(
-        rst._lpfDevice,
-        A._lpfDevice,
-        B._lpfDevice,
+        mResult._lpfDevice,
+        c_mA._lpfDevice,
+        c_mB._lpfDevice,
         nSize
     );
 
-    cudaError_t error = cudaGetLastError();
-    if( error!=cudaSuccess )
+    cudaError_t cudError = cudaGetLastError();
+    if( cudError!=cudaSuccess )
     {
         throw std::runtime_error(
             "cuda_mul_elementwise: kernel launch failed"
         );
     }
 }
-void cuda_ReLU_forward(cuMat& rst,const cuMat& value)
+void cuda_ReLU_forward(cuMat& mResult,const cuMat& c_mValue)
 {
-    if( (rst._nRows!=value._nRows)||(rst._nCols!=value._nCols) )
+    if( (mResult._nRows!=c_mValue._nRows)||(mResult._nCols!=c_mValue._nCols) )
     {
         throw std::runtime_error(
             "cuda_ReLU_forward: matrix size mismatch"
         );
     }
     //
-    int nSize       =value._nRows * value._nCols;
+    int nSize       =c_mValue._nRows * c_mValue._nCols;
     int nThreads    =256;
     int nBlocks     =(nSize + nThreads - 1)/nThreads;
     if( nSize<=0 )   {return;}
     //
     kernel_ReLU_forward<<<nBlocks,nThreads>>>(
-        rst._lpfDevice,
-        value._lpfDevice,
+        mResult._lpfDevice,
+        c_mValue._lpfDevice,
         nSize
     );
 
-    cudaError_t error = cudaGetLastError();
-    if( error!=cudaSuccess )
+    cudaError_t cudError = cudaGetLastError();
+    if( cudError!=cudaSuccess )
     {
         throw std::runtime_error(
             "cuda_ReLU_forward: kernel launch failed"
         );
     }
 }
-void cuda_ReLU_backward(cuMat& rst,const cuMat& data,const cuMat& grad)
+void cuda_ReLU_backward(cuMat& mResult,const cuMat& c_mData,const cuMat& c_mGrad)
 {
-    if( (rst._nRows!=data._nRows)||(rst._nCols!=data._nCols)||
-        (data._nRows!=grad._nRows)||(data._nCols!=grad._nCols) )
+    if( (mResult._nRows!=c_mData._nRows)||(mResult._nCols!=c_mData._nCols)||
+        (c_mData._nRows!=c_mGrad._nRows)||(c_mData._nCols!=c_mGrad._nCols) )
     {
         throw std::runtime_error(
             "cuda_ReLU_backward: matrix size mismatch"
         );
     }
     //
-    int nSize       =data._nRows * data._nCols;
+    int nSize       =c_mData._nRows * c_mData._nCols;
     int nThreads    =256;
     int nBlocks     =(nSize + nThreads - 1)/nThreads;
     if( nSize<=0 )   {return;}
     //
     kernel_ReLU_backward<<<nBlocks,nThreads>>>(
-        rst._lpfDevice,
-        data._lpfDevice,
-        grad._lpfDevice,
+        mResult._lpfDevice,
+        c_mData._lpfDevice,
+        c_mGrad._lpfDevice,
         nSize
     );
     
-    cudaError_t error = cudaGetLastError();
-    if( error!=cudaSuccess )
+    cudaError_t cudError = cudaGetLastError();
+    if( cudError!=cudaSuccess )
     {
         throw std::runtime_error(
             "cuda_ReLU_backward: kernel launch failed"
         );
     }
 }
-void cuda_GELU_forward(cuMat& rst,const cuMat& value)
+void cuda_GELU_forward(cuMat& mResult,const cuMat& c_mValue)
 {
-    if( (rst._nRows!=value._nRows)||(rst._nCols!=value._nCols) )
+    if( (mResult._nRows!=c_mValue._nRows)||(mResult._nCols!=c_mValue._nCols) )
     {
         throw std::runtime_error(
             "cuda_ReLU_forward: matrix size mismatch"
         );
     }
     //
-    int nSize       =value._nRows * value._nCols;
+    int nSize       =c_mValue._nRows * c_mValue._nCols;
     int nThreads    =256;
     int nBlocks     =(nSize + nThreads - 1)/nThreads;
     if( nSize<=0 )   {return;}
     //
     kernel_GELU_forward<<<nBlocks,nThreads>>>(
-        rst._lpfDevice,
-        value._lpfDevice,
+        mResult._lpfDevice,
+        c_mValue._lpfDevice,
         nSize
     );
     //
-    cudaError_t error = cudaGetLastError();
-    if( error!=cudaSuccess )
+    cudaError_t cudError = cudaGetLastError();
+    if( cudError!=cudaSuccess )
     {
         throw std::runtime_error(
             "cuda_ReLU_forward: kernel launch failed"
         );
     }
 }
-void cuda_GELU_backward(cuMat& rst,const cuMat& data,const cuMat& grad)
+void cuda_GELU_backward(cuMat& mResult,const cuMat& c_mData,const cuMat& c_mGrad)
 {
-    if( (rst._nRows!=data._nRows)||(rst._nCols!=data._nCols)||
-        (data._nRows!=grad._nRows)||(data._nCols!=grad._nCols) )
+    if( (mResult._nRows!=c_mData._nRows)||(mResult._nCols!=c_mData._nCols)||
+        (c_mData._nRows!=c_mGrad._nRows)||(c_mData._nCols!=c_mGrad._nCols) )
     {
         throw std::runtime_error(
             "cuda_GELU_backward: matrix size mismatch"
         );
     }
     //
-    int nSize       =data._nRows * data._nCols;
+    int nSize       =c_mData._nRows * c_mData._nCols;
     int nThreads    =256;
     int nBlocks     =(nSize + nThreads - 1)/nThreads;
     if( nSize<=0 )   {return;}
     //
     kernel_GELU_backward<<<nBlocks,nThreads>>>(
-        rst._lpfDevice,
-        data._lpfDevice,
-        grad._lpfDevice,
+        mResult._lpfDevice,
+        c_mData._lpfDevice,
+        c_mGrad._lpfDevice,
         nSize
     );
     //
-    cudaError_t error = cudaGetLastError();
-    if( error!=cudaSuccess )
+    cudaError_t cudError = cudaGetLastError();
+    if( cudError!=cudaSuccess )
     {
         throw std::runtime_error(
             "cuda_GELU_backward: kernel launch failed"
@@ -214,41 +214,41 @@ void cuda_GELU_backward(cuMat& rst,const cuMat& data,const cuMat& grad)
     }
 }
 void cuda_SoftmaxCrossEntropy_forward(
-    cuMat& rst,
-    const cuMat& logits,
-    const cuMat& target
+    cuMat& mResult,
+    const cuMat& c_mLogits,
+    const cuMat& c_mTarget
 )
 {
-    if( (logits._nRows!=target._nRows)||(logits._nCols!=target._nCols) )
+    if( (c_mLogits._nRows!=c_mTarget._nRows)||(c_mLogits._nCols!=c_mTarget._nCols) )
     {
         throw std::runtime_error(
             "cuda_SoftmaxCrossEntropy_forward: matrix size mismatch"
         );
     }
-    if( (rst._nRows!=1)||(rst._nCols!=1) )
+    if( (mResult._nRows!=1)||(mResult._nCols!=1) )
     {
         throw std::runtime_error(
             "cuda_SoftmaxCrossEntropy_forward: result must be 1x1"
         );
     }
     //
-    int nClass      =logits._nRows;
-    int nBatch      =logits._nCols;
+    int nClass      =c_mLogits._nRows;
+    int nBatch      =c_mLogits._nCols;
     int nThreads    =256;
     int nBlocks     =(nBatch + nThreads - 1)/nThreads;
     if( (nClass<=0)||(nBatch<=0) )  {return;}
     //
-    cuda_fill( rst,0.0f );      // atomicAddするので最初は0
+    cuda_fill( mResult,0.0f );      // atomicAddするので最初は0
     kernel_SoftmaxCrossEntropy_forward<<<nBlocks,nThreads>>>(
-        rst._lpfDevice,
-        logits._lpfDevice,
-        target._lpfDevice,
+        mResult._lpfDevice,
+        c_mLogits._lpfDevice,
+        c_mTarget._lpfDevice,
         nClass,
         nBatch
     );
     //
-    cudaError_t error = cudaGetLastError();
-    if( error!=cudaSuccess )
+    cudaError_t cudError = cudaGetLastError();
+    if( cudError!=cudaSuccess )
     {
         throw std::runtime_error(
             "cuda_SoftmaxCrossEntropy_forward: kernel launch failed"
@@ -256,48 +256,48 @@ void cuda_SoftmaxCrossEntropy_forward(
     }
 }
 void cuda_SoftmaxCrossEntropy_backward(
-    cuMat& logitsGrad,
-    const cuMat& logits,
-    const cuMat& target,
-    const cuMat& grad
+    cuMat& mLogitsGrad,
+    const cuMat& c_mLogits,
+    const cuMat& c_mTarget,
+    const cuMat& c_mGrad
 )
 {
-    if( (logits._nRows!=target._nRows)||(logits._nCols!=target._nCols) )
+    if( (c_mLogits._nRows!=c_mTarget._nRows)||(c_mLogits._nCols!=c_mTarget._nCols) )
     {
         throw std::runtime_error(
             "cuda_SoftmaxCrossEntropy_backward: matrix size mismatch"
         );
     }
-    if( (logits._nRows!=logitsGrad._nRows)||(logits._nCols!=logitsGrad._nCols) )
+    if( (c_mLogits._nRows!=mLogitsGrad._nRows)||(c_mLogits._nCols!=mLogitsGrad._nCols) )
     {
         throw std::runtime_error(
             "cuda_SoftmaxCrossEntropy_backward: gradient size mismatch"
         );
     }
-    if( (grad._nRows!=1)||(grad._nCols!=1) )
+    if( (c_mGrad._nRows!=1)||(c_mGrad._nCols!=1) )
     {
         throw std::runtime_error(
             "cuda_SoftmaxCrossEntropy_backward: grad must be 1x1"
         );
     }
     //
-    int nClass      =logits._nRows;
-    int nBatch      =logits._nCols;
+    int nClass      =c_mLogits._nRows;
+    int nBatch      =c_mLogits._nCols;
     int nThreads    =256;
     int nBlocks     =(nBatch + nThreads - 1)/nThreads;
     if( (nClass<=0)||(nBatch<=0) )  {return;}
     //
     kernel_SoftmaxCrossEntropy_backward<<<nBlocks,nThreads>>>(
-        logitsGrad._lpfDevice,
-        logits._lpfDevice,
-        target._lpfDevice,
-        grad._lpfDevice,
+        mLogitsGrad._lpfDevice,
+        c_mLogits._lpfDevice,
+        c_mTarget._lpfDevice,
+        c_mGrad._lpfDevice,
         nClass,
         nBatch
     );
     //
-    cudaError_t error = cudaGetLastError();
-    if( error!=cudaSuccess )
+    cudaError_t cudError = cudaGetLastError();
+    if( cudError!=cudaSuccess )
     {
         throw std::runtime_error(
             "cuda_SoftmaxCrossEntropy_backward: kernel launch failed"
@@ -305,48 +305,48 @@ void cuda_SoftmaxCrossEntropy_backward(
     }
 }
 void cuda_Adam_update(
-    cuMat& data,
-    const cuMat& grad,
-    cuMat& m,
-    cuMat& v,
-    float learningRate,
-    float beta1,
-    float beta2,
-    float beta1Correction,
-    float beta2Correction,
-    float epsilon
+    cuMat& mData,
+    const cuMat& c_mGrad,
+    cuMat& mFirstMoment,
+    cuMat& mSecondMoment,
+    float fLearningRate,
+    float fBeta1,
+    float fBeta2,
+    float fBeta1Correction,
+    float fBeta2Correction,
+    float fEpsilon
 )
 {
-    if( (data._nRows!=grad._nRows)||(data._nCols!=grad._nCols)||
-        (data._nRows!=m._nRows)||(data._nCols!=m._nCols)||
-        (data._nRows!=v._nRows)||(data._nCols!=v._nCols) )
+    if( (mData._nRows!=c_mGrad._nRows)||(mData._nCols!=c_mGrad._nCols)||
+        (mData._nRows!=mFirstMoment._nRows)||(mData._nCols!=mFirstMoment._nCols)||
+        (mData._nRows!=mSecondMoment._nRows)||(mData._nCols!=mSecondMoment._nCols) )
     {
         throw std::runtime_error(
             "cuda_Adam_update: matrix size mismatch"
         );
     }
 
-    int nSize       =data._nRows*data._nCols;
+    int nSize       =mData._nRows*mData._nCols;
     int nThreads    =256;
     int nBlocks     =(nSize+nThreads-1)/nThreads;
     if( nSize<=0 )  {return;}
     //
     kernel_Adam_update<<<nBlocks,nThreads>>>(
-        data._lpfDevice,
-        grad._lpfDevice,
-        m._lpfDevice,
-        v._lpfDevice,
-        learningRate,
-        beta1,
-        beta2,
-        beta1Correction,
-        beta2Correction,
-        epsilon,
+        mData._lpfDevice,
+        c_mGrad._lpfDevice,
+        mFirstMoment._lpfDevice,
+        mSecondMoment._lpfDevice,
+        fLearningRate,
+        fBeta1,
+        fBeta2,
+        fBeta1Correction,
+        fBeta2Correction,
+        fEpsilon,
         nSize
     );
 
-    cudaError_t error   =cudaGetLastError();
-    if( error!=cudaSuccess )
+    cudaError_t cudError   =cudaGetLastError();
+    if( cudError!=cudaSuccess )
     {
         throw std::runtime_error(
             "cuda_Adam_update: kernel launch failed"
@@ -355,164 +355,164 @@ void cuda_Adam_update(
 }
 
 
-__global__ void kernel_fill(float* rst,float value,int size)
+__global__ void kernel_fill(float* lpfResult,float c_fValue,int nSize)
 {
-    int i   =blockIdx.x * blockDim.x + threadIdx.x;
+    int nIndex   =blockIdx.x * blockDim.x + threadIdx.x;
 
-    if( i<size )
+    if( nIndex<nSize )
     {
-        rst[i]    =value;
+        lpfResult[nIndex]    =c_fValue;
     }
 }
 
-__global__ void kernel_mul_elementwise(float* rst,const float* A,const float* B,int size)
+__global__ void kernel_mul_elementwise(float* lpfResult,const float* c_lpfA,const float* c_lpfB,int nSize)
 {
-    int i   =blockIdx.x * blockDim.x + threadIdx.x;
+    int nIndex   =blockIdx.x * blockDim.x + threadIdx.x;
 
-    if( i<size )
+    if( nIndex<nSize )
     {
-        rst[i]    =A[i] * B[i];
+        lpfResult[nIndex]    =c_lpfA[nIndex] * c_lpfB[nIndex];
     }
 }
-__global__ void kernel_ReLU_forward(float* rst,const float* value,int size)
+__global__ void kernel_ReLU_forward(float* lpfResult,const float* c_lpfValue,int nSize)
 {
-    int i   =blockIdx.x * blockDim.x + threadIdx.x;
+    int nIndex   =blockIdx.x * blockDim.x + threadIdx.x;
 
-    if( i<size )
+    if( nIndex<nSize )
     {
-        rst[i]  =value[i]>0.0f ? value[i] : 0.0f;
+        lpfResult[nIndex]  =c_lpfValue[nIndex]>0.0f ? c_lpfValue[nIndex] : 0.0f;
     }
 }
-__global__ void kernel_ReLU_backward(float* rst,const float* data,const float* grad,int size)
+__global__ void kernel_ReLU_backward(float* lpfResult,const float* c_lpfData,const float* c_lpfGrad,int nSize)
 {
-    int i   =blockIdx.x * blockDim.x + threadIdx.x;
+    int nIndex   =blockIdx.x * blockDim.x + threadIdx.x;
 
-    if( i<size )
+    if( nIndex<nSize )
     {
-        if( data[i]>0.0f )
+        if( c_lpfData[nIndex]>0.0f )
         {
-            rst[i]  +=grad[i];
+            lpfResult[nIndex]  +=c_lpfGrad[nIndex];
         }
     }
 }
-__global__ void kernel_GELU_forward(float* rst,const float* value,int size)
+__global__ void kernel_GELU_forward(float* lpfResult,const float* c_lpfValue,int nSize)
 {
-    int i   =blockIdx.x * blockDim.x + threadIdx.x;
+    int nIndex   =blockIdx.x * blockDim.x + threadIdx.x;
 
-    if( i<size )
+    if( nIndex<nSize )
     {
-        const float v   =value[i];
-        const float c   =0.7978845608f;
-        const float a   =0.044715f;
-        const float u   =c*(v + a*v*v*v);
-        const float t   =tanhf( u );
+        const float c_fValue =c_lpfValue[nIndex];
+        const float c_fScale =0.7978845608f;
+        const float c_fCubic =0.044715f;
+        const float c_fInner =c_fScale*(c_fValue+c_fCubic*c_fValue*c_fValue*c_fValue);
+        const float c_fTanh  =tanhf(c_fInner);
         
-        const float derivative  =0.5f*(1.0f + t);
+        const float c_fDerivative =0.5f*(1.0f+c_fTanh);
 
-        rst[i]  =value[i]*derivative;
+        lpfResult[nIndex] =c_lpfValue[nIndex]*c_fDerivative;
     }
 }
-__global__ void kernel_GELU_backward(float* rst,const float* data,const float* grad,int size)
+__global__ void kernel_GELU_backward(float* lpfResult,const float* c_lpfData,const float* c_lpfGrad,int nSize)
 {
-    int i   =blockIdx.x * blockDim.x + threadIdx.x;
+    int nIndex   =blockIdx.x * blockDim.x + threadIdx.x;
 
-    if( i<size )
+    if( nIndex<nSize )
     {
-        const float v   =data[i];
-        const float c   =0.7978845608f;
-        const float a   =0.044715f;
-        const float u   =c*(v + a*v*v*v);
-        const float t   =tanhf( u );
+        const float c_fValue =c_lpfData[nIndex];
+        const float c_fScale =0.7978845608f;
+        const float c_fCubic =0.044715f;
+        const float c_fInner =c_fScale*(c_fValue+c_fCubic*c_fValue*c_fValue*c_fValue);
+        const float c_fTanh  =tanhf(c_fInner);
 
-        const float derivative  =0.5f*(1.0f + t) + 0.5f*v*(1.0f - t*t)*c*(1.0f + 3.0f*a*v*v);
+        const float c_fDerivative =0.5f*(1.0f+c_fTanh)+0.5f*c_fValue*(1.0f-c_fTanh*c_fTanh)*c_fScale*(1.0f+3.0f*c_fCubic*c_fValue*c_fValue);
 
-        rst[i]  +=grad[i]*derivative;
+        lpfResult[nIndex] +=c_lpfGrad[nIndex]*c_fDerivative;
     }
 }
-__global__ void kernel_SoftmaxCrossEntropy_forward(float* rst,const float* logits,const float* target,int nClass,int nBatch)
+__global__ void kernel_SoftmaxCrossEntropy_forward(float* lpfResult,const float* c_lpfLogits,const float* c_lpfTarget,int nClass,int nBatch)
 {
-    int b   =blockIdx.x * blockDim.x + threadIdx.x;
+    int nBatchIndex   =blockIdx.x * blockDim.x + threadIdx.x;
 
-    if( b<nBatch )
+    if( nBatchIndex<nBatch )
     {
-        // max(logits)を求める
-        float fMaxLogits    =logits[b*nClass];
-        for( int i=1;i<nClass;i++ )
+        // max(c_lpfLogits)を求める
+        float fMaxLogits    =c_lpfLogits[nBatchIndex*nClass];
+        for( int nClassIndex=1;nClassIndex<nClass;nClassIndex++ )
         {
-            if( logits[b*nClass+i]>fMaxLogits )
+            if( c_lpfLogits[nBatchIndex*nClass+nClassIndex]>fMaxLogits )
             {
-                fMaxLogits    =logits[b*nClass+i];
+                fMaxLogits =c_lpfLogits[nBatchIndex*nClass+nClassIndex];
             }
         }
         // expの合計
         float fSumExp       =0.0f;
-        for( int i=0;i<nClass;i++ )
+        for( int nClassIndex=0;nClassIndex<nClass;nClassIndex++ )
         {
-            fSumExp +=expf( logits[b*nClass+i]-fMaxLogits );
+            fSumExp +=expf(c_lpfLogits[nBatchIndex*nClass+nClassIndex]-fMaxLogits);
         }
         // CrossEntropy
         float fLoss         =0.0;
         float fSumExpLog    =fMaxLogits + logf( fSumExp );
-        for( int i=0;i<nClass;i++ )
+        for( int nClassIndex=0;nClassIndex<nClass;nClassIndex++ )
         {
-            int idx =b*nClass+i;
+            int nIndex =nBatchIndex*nClass+nClassIndex;
 
-            fLoss   -=target[idx] * (logits[idx] - fSumExpLog);
+            fLoss   -=c_lpfTarget[nIndex] * (c_lpfLogits[nIndex] - fSumExpLog);
         }
         // batch平均
         atomicAdd(
-            rst,
+            lpfResult,
             fLoss/static_cast<float>(nBatch)
         );
     }
 }
-__global__ void kernel_SoftmaxCrossEntropy_backward(float* rst,const float* logits,const float* target,const float* grad,int nClass,int nBatch)
+__global__ void kernel_SoftmaxCrossEntropy_backward(float* lpfResult,const float* c_lpfLogits,const float* c_lpfTarget,const float* c_lpfGrad,int nClass,int nBatch)
 {
-    int b   =blockIdx.x * blockDim.x + threadIdx.x;
+    int nBatchIndex   =blockIdx.x * blockDim.x + threadIdx.x;
 
-    if( b<nBatch )
+    if( nBatchIndex<nBatch )
     {
-        // max(logits)
-        float fMaxLogits    =logits[b*nClass];
-        for( int i=0;i<nClass;i++ )
+        // max(c_lpfLogits)
+        float fMaxLogits    =c_lpfLogits[nBatchIndex*nClass];
+        for( int nClassIndex=0;nClassIndex<nClass;nClassIndex++ )
         {
-            if( logits[b*nClass+i]>fMaxLogits )
+            if( c_lpfLogits[nBatchIndex*nClass+nClassIndex]>fMaxLogits )
             {
-                fMaxLogits  =logits[b*nClass+i];
+                fMaxLogits =c_lpfLogits[nBatchIndex*nClass+nClassIndex];
             }
         }
         // expの合計
         float fSumExp   =0.0f;
-        for( int i=0;i<nClass;i++ )
+        for( int nClassIndex=0;nClassIndex<nClass;nClassIndex++ )
         {
-            fSumExp +=expf( logits[b*nClass+i]-fMaxLogits );
+            fSumExp +=expf(c_lpfLogits[nBatchIndex*nClass+nClassIndex]-fMaxLogits);
         }
         // gradient
-        for( int i=0;i<nClass;i++ )
+        for( int nClassIndex=0;nClassIndex<nClass;nClassIndex++ )
         {
-            int idx         =b*nClass+i;
-            float fSoftmax  =expf( logits[idx]-fMaxLogits )/fSumExp;
+            int nIndex =nBatchIndex*nClass+nClassIndex;
+            float fSoftmax  =expf( c_lpfLogits[nIndex]-fMaxLogits )/fSumExp;
 
-            rst[idx]    +=grad[0]*(fSoftmax-target[idx])/static_cast<float>(nBatch);
+            lpfResult[nIndex]    +=c_lpfGrad[0]*(fSoftmax-c_lpfTarget[nIndex])/static_cast<float>(nBatch);
         }
     }
 }
-__global__ void kernel_Adam_update(float* data,const float* grad,float* m,float* v,float learningRate,float beta1,float beta2,float beta1Correction,float beta2Correction,float epsilon,int size)
+__global__ void kernel_Adam_update(float* lpfData,const float* c_lpfGrad,float* lpfFirstMoment,float* lpfSecondMoment,float fLearningRate,float fBeta1,float fBeta2,float fBeta1Correction,float fBeta2Correction,float fEpsilon,int nSize)
 {
-    int i   =blockIdx.x * blockDim.x + threadIdx.x;
+    int nIndex   =blockIdx.x * blockDim.x + threadIdx.x;
 
-    if( i<size )
+    if( nIndex<nSize )
     {
-        float fGrad =grad[i];
+        float fGrad =c_lpfGrad[nIndex];
 
         // 1次モーメント
-        m[i]    =beta1*m[i] + (1.0f-beta1)*fGrad;
+        lpfFirstMoment[nIndex] =fBeta1*lpfFirstMoment[nIndex]+(1.0f-fBeta1)*fGrad;
         // 2次モーメント
-        v[i]    =beta2*v[i] + (1.0f-beta2)*fGrad*fGrad;
+        lpfSecondMoment[nIndex] =fBeta2*lpfSecondMoment[nIndex]+(1.0f-fBeta2)*fGrad*fGrad;
         // Bias Correction
-        float mHat  =m[i]/beta1Correction;
-        float vHat  =v[i]/beta2Correction;
+        float fFirstMomentHat =lpfFirstMoment[nIndex]/fBeta1Correction;
+        float fSecondMomentHat =lpfSecondMoment[nIndex]/fBeta2Correction;
         // Parameter update
-        data[i] -=learningRate*mHat/(sqrtf(vHat)+epsilon);
+        lpfData[nIndex] -=fLearningRate*fFirstMomentHat/(sqrtf(fSecondMomentHat)+fEpsilon);
     }
 }
