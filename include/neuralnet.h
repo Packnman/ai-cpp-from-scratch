@@ -39,10 +39,16 @@ public:
 private:
     std::shared_ptr<Tensor> _spmWeight;
     std::shared_ptr<Tensor> _spmBias;
+    // BatchNormのためのメンバー変数
+    std::shared_ptr<Tensor> _spmGamma;
+    std::shared_ptr<Tensor> _spmBeta;
+    std::shared_ptr<Tensor> _spmRunningMean;
+    std::shared_ptr<Tensor> _spmRunningVar;
     //
-    Linear  _lnrLinear;
-    ReLU    _rluReLU;
-    Dropout _drpDropout;
+    Linear      _lnrLinear;
+    BatchNorm   _bnmBatchNorm;
+    ReLU        _rluReLU;
+    Dropout     _drpDropout;
 
 public:
     void init(std::mt19937& rngRandom);

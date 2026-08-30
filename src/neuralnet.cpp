@@ -60,11 +60,20 @@ LayerHidden::LayerHidden(int nInput,int nOutput,float fDropoutRate,std::uint64_t
     :Module(),
      _spmWeight( std::make_shared<Tensor>(nOutput,nInput) ),
      _spmBias( std::make_shared<Tensor>(nOutput,1) ),
+     _spmGamma( std::make_shared<Tensor>(nOutput,1) ),
+     _spmBeta( std::make_shared<Tensor>(nOutput,1) ),
+     _spmRunningMean( std::make_shared<Tensor>(nOutput,1) ),
+     _spmRunningVar( std::make_shared<Tensor>(nOutput,1) ),
      _lnrLinear( _spmWeight.get(),_spmBias.get() ),
+     _bnmBatchNorm( _spmGamma.get(),_spmBeta.get(),_spmRunningMean.get(),_spmRunningVar.get() ),
      _drpDropout( fDropoutRate,nDropoutSeed )
 {
     registerParameter( "weight",_spmWeight.get() );
     registerParameter( "bias",_spmBias.get() );
+    registerParameter( "gamma",_spmGamma.get() );
+    registerParameter( "beta",_spmBeta.get() );
+    registerBuffer( "running_mean",_spmRunningMean.get() );
+    registerBuffer( "running_var",_spmRunningVar.get() );
 }
 LayerHidden::~LayerHidden()
 {
@@ -74,6 +83,10 @@ void LayerHidden::init(std::mt19937& rngRandom)
 {
     init_Weight( *_spmWeight,_spmWeight->_mData._nCols,rngRandom );
     cuda_fill( _spmBias.get()->_mData,0 );
+    cuda_fill( _spmGamma.get()->_mData,1.0f );
+    cuda_fill( _spmBeta.get()->_mData,0.0f );
+    cuda_fill( _spmRunningMean.get()->_mData,0.0f );
+    cuda_fill( _spmRunningVar.get()->_mData,1.0f );
 }
 std::shared_ptr<Tensor> LayerHidden::forward(
     std::vector<std::shared_ptr<Tensor>>& spmInputs
@@ -81,8 +94,12 @@ std::shared_ptr<Tensor> LayerHidden::forward(
 {
     // Linear
     std::shared_ptr<Tensor> spmOutput =_lnrLinear( spmInputs );
-    // ReLU
+    // BatchNorm
+    _bnmBatchNorm.setTraining( isTraining() );
     std::vector<std::shared_ptr<Tensor>> spmOutputs{spmOutput};
+    spmOutput =_bnmBatchNorm( spmOutputs );
+    // ReLU
+    spmOutputs ={spmOutput};
     spmOutput =_rluReLU( spmOutputs );
     // Dropout
     if( isTraining() )
@@ -171,7 +188,7 @@ std::shared_ptr<Tensor> NeuralNet::forward(
     }
     //
     std::vector<std::shared_ptr<Tensor>> spmOutputs{spmInputs[0]};
-    
+
     // Layer Inpout
     std::shared_ptr<Tensor> spmOutput 
                 =_lyrInput.forward( spmOutputs );

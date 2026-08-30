@@ -75,8 +75,15 @@ if(BUILD_TESTING)
     )
     target_link_libraries(dropout_check PRIVATE ai_cpp)
 
+    add_executable(batchnorm_check tests/batchnorm_check.cpp)
+    target_include_directories(batchnorm_check PRIVATE
+        ${PROJECT_SOURCE_DIR}/lib/include
+    )
+    target_link_libraries(batchnorm_check PRIVATE ai_cpp)
+
     add_test(NAME cuda_check COMMAND cuda_check)
     add_test(NAME multi_output_check COMMAND multi_output_check)
     add_test(NAME model_state_check COMMAND model_state_check)
     add_test(NAME dropout_check COMMAND dropout_check)
+    add_test(NAME batchnorm_check COMMAND batchnorm_check)
 endif()

@@ -66,6 +66,39 @@ void cuda_Dropout_backward(
     const cuMat& c_mGrad,
     const cuMat& c_mMask
 );
+void cuda_BatchNorm_forward_training(
+    cuMat& mResult,
+    const cuMat& c_mValue,
+    const cuMat& c_mGamma,
+    const cuMat& c_mBeta,
+    cuMat& mRunningMean,
+    cuMat& mRunningVar,
+    cuMat& mNormalized,
+    cuMat& mInvStd,
+    float fMomentum,
+    float fEpsilon
+);
+void cuda_BatchNorm_forward_evaluation(
+    cuMat& mResult,
+    const cuMat& c_mValue,
+    const cuMat& c_mGamma,
+    const cuMat& c_mBeta,
+    const cuMat& c_mRunningMean,
+    const cuMat& c_mRunningVar,
+    cuMat& mNormalized,
+    cuMat& mInvStd,
+    float fEpsilon
+);
+void cuda_BatchNorm_backward(
+    cuMat& mInputGrad,
+    cuMat& mGammaGrad,
+    cuMat& mBetaGrad,
+    const cuMat& c_mOutputGrad,
+    const cuMat& c_mGamma,
+    const cuMat& c_mNormalized,
+    const cuMat& c_mInvStd,
+    bool isTraining
+);
 void cuda_SoftmaxCrossEntropy_forward(
     cuMat& mResult,
     const cuMat& c_mLogits,

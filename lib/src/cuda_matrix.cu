@@ -12,6 +12,9 @@ __global__ void kernel_GELU_forward(float* lpfResult,const float* c_lpfValue,int
 __global__ void kernel_GELU_backward(float* lpfResult,const float* c_lpfData,const float* c_lpfGrad,int nSize);
 __global__ void kernel_Dropout_forward(float* lpfResult,const float* c_lpfValue,float* lpfMask,float fDropProbability,float fScale,int nSize);
 __global__ void kernel_Dropout_backward(float* lpfResult,const float* c_lpfGrad,const float* c_lpfMask,int nSize);
+__global__ void kernel_BatchNorm_forward_training(float* lpfResult,const float* c_lpfValue,const float* c_lpfGamma,const float* c_lpfBeta,float* lpfRunningMean,float* lpfRunningVar,float* lpfNormalized,float* lpfInvStd,float fMomentum,float fEpsilon,int nFeatures,int nBatch);
+__global__ void kernel_BatchNorm_forward_evaluation(float* lpfResult,const float* c_lpfValue,const float* c_lpfGamma,const float* c_lpfBeta,const float* c_lpfRunningMean,const float* c_lpfRunningVar,float* lpfNormalized,float* lpfInvStd,float fEpsilon,int nFeatures,int nBatch);
+__global__ void kernel_BatchNorm_backward(float* lpfInputGrad,float* lpfGammaGrad,float* lpfBetaGrad,const float* c_lpfOutputGrad,const float* c_lpfGamma,const float* c_lpfNormalized,const float* c_lpfInvStd,bool isTraining,int nFeatures,int nBatch);
 __global__ void kernel_SoftmaxCrossEntropy_forward(float* lpfResult,const float* c_lpfLogits,const float* c_lpfTarget,int nClass,int nBatch);
 __global__ void kernel_SoftmaxCrossEntropy_backward(float* lpfResult,const float* c_lpfLogits,const float* c_lpfTarget,const float* c_lpfGrad,int nClass,int nBatch);
 __global__ void kernel_Adam_update(float* lpfData,const float* c_lpfGrad,float* lpfFirstMoment,float* lpfSecondMoment,float fLearningRate,float fBeta1,float fBeta2,float fBeta1Correction,float fBeta2Correction,float fEpsilon,int nSize);
@@ -28,7 +31,7 @@ void cuMat::ones()
         1.0f,
         nSize
     );
-    // 
+    //
     cudaError_t cudError =cudaGetLastError();
     if( cudError!=cudaSuccess )
     {
@@ -51,7 +54,7 @@ void cuda_fill(cuMat& mResult,float fValue)
         mResult._lpfDevice,
         fValue,nSize
     );
-    // 
+    //
     cudaError_t cudError =cudaGetLastError();
     if( cudError!=cudaSuccess )
     {
@@ -64,7 +67,7 @@ void cuda_fill(cuMat& mResult,float fValue)
 void cuda_mul_elementwise(cuMat& mResult,const cuMat& c_mA,const cuMat& c_mB)
 {
     // R = c_mA ⦿ c_mB
-    
+
     // 行列数の確認
     if( (c_mA._nRows!=c_mB._nRows)||(c_mA._nCols!=c_mB._nCols) )
     {
@@ -148,7 +151,7 @@ void cuda_ReLU_backward(cuMat& mResult,const cuMat& c_mData,const cuMat& c_mGrad
         c_mGrad._lpfDevice,
         nSize
     );
-    
+
     cudaError_t cudError = cudaGetLastError();
     if( cudError!=cudaSuccess )
     {
@@ -252,6 +255,139 @@ void cuda_Dropout_backward(cuMat& mResult,const cuMat& c_mGrad,const cuMat& c_mM
     if( cudError!=cudaSuccess )
     {
         throw std::runtime_error(std::string("cuda_Dropout_backward: kernel launch failed: ")+cudaGetErrorString(cudError));
+    }
+}
+void cuda_BatchNorm_forward_training(
+    cuMat& mResult,const cuMat& c_mValue,
+    const cuMat& c_mGamma,const cuMat& c_mBeta,
+    cuMat& mRunningMean,cuMat& mRunningVar,
+    cuMat& mNormalized,cuMat& mInvStd,
+    float fMomentum,float fEpsilon
+)
+{
+    const int nFeatures =c_mValue._nRows;
+    const int nBatch    =c_mValue._nCols;
+    if( (nBatch<=0)||(mResult._nRows!=nFeatures)||(mResult._nCols!=nBatch)||
+        (c_mGamma._nRows!=nFeatures)||(c_mGamma._nCols!=1)||
+        (c_mBeta._nRows!=nFeatures)||(c_mBeta._nCols!=1)||
+        (mRunningMean._nRows!=nFeatures)||(mRunningMean._nCols!=1)||
+        (mRunningVar._nRows!=nFeatures)||(mRunningVar._nCols!=1)||
+        (mNormalized._nRows!=nFeatures)||(mNormalized._nCols!=nBatch)||
+        (mInvStd._nRows!=nFeatures)||(mInvStd._nCols!=1) )
+    {
+        throw std::runtime_error("cuda_BatchNorm_forward_training: matrix size mismatch");
+    }
+    if( nFeatures<=0 ) {return;}
+    const int nThreads =256;
+    const int nBlocks =(nFeatures+nThreads-1)/nThreads;
+    //
+    kernel_BatchNorm_forward_training<<<nBlocks,nThreads>>>(
+        mResult._lpfDevice,
+        c_mValue._lpfDevice,
+        c_mGamma._lpfDevice,
+        c_mBeta._lpfDevice,
+        mRunningMean._lpfDevice,
+        mRunningVar._lpfDevice,
+        mNormalized._lpfDevice,
+        mInvStd._lpfDevice,
+        fMomentum,
+        fEpsilon,
+        nFeatures,
+        nBatch
+    );
+    //
+    cudaError_t cudError =cudaGetLastError();
+    if( cudError!=cudaSuccess )
+    {
+        throw std::runtime_error(std::string(
+            "cuda_BatchNorm_forward_training: kernel launch failed: ")+cudaGetErrorString(cudError)
+        );
+    }
+}
+void cuda_BatchNorm_forward_evaluation(
+    cuMat& mResult,const cuMat& c_mValue,
+    const cuMat& c_mGamma,const cuMat& c_mBeta,
+    const cuMat& c_mRunningMean,const cuMat& c_mRunningVar,
+    cuMat& mNormalized,cuMat& mInvStd,float fEpsilon
+)
+{
+    const int nFeatures =c_mValue._nRows;
+    const int nBatch =c_mValue._nCols;
+    if( (nBatch<=0)||(mResult._nRows!=nFeatures)||(mResult._nCols!=nBatch)||
+        (c_mGamma._nRows!=nFeatures)||(c_mGamma._nCols!=1)||
+        (c_mBeta._nRows!=nFeatures)||(c_mBeta._nCols!=1)||
+        (c_mRunningMean._nRows!=nFeatures)||(c_mRunningMean._nCols!=1)||
+        (c_mRunningVar._nRows!=nFeatures)||(c_mRunningVar._nCols!=1)||
+        (mNormalized._nRows!=nFeatures)||(mNormalized._nCols!=nBatch)||
+        (mInvStd._nRows!=nFeatures)||(mInvStd._nCols!=1) )
+    {
+        throw std::runtime_error("cuda_BatchNorm_forward_evaluation: matrix size mismatch");
+    }
+    if( nFeatures<=0 ) {return;}
+    const int nThreads =256;
+    const int nBlocks =(nFeatures+nThreads-1)/nThreads;
+    //
+    kernel_BatchNorm_forward_evaluation<<<nBlocks,nThreads>>>(
+        mResult._lpfDevice,
+        c_mValue._lpfDevice,
+        c_mGamma._lpfDevice,
+        c_mBeta._lpfDevice,
+        c_mRunningMean._lpfDevice,
+        c_mRunningVar._lpfDevice,
+        mNormalized._lpfDevice,
+        mInvStd._lpfDevice,
+        fEpsilon,
+        nFeatures,
+        nBatch
+    );
+    //
+    cudaError_t cudError =cudaGetLastError();
+    if( cudError!=cudaSuccess )
+    {
+        throw std::runtime_error(std::string(
+            "cuda_BatchNorm_forward_evaluation: kernel launch failed: ")+cudaGetErrorString(cudError)
+        );
+    }
+}
+void cuda_BatchNorm_backward(
+    cuMat& mInputGrad,cuMat& mGammaGrad,cuMat& mBetaGrad,
+    const cuMat& c_mOutputGrad,const cuMat& c_mGamma,
+    const cuMat& c_mNormalized,const cuMat& c_mInvStd,
+    bool isTraining
+)
+{
+    const int nFeatures =c_mOutputGrad._nRows;
+    const int nBatch =c_mOutputGrad._nCols;
+    if( (nBatch<=0)||(mInputGrad._nRows!=nFeatures)||(mInputGrad._nCols!=nBatch)||
+        (mGammaGrad._nRows!=nFeatures)||(mGammaGrad._nCols!=1)||
+        (mBetaGrad._nRows!=nFeatures)||(mBetaGrad._nCols!=1)||
+        (c_mGamma._nRows!=nFeatures)||(c_mGamma._nCols!=1)||
+        (c_mNormalized._nRows!=nFeatures)||(c_mNormalized._nCols!=nBatch)||
+        (c_mInvStd._nRows!=nFeatures)||(c_mInvStd._nCols!=1) )
+    {
+        throw std::runtime_error("cuda_BatchNorm_backward: matrix size mismatch");
+    }
+    if( nFeatures<=0 ) {return;}
+    const int nThreads  =256;
+    const int nBlocks   =(nFeatures+nThreads-1)/nThreads;
+    //
+    kernel_BatchNorm_backward<<<nBlocks,nThreads>>>(
+        mInputGrad._lpfDevice,
+        mGammaGrad._lpfDevice,
+        mBetaGrad._lpfDevice,
+        c_mOutputGrad._lpfDevice,
+        c_mGamma._lpfDevice,
+        c_mNormalized._lpfDevice,
+        c_mInvStd._lpfDevice,
+        isTraining,
+        nFeatures,
+        nBatch
+    );
+    //
+    cudaError_t cudError =cudaGetLastError();
+    if( cudError!=cudaSuccess )
+    {
+        throw std::runtime_error(std::string("cuda_BatchNorm_backward: kernel launch failed: ")+cudaGetErrorString(cudError));
     }
 }
 void cuda_SoftmaxCrossEntropy_forward(
@@ -447,7 +583,7 @@ __global__ void kernel_GELU_forward(float* lpfResult,const float* c_lpfValue,int
         const float c_fCubic =0.044715f;
         const float c_fInner =c_fScale*(c_fValue+c_fCubic*c_fValue*c_fValue*c_fValue);
         const float c_fTanh  =tanhf(c_fInner);
-        
+
         const float c_fDerivative =0.5f*(1.0f+c_fTanh);
 
         lpfResult[nIndex] =c_lpfValue[nIndex]*c_fDerivative;
@@ -477,7 +613,7 @@ __global__ void kernel_Dropout_forward(float* lpfResult,const float* c_lpfValue,
     if( nIndex<nSize )
     {
         const float fMask =lpfMask[nIndex]>fDropProbability ? fScale : 0.0f;
-        
+
         lpfMask[nIndex]     =fMask;
         lpfResult[nIndex]   =c_lpfValue[nIndex]*fMask;
     }
@@ -576,5 +712,139 @@ __global__ void kernel_Adam_update(float* lpfData,const float* c_lpfGrad,float* 
         float fSecondMomentHat =lpfSecondMoment[nIndex]/fBeta2Correction;
         // Parameter update
         lpfData[nIndex] -=fLearningRate*fFirstMomentHat/(sqrtf(fSecondMomentHat)+fEpsilon);
+    }
+}
+
+// 学習時のBatchNorm。1 CUDA threadが1特徴量 f を担当し、
+// その特徴量についてバッチ方向 b=0,...,B-1 を走査する。
+// cuMatはcolumn-majorなので x_{f,b} の位置は b*F+f になる。
+__global__ void kernel_BatchNorm_forward_training(
+    float* lpfResult,const float* c_lpfValue,
+    const float* c_lpfGamma,const float* c_lpfBeta,
+    float* lpfRunningMean,float* lpfRunningVar,
+    float* lpfNormalized,float* lpfInvStd,
+    float fMomentum,float fEpsilon,int nFeatures,int nBatch
+)
+{
+    int nFeature =blockIdx.x*blockDim.x+threadIdx.x;
+
+    if( nFeature>=nFeatures ) {return;}
+
+    // ミニバッチ平均: mu_f = (1/B) * sum_b x_{f,b}
+    float fMean =0.0f;
+    for( int nBatchIndex=0;nBatchIndex<nBatch;++nBatchIndex )
+    {
+        fMean +=c_lpfValue[nBatchIndex*nFeatures+nFeature];
+    }
+    fMean /=static_cast<float>(nBatch);
+
+    // ミニバッチ分散（母分散）:
+    // sigma_f^2 = (1/B) * sum_b (x_{f,b}-mu_f)^2
+    float fVariance =0.0f;
+    for( int nBatchIndex=0;nBatchIndex<nBatch;++nBatchIndex )
+    {
+        const float fCentered =c_lpfValue[nBatchIndex*nFeatures+nFeature]-fMean;
+        fVariance +=fCentered*fCentered;
+    }
+    fVariance /=static_cast<float>(nBatch);
+
+    // inv_std_f = 1/sqrt(sigma_f^2+epsilon)。backwardでも再利用する。
+    const float fInvStd =rsqrtf(fVariance+fEpsilon);
+    lpfInvStd[nFeature]         =fInvStd;
+
+    // running_mean_f <- (1-m)*running_mean_f + m*mu_f
+    lpfRunningMean[nFeature]    =(1.0f-fMomentum)*lpfRunningMean[nFeature]+fMomentum*fMean;
+
+    // 学習時の正規化は分母Bの分散を使うが、running varianceには
+    // 不偏分散 B/(B-1)*sigma_f^2 を保存する（B=1では補正しない）。
+    // running_var_f <- (1-m)*running_var_f + m*unbiased_var_f
+    const float fRunningVariance =nBatch>1
+        ? fVariance*static_cast<float>(nBatch)/static_cast<float>(nBatch-1)
+        : fVariance;
+    lpfRunningVar[nFeature] =(1.0f-fMomentum)*lpfRunningVar[nFeature]+fMomentum*fRunningVariance;
+    for( int nBatchIndex=0;nBatchIndex<nBatch;++nBatchIndex )
+    {
+        const int nIndex        =nBatchIndex*nFeatures+nFeature;
+
+        // x_hat_{f,b} = (x_{f,b}-mu_f)/sqrt(sigma_f^2+epsilon)
+        // y_{f,b} = gamma_f*x_hat_{f,b}+beta_f
+        const float fNormalized =(c_lpfValue[nIndex]-fMean)*fInvStd;
+
+        lpfNormalized[nIndex]   =fNormalized;
+        lpfResult[nIndex]       =c_lpfGamma[nFeature]*fNormalized+c_lpfBeta[nFeature];
+    }
+}
+// 評価時は現在のミニバッチから平均・分散を求めず、
+// 学習中に蓄積したrunning_meanとrunning_varだけを使用する。
+__global__ void kernel_BatchNorm_forward_evaluation(
+    float* lpfResult,const float* c_lpfValue,
+    const float* c_lpfGamma,const float* c_lpfBeta,
+    const float* c_lpfRunningMean,const float* c_lpfRunningVar,
+    float* lpfNormalized,float* lpfInvStd,
+    float fEpsilon,int nFeatures,int nBatch
+)
+{
+    int nFeature =blockIdx.x*blockDim.x+threadIdx.x;
+
+    if( nFeature>=nFeatures ) {return;}
+    // x_hat_{f,b} = (x_{f,b}-running_mean_f)
+    //                 / sqrt(running_var_f+epsilon)
+    const float fInvStd =rsqrtf(c_lpfRunningVar[nFeature]+fEpsilon);
+    lpfInvStd[nFeature] =fInvStd;
+    for( int nBatchIndex=0;nBatchIndex<nBatch;++nBatchIndex )
+    {
+        const int nIndex        =nBatchIndex*nFeatures+nFeature;
+        const float fNormalized =(c_lpfValue[nIndex]-c_lpfRunningMean[nFeature])*fInvStd;
+
+        lpfNormalized[nIndex]   =fNormalized;
+        lpfResult[nIndex]       =c_lpfGamma[nFeature]*fNormalized+c_lpfBeta[nFeature];
+    }
+}
+// g_{f,b}=dL/dy_{f,b} として入力、gamma、betaの勾配を計算する。
+// forwardと同様に1 CUDA threadが1特徴量 f を担当する。
+__global__ void kernel_BatchNorm_backward(
+    float* lpfInputGrad,float* lpfGammaGrad,float* lpfBetaGrad,
+    const float* c_lpfOutputGrad,const float* c_lpfGamma,
+    const float* c_lpfNormalized,const float* c_lpfInvStd,
+    bool isTraining,int nFeatures,int nBatch
+)
+{
+    int nFeature =blockIdx.x*blockDim.x+threadIdx.x;
+
+    if( nFeature>=nFeatures ) {return;}
+    // S1_f = sum_b g_{f,b}
+    // S2_f = sum_b g_{f,b}*x_hat_{f,b}
+    float fGradSum              =0.0f;
+    float fGradNormalizedSum    =0.0f;
+    for( int nBatchIndex=0;nBatchIndex<nBatch;++nBatchIndex )
+    {
+        const int nIndex    =nBatchIndex*nFeatures+nFeature;
+        const float fGrad   =c_lpfOutputGrad[nIndex];
+        fGradSum            +=fGrad;
+        fGradNormalizedSum  +=fGrad*c_lpfNormalized[nIndex];
+    }
+    // dL/dbeta_f = S1_f, dL/dgamma_f = S2_f
+    lpfGammaGrad[nFeature]  +=fGradNormalizedSum;
+    lpfBetaGrad[nFeature]   +=fGradSum;
+
+    const float fGammaInvStd =c_lpfGamma[nFeature]*c_lpfInvStd[nFeature];
+    for( int nBatchIndex=0;nBatchIndex<nBatch;++nBatchIndex )
+    {
+        const int nIndex    =nBatchIndex*nFeatures+nFeature;
+        if( isTraining )
+        {
+            // dL/dx_{f,b} = gamma_f*inv_std_f/B *
+            //   (B*g_{f,b} - S1_f - x_hat_{f,b}*S2_f)
+            lpfInputGrad[nIndex]    +=fGammaInvStd/float(nBatch)*(
+                float(nBatch)*c_lpfOutputGrad[nIndex]-fGradSum-
+                c_lpfNormalized[nIndex]*fGradNormalizedSum
+            );
+        }
+        else
+        {
+            // 評価時の平均・分散は定数なので、
+            // dL/dx_{f,b} = gamma_f*inv_std_f*g_{f,b}
+            lpfInputGrad[nIndex]    +=fGammaInvStd*c_lpfOutputGrad[nIndex];
+        }
     }
 }

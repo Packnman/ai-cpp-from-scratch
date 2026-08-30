@@ -52,8 +52,12 @@ int main()
         const std::vector<std::string> expectedNames{
             "hidden1.weight",
             "hidden1.bias",
+            "hidden1.gamma",
+            "hidden1.beta",
             "hidden2.weight",
             "hidden2.bias",
+            "hidden2.gamma",
+            "hidden2.beta",
             "output.weight",
             "output.bias"
         };
@@ -64,7 +68,28 @@ int main()
             require( named[i].strName==expectedNames[i],"parameter name mismatch" );
         }
         require( source.getParams().size()==named.size(),"getParams count mismatch" );
-        require( source.stateDict().size()==named.size(),"stateDict count mismatch" );
+        const std::vector<std::string> expectedStateNames{
+            "hidden1.weight",
+            "hidden1.bias",
+            "hidden1.gamma",
+            "hidden1.beta",
+            "hidden2.weight",
+            "hidden2.bias",
+            "hidden2.gamma",
+            "hidden2.beta",
+            "output.weight",
+            "output.bias",
+            "hidden1.running_mean",
+            "hidden1.running_var",
+            "hidden2.running_mean",
+            "hidden2.running_var"
+        };
+        const StateDict initialState =source.stateDict();
+        require( initialState.size()==expectedStateNames.size(),"stateDict count mismatch" );
+        for( std::size_t i=0;i<initialState.size();++i )
+        {
+            require( initialState[i].strName==expectedStateNames[i],"stateDict name mismatch" );
+        }
 
         source.save( FILE_NAME );
         destination.load( FILE_NAME );

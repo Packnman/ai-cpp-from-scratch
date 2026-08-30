@@ -4,12 +4,14 @@ CUDA と C++ を使い、ニューラルネットワークの基本要素を低�
 
 Module と Model は派生クラスでネットワーク構造やパラメータを定義することを前提とした基盤です。エンドツーエンドで学習を実行するプログラムはまだ実装されておらず、このリポジトリは完成済みの学習アプリケーションではありません。
 
+公開ヘッダーごとの設計仕様は [docs/README.md](docs/README.md) を参照してください。
+
 ## 実装済みの主な機能
 
 - CPU の `Mat` と CUDA デバイス上の `cuMat` による行列データ管理
 - cuBLAS および CUDA kernel を使った行列演算
 - `Tensor`、`Function`、`Context` による逆伝播の基盤
-- Linear、ReLU、GELU、Softmax Cross Entropy
+- Linear、BatchNorm、Dropout、ReLU、GELU、Softmax Cross Entropy
 - SGD、Adam
 - Module/Model の保存、読み込み、勾配初期化のための基底 API
 - CUDA デバイス検出と簡単な kernel 実行を確認する `cuda_check`
@@ -81,6 +83,95 @@ U^{(i+1)} = \boldsymbol{W}^{(i)}\boldsymbol{Z}^{(i)} + \boldsymbol{b}^{(i)}
 \\
 \frac{\partial E_p}{\partial b} = \Delta^{(i)}\boldsymbol{v}^T
 $$
+
+### BatchNorm
+
+この実装では、入力を「特徴量数 × バッチ数」の行列として扱い、各特徴量をバッチ方向に正規化する。
+$f$を特徴量の添字、$b$をバッチ内サンプルの添字、$B$をバッチ数とする。
+
+| 記号 | 意味 |
+| -- | :-- |
+| $x_{fb}$ | BatchNormへの入力 |
+| $\mu_f$ | ミニバッチ平均 |
+| $\sigma_f^2$ | ミニバッチ分散 |
+| $\hat{x}_{fb}$ | 正規化後の値 |
+| $\gamma_f,\beta_f$ | 学習するスケールとシフト |
+| $\epsilon$ | ゼロ除算を防ぐ微小値 |
+| $m$ | running統計の更新率（momentum） |
+
+既定値は $m=0.1$、$\epsilon=10^{-5}$ とする。
+
+学習時の順伝播は次の通り。
+
+$$
+\mu_f=\frac{1}{B}\sum_{b=1}^{B}x_{fb}
+\\
+\sigma_f^2=\frac{1}{B}\sum_{b=1}^{B}(x_{fb}-\mu_f)^2
+\\
+\hat{x}_{fb}=
+\frac{x_{fb}-\mu_f}{\sqrt{\sigma_f^2+\epsilon}}
+\\
+y_{fb}=\gamma_f\hat{x}_{fb}+\beta_f
+$$
+
+学習中は評価用の平均と分散も更新する。
+
+$$
+\mathrm{running\_mean}_f
+\leftarrow
+(1-m)\mathrm{running\_mean}_f+m\mu_f
+\\
+\mathrm{running\_var}_f
+\leftarrow
+(1-m)\mathrm{running\_var}_f
++m\frac{B}{B-1}\sigma_f^2
+\qquad (B>1)
+$$
+
+正規化には母分散（分母$B$）を使い、running varianceの更新には不偏分散（分母$B-1$）を使う。$B=1$の場合は補正しない。
+
+評価時はミニバッチの統計を計算・更新せず、保存済みのrunning統計を使用する。
+
+$$
+\hat{x}_{fb}=
+\frac{x_{fb}-\mathrm{running\_mean}_f}
+{\sqrt{\mathrm{running\_var}_f+\epsilon}}
+\\
+y_{fb}=\gamma_f\hat{x}_{fb}+\beta_f
+$$
+
+逆伝播では、上流勾配を
+
+$$
+g_{fb}=\frac{\partial L}{\partial y_{fb}}
+$$
+
+とすると、学習パラメータの勾配は次になる。
+
+$$
+\frac{\partial L}{\partial \beta_f}
+=\sum_{b=1}^{B}g_{fb}
+\\
+\frac{\partial L}{\partial \gamma_f}
+=\sum_{b=1}^{B}g_{fb}\hat{x}_{fb}
+$$
+
+学習時の入力勾配は次の式でまとめて計算する。
+
+$$
+\frac{\partial L}{\partial x_{fb}}
+=
+\frac{\gamma_f}
+{B\sqrt{\sigma_f^2+\epsilon}}
+\left[
+Bg_{fb}
+-\sum_{j=1}^{B}g_{fj}
+-\hat{x}_{fb}
+\sum_{j=1}^{B}g_{fj}\hat{x}_{fj}
+\right]
+$$
+
+gammaとbetaはParameterとしてOptimizerの更新対象にし、running_meanとrunning_varはBufferとしてモデルへ保存する。現在の隠れ層では Linear → BatchNorm → ReLU → Dropout の順序で適用する。
 
 ### ReLU
 $$
@@ -185,5 +276,6 @@ $$
 | 10 | is/can-- | bool | |
 | 11 | str-- | string | |
 | 12 | 3文字略省-- | クラス名 | |
-| 13 | --複数形 | vector | 本体を複数形にする |
+| 13 | --複数形 | vector | 本体を複数形にする | |
+
 ※変数名本体は意味ごとに大文字から始めること

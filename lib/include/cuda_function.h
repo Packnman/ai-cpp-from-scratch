@@ -89,6 +89,46 @@ public:
 };
 
 // --------------------------
+// BatchNorm
+// --------------------------
+class BatchNorm: public Function
+{
+public:
+    BatchNorm(
+        Tensor* lpGamma,
+        Tensor* lpBeta,
+        Tensor* lpRunningMean,
+        Tensor* lpRunningVar,
+        float fMomentum=0.1f,
+        float fEpsilon=1.0e-5f
+    );
+    ~BatchNorm() override;
+
+private:
+    Tensor* _lpmGamma;
+    Tensor* _lpmBeta;
+    Tensor* _lpmRunningMean;
+    Tensor* _lpmRunningVar;
+    float   _fMomentum;
+    float   _fEpsilon;
+    bool    _isTraining;
+    bool    _wasTraining;
+    cuMat   _mNormalized;
+    cuMat   _mInvStd;
+
+public:
+    void setTraining(bool isTraining);
+    bool isTraining() const;
+
+    void backward(
+        const TensorGradList& c_lpmOutputGrads,
+        const TensorList& c_spmInputs,
+        const TensorList& c_spmOutputs
+    ) override;
+    TensorList forward(const TensorList& c_spmInputs) override;
+};
+
+// --------------------------
 // Linear
 // --------------------------
 class Linear: public Function
