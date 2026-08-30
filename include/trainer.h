@@ -19,6 +19,7 @@ struct TrainConfig {
     int             nBatchSize;    // 1バッチあたりのサンプル数
     std::uint32_t   nSeed;         // 乱数生成用のシード値
     float           fLearningRate;   // Optimizerの学習率
+    float           fDropoutRate =0.2f; // Dropoutで無効化する確率
 };
 
 struct SupervisedBatch {
@@ -86,6 +87,7 @@ void train(
     const TrainConfig& c_cfgConfig
 )
 {
+    mdlModel.setTraining( true );
     trainer_detail::validateConfig( c_cfgConfig );
     if( c_dtsDataset.size()==0 )
     {
@@ -162,6 +164,7 @@ float evaluate(
     MetricType metMetric
 )
 {
+    mdlModel.setTraining( false );
     if( nBatchSize<=0 )
     {
         throw std::runtime_error(

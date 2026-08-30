@@ -29,10 +29,11 @@ int main(int nArgCount,char** lpszArgs)
             .nEpochs        =5,
             .nBatchSize     =128,
             .nSeed          =42,
-            .fLearningRate  =1.0e-3f
+            .fLearningRate  =1.0e-3f,
+            .fDropoutRate   =0.2f
         };
 
-        NeuralNet nntModel( cfgConfig.nSeed );
+        NeuralNet nntModel( cfgConfig.nSeed,cfgConfig.fDropoutRate );
         Adam admOptimizer( &nntModel,cfgConfig.fLearningRate );
 
         train(
@@ -50,11 +51,11 @@ int main(int nArgCount,char** lpszArgs)
         );
 
         printf(
-            "test_accuracy=%.2f",
+            "test_accuracy=%.2f\n",
             fAccuracy*100.0f
         );
 
-        nntModel.save( "mnist_model.bin" );
+        nntModel.save( "mnist_dropout_model.bin" );
     }
     catch( const std::exception& c_excError )
     {

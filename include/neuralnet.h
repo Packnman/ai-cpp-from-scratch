@@ -33,7 +33,7 @@ public:
 // --------------------------
 class LayerHidden : public Module{
 public:
-    LayerHidden(int nInput,int nOutput);
+    LayerHidden(int nInput,int nOutput,float fDropoutRate,std::uint64_t nDropoutSeed);
     ~LayerHidden() override;
 
 private:
@@ -42,6 +42,7 @@ private:
     //
     Linear  _lnrLinear;
     ReLU    _rluReLU;
+    Dropout _drpDropout;
 
 public:
     void init(std::mt19937& rngRandom);
@@ -84,7 +85,7 @@ public:
 // --------------------------
 class NeuralNet : public Model{
 public:
-    NeuralNet(std::uint32_t nSeed);
+    NeuralNet(std::uint32_t nSeed,float fDropoutRate=0.2f);
     ~NeuralNet() override;
 private:
     LayerInput  _lyrInput;

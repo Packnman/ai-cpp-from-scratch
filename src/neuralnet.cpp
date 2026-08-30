@@ -56,11 +56,12 @@ std::shared_ptr<Tensor> LayerInput::forward(
 // 役割：
 //  ・1層目からn-1層目までの処理
 // --------------------------
-LayerHidden::LayerHidden(int nInput,int nOutput)
+LayerHidden::LayerHidden(int nInput,int nOutput,float fDropoutRate,std::uint64_t nDropoutSeed)
     :Module(),
      _spmWeight( std::make_shared<Tensor>(nOutput,nInput) ),
      _spmBias( std::make_shared<Tensor>(nOutput,1) ),
-     _lnrLinear( _spmWeight.get(),_spmBias.get() )
+     _lnrLinear( _spmWeight.get(),_spmBias.get() ),
+     _drpDropout( fDropoutRate,nDropoutSeed )
 {
     registerParameter( "weight",_spmWeight.get() );
     registerParameter( "bias",_spmBias.get() );
@@ -83,6 +84,12 @@ std::shared_ptr<Tensor> LayerHidden::forward(
     // ReLU
     std::vector<std::shared_ptr<Tensor>> spmOutputs{spmOutput};
     spmOutput =_rluReLU( spmOutputs );
+    // Dropout
+    if( isTraining() )
+    {
+        spmOutputs ={spmOutput};
+        spmOutput =_drpDropout( spmOutputs );
+    }
 
     return spmOutput;
 }
@@ -114,6 +121,7 @@ std::shared_ptr<Tensor> LayerOutput::forward(
     std::vector<std::shared_ptr<Tensor>>& spmInputs
 )
 {
+    // Linear
     return _lnrLinear( spmInputs );
 }
 // --------------------------
@@ -122,11 +130,11 @@ std::shared_ptr<Tensor> LayerOutput::forward(
 // 役割：
 //  ・
 // --------------------------
-NeuralNet::NeuralNet(std::uint32_t nSeed)
+NeuralNet::NeuralNet(std::uint32_t nSeed,float fDropoutRate)
     :Model(),
      _lyrInput(),
-     _lyrHidden1(784,256),
-     _lyrHidden2(256,128),
+     _lyrHidden1(784,256,fDropoutRate,static_cast<std::uint64_t>(nSeed)+1),
+     _lyrHidden2(256,128,fDropoutRate,static_cast<std::uint64_t>(nSeed)+2),
      _lyrOutput(128,10)
 {
     registerModule( "input",&_lyrInput );
@@ -163,13 +171,18 @@ std::shared_ptr<Tensor> NeuralNet::forward(
     }
     //
     std::vector<std::shared_ptr<Tensor>> spmOutputs{spmInputs[0]};
-    std::shared_ptr<Tensor> spmOutput =_lyrInput.forward( spmOutputs );
-    spmOutputs ={spmOutput};
-    spmOutput =_lyrHidden1.forward( spmOutputs );
-    spmOutputs ={spmOutput};
-    spmOutput =_lyrHidden2.forward( spmOutputs );
-    spmOutputs ={spmOutput};
-    //
+    
+    // Layer Inpout
+    std::shared_ptr<Tensor> spmOutput 
+                =_lyrInput.forward( spmOutputs );
+    spmOutputs  ={spmOutput};
+    // Hidden Layer 1
+    spmOutput   =_lyrHidden1.forward( spmOutputs );
+    spmOutputs  ={spmOutput};
+    // Hidden Layer 2
+    spmOutput   =_lyrHidden2.forward( spmOutputs );
+    spmOutputs  ={spmOutput};
+    // Output Layer
     return _lyrOutput.forward( spmOutputs );
 }
 std::shared_ptr<Tensor> NeuralNet::loss(

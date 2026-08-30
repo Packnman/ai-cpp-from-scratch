@@ -26,7 +26,7 @@ add_library(ai_cpp STATIC
     lib/src/optimizer.cpp
 )
 target_include_directories(ai_cpp PUBLIC ${PROJECT_SOURCE_DIR}/lib/include)
-target_link_libraries(ai_cpp PUBLIC CUDA::cudart CUDA::cublas)
+target_link_libraries(ai_cpp PUBLIC CUDA::cudart CUDA::cublas CUDA::curand)
 set_target_properties(ai_cpp PROPERTIES
     CUDA_ARCHITECTURES "${AI_CPP_CUDA_ARCHITECTURES}"
 )
@@ -65,7 +65,18 @@ if(BUILD_TESTING)
     )
     target_link_libraries(model_state_check PRIVATE ai_cpp)
 
+    add_executable(dropout_check
+        tests/dropout_check.cpp
+        src/neuralnet.cpp
+    )
+    target_include_directories(dropout_check PRIVATE
+        ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/lib/include
+    )
+    target_link_libraries(dropout_check PRIVATE ai_cpp)
+
     add_test(NAME cuda_check COMMAND cuda_check)
     add_test(NAME multi_output_check COMMAND multi_output_check)
     add_test(NAME model_state_check COMMAND model_state_check)
+    add_test(NAME dropout_check COMMAND dropout_check)
 endif()

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+#include <curand.h>
 #include <vector>
 #include <memory>
 #include "cuda_matrix.h"
@@ -53,6 +55,29 @@ class ReLU: public Function
 public:
     ReLU();
     ~ReLU();
+
+public:
+    void backward(
+        const TensorGradList& c_lpmOutputGrads,
+        const TensorList& c_spmInputs,
+        const TensorList& c_spmOutputs
+    ) override;
+    TensorList forward(const TensorList& c_spmInputs) override;
+};
+
+// --------------------------
+// Dropout
+// --------------------------
+class Dropout: public Function
+{
+public:
+    Dropout(float fDropProbability,std::uint64_t nSeed);
+    ~Dropout() override;
+
+private:
+    float _fDropProbability;
+    curandGenerator_t _crnGenerator;
+    cuMat _mMask;
 
 public:
     void backward(

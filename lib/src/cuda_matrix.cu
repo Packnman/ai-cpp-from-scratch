@@ -10,6 +10,8 @@ __global__ void kernel_ReLU_forward(float* lpfResult,const float* c_lpfValue,int
 __global__ void kernel_ReLU_backward(float* lpfResult,const float* c_lpfData,const float* c_lpfGrad,int nSize);
 __global__ void kernel_GELU_forward(float* lpfResult,const float* c_lpfValue,int nSize);
 __global__ void kernel_GELU_backward(float* lpfResult,const float* c_lpfData,const float* c_lpfGrad,int nSize);
+__global__ void kernel_Dropout_forward(float* lpfResult,const float* c_lpfValue,float* lpfMask,float fDropProbability,float fScale,int nSize);
+__global__ void kernel_Dropout_backward(float* lpfResult,const float* c_lpfGrad,const float* c_lpfMask,int nSize);
 __global__ void kernel_SoftmaxCrossEntropy_forward(float* lpfResult,const float* c_lpfLogits,const float* c_lpfTarget,int nClass,int nBatch);
 __global__ void kernel_SoftmaxCrossEntropy_backward(float* lpfResult,const float* c_lpfLogits,const float* c_lpfTarget,const float* c_lpfGrad,int nClass,int nBatch);
 __global__ void kernel_Adam_update(float* lpfData,const float* c_lpfGrad,float* lpfFirstMoment,float* lpfSecondMoment,float fLearningRate,float fBeta1,float fBeta2,float fBeta1Correction,float fBeta2Correction,float fEpsilon,int nSize);
@@ -211,6 +213,45 @@ void cuda_GELU_backward(cuMat& mResult,const cuMat& c_mData,const cuMat& c_mGrad
         throw std::runtime_error(
             "cuda_GELU_backward: kernel launch failed"
         );
+    }
+}
+void cuda_Dropout_forward(cuMat& mResult,const cuMat& c_mValue,cuMat& mMask,float fDropProbability)
+{
+    if( (mResult._nRows!=c_mValue._nRows)||(mResult._nCols!=c_mValue._nCols)||
+        (mMask._nRows!=c_mValue._nRows)||(mMask._nCols!=c_mValue._nCols) )
+    {
+        throw std::runtime_error("cuda_Dropout_forward: matrix size mismatch");
+    }
+    const int nSize =c_mValue._nRows*c_mValue._nCols;
+    if( nSize<=0 ) {return;}
+    const int nThreads =256;
+    const int nBlocks =(nSize+nThreads-1)/nThreads;
+    kernel_Dropout_forward<<<nBlocks,nThreads>>>(
+        mResult._lpfDevice,c_mValue._lpfDevice,mMask._lpfDevice,
+        fDropProbability,1.0f/(1.0f-fDropProbability),nSize
+    );
+    cudaError_t cudError =cudaGetLastError();
+    if( cudError!=cudaSuccess )
+    {
+        throw std::runtime_error(std::string("cuda_Dropout_forward: kernel launch failed: ")+cudaGetErrorString(cudError));
+    }
+}
+void cuda_Dropout_backward(cuMat& mResult,const cuMat& c_mGrad,const cuMat& c_mMask)
+{
+    if( (mResult._nRows!=c_mGrad._nRows)||(mResult._nCols!=c_mGrad._nCols)||
+        (c_mMask._nRows!=c_mGrad._nRows)||(c_mMask._nCols!=c_mGrad._nCols) )
+    {
+        throw std::runtime_error("cuda_Dropout_backward: matrix size mismatch");
+    }
+    const int nSize =c_mGrad._nRows*c_mGrad._nCols;
+    if( nSize<=0 ) {return;}
+    const int nThreads =256;
+    const int nBlocks =(nSize+nThreads-1)/nThreads;
+    kernel_Dropout_backward<<<nBlocks,nThreads>>>(mResult._lpfDevice,c_mGrad._lpfDevice,c_mMask._lpfDevice,nSize);
+    cudaError_t cudError =cudaGetLastError();
+    if( cudError!=cudaSuccess )
+    {
+        throw std::runtime_error(std::string("cuda_Dropout_backward: kernel launch failed: ")+cudaGetErrorString(cudError));
     }
 }
 void cuda_SoftmaxCrossEntropy_forward(
@@ -427,6 +468,27 @@ __global__ void kernel_GELU_backward(float* lpfResult,const float* c_lpfData,con
         const float c_fDerivative =0.5f*(1.0f+c_fTanh)+0.5f*c_fValue*(1.0f-c_fTanh*c_fTanh)*c_fScale*(1.0f+3.0f*c_fCubic*c_fValue*c_fValue);
 
         lpfResult[nIndex] +=c_lpfGrad[nIndex]*c_fDerivative;
+    }
+}
+__global__ void kernel_Dropout_forward(float* lpfResult,const float* c_lpfValue,float* lpfMask,float fDropProbability,float fScale,int nSize)
+{
+    int nIndex =blockIdx.x*blockDim.x+threadIdx.x;
+
+    if( nIndex<nSize )
+    {
+        const float fMask =lpfMask[nIndex]>fDropProbability ? fScale : 0.0f;
+        
+        lpfMask[nIndex]     =fMask;
+        lpfResult[nIndex]   =c_lpfValue[nIndex]*fMask;
+    }
+}
+__global__ void kernel_Dropout_backward(float* lpfResult,const float* c_lpfGrad,const float* c_lpfMask,int nSize)
+{
+    int nIndex =blockIdx.x*blockDim.x+threadIdx.x;
+
+    if( nIndex<nSize )
+    {
+        lpfResult[nIndex] +=c_lpfGrad[nIndex]*c_lpfMask[nIndex];
     }
 }
 __global__ void kernel_SoftmaxCrossEntropy_forward(float* lpfResult,const float* c_lpfLogits,const float* c_lpfTarget,int nClass,int nBatch)

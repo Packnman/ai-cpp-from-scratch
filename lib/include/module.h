@@ -32,6 +32,9 @@ public:
     std::vector<Tensor*> getParams() const;
     StateDict stateDict() const;
 
+    void setTraining(bool isTraining);
+    bool isTraining() const;
+
     virtual void zero_grads();
     virtual void reset_state();
     virtual std::shared_ptr<Tensor> forward(
@@ -56,6 +59,7 @@ private:
     std::vector<NamedTensor> _nmtParams;
     std::vector<NamedTensor> _nmtBuffers;
     std::vector<NamedModule> _nmmModules;
+    bool _isTraining;
 };
 
 class Model : public Module

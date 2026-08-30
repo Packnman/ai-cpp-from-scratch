@@ -55,6 +55,17 @@ void cuda_GELU_backward(
     const cuMat& c_mData,
     const cuMat& c_mGrad
 );
+void cuda_Dropout_forward(
+    cuMat& mResult,
+    const cuMat& c_mValue,
+    cuMat& mMask,
+    float fDropProbability
+);
+void cuda_Dropout_backward(
+    cuMat& mResult,
+    const cuMat& c_mGrad,
+    const cuMat& c_mMask
+);
 void cuda_SoftmaxCrossEntropy_forward(
     cuMat& mResult,
     const cuMat& c_mLogits,

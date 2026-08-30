@@ -88,6 +88,7 @@ namespace {
 }
 
 Module::Module()
+    :_isTraining( true )
 {
 }
 
@@ -163,7 +164,22 @@ void Module::registerModule(const std::string& c_strName,Module* lpModule)
         throw std::invalid_argument("Module: cannot register itself: "+c_strName);
     }
     //
+    lpModule->setTraining( _isTraining );
     _nmmModules.push_back({c_strName,lpModule});
+}
+
+void Module::setTraining(bool isTraining)
+{
+    _isTraining =isTraining;
+    for( const NamedModule& c_nmmChild : _nmmModules )
+    {
+        c_nmmChild.lpModule->setTraining( isTraining );
+    }
+}
+
+bool Module::isTraining() const
+{
+    return _isTraining;
 }
 
 std::vector<NamedTensor> Module::namedParameters() const
