@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <string>
 
@@ -15,6 +16,9 @@ int main(int nArgCount,char** lpszArgs)
         const std::string c_strDataDirectory =nArgCount>=2
             ? lpszArgs[1]
             : "data/mnist";
+        const std::filesystem::path c_pthModelDirectory =nArgCount>=3
+            ? lpszArgs[2]
+            : "models";
 
         MnistDataset mnsTrainDataset =MnistDataset::load(
             c_strDataDirectory + "/train-images-idx3-ubyte",
@@ -55,7 +59,10 @@ int main(int nArgCount,char** lpszArgs)
             fAccuracy*100.0f
         );
 
-        nntModel.save( "mnist_dropout_model.bin" );
+        std::filesystem::create_directories( c_pthModelDirectory );
+        const std::filesystem::path c_pthModelFile =
+            c_pthModelDirectory/"mnist_model_batchnorm.bin";
+        nntModel.save( c_pthModelFile.c_str() );
     }
     catch( const std::exception& c_excError )
     {

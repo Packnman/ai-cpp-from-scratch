@@ -64,5 +64,7 @@ Thumbs.db
 # data/outputs
 # ==============================
 data/
+/models/
+*.bin
 docs/*
 !docs/*.md
