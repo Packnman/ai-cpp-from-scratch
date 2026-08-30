@@ -69,8 +69,8 @@ namespace {
         for( const NamedTensor& c_nmtEntry : c_nmtSources )
         {
             nmtDestinations.push_back({
-                c_strPrefix+c_nmtEntry._strName,
-                c_nmtEntry._lpTensor
+                c_strPrefix+c_nmtEntry.strName,
+                c_nmtEntry.lpTensor
             });
         }
     }
@@ -113,13 +113,14 @@ void Module::validateRegistrationName(const std::string& c_strName) const
 
 bool Module::containsLocalName(const std::string& c_strName) const
 {
+    // ラムダ式関数の作成
     auto fnTensorHasName =[&c_strName](const NamedTensor& c_nmtEntry)
     {
-        return c_nmtEntry._strName==c_strName;
+        return c_nmtEntry.strName==c_strName;
     };
     auto fnModuleHasName =[&c_strName](const NamedModule& c_nmmEntry)
     {
-        return c_nmmEntry._strName==c_strName;
+        return c_nmmEntry.strName==c_strName;
     };
 
     return
@@ -135,6 +136,7 @@ void Module::registerParameter(const std::string& c_strName,Tensor* lpTensor)
     {
         throw std::invalid_argument("Module: parameter must not be null: "+c_strName);
     }
+    //
     _nmtParams.push_back({c_strName,lpTensor});
 }
 
@@ -145,6 +147,7 @@ void Module::registerBuffer(const std::string& c_strName,Tensor* lpTensor)
     {
         throw std::invalid_argument("Module: buffer must not be null: "+c_strName);
     }
+    //
     _nmtBuffers.push_back({c_strName,lpTensor});
 }
 
@@ -159,6 +162,7 @@ void Module::registerModule(const std::string& c_strName,Module* lpModule)
     {
         throw std::invalid_argument("Module: cannot register itself: "+c_strName);
     }
+    //
     _nmmModules.push_back({c_strName,lpModule});
 }
 
@@ -169,10 +173,11 @@ std::vector<NamedTensor> Module::namedParameters() const
     {
         appendWithPrefix(
             nmtResults,
-            c_nmmChild._strName+".",
-            c_nmmChild._lpModule->namedParameters()
+            c_nmmChild.strName+".",
+            c_nmmChild.lpModule->namedParameters()
         );
     }
+    //
     return nmtResults;
 }
 
@@ -183,10 +188,11 @@ std::vector<NamedTensor> Module::namedBuffers() const
     {
         appendWithPrefix(
             nmtResults,
-            c_nmmChild._strName+".",
-            c_nmmChild._lpModule->namedBuffers()
+            c_nmmChild.strName+".",
+            c_nmmChild.lpModule->namedBuffers()
         );
     }
+    //
     return nmtResults;
 }
 
@@ -197,8 +203,9 @@ std::vector<Tensor*> Module::getParams() const
     lpResults.reserve( nmtParams.size() );
     for( const NamedTensor& c_nmtParam : nmtParams )
     {
-        lpResults.push_back( c_nmtParam._lpTensor );
+        lpResults.push_back( c_nmtParam.lpTensor );
     }
+    //
     return lpResults;
 }
 
@@ -207,6 +214,7 @@ StateDict Module::stateDict() const
     StateDict nmtResults =namedParameters();
     std::vector<NamedTensor> nmtBuffers =namedBuffers();
     nmtResults.insert( nmtResults.end(),nmtBuffers.begin(),nmtBuffers.end() );
+    //
     return nmtResults;
 }
 
@@ -253,26 +261,26 @@ void Model::save(const char* lpszFileName)
 
     for( const NamedTensor& c_nmtEntry : nmtState )
     {
-        if( (c_nmtEntry._lpTensor==nullptr)||
-            (c_nmtEntry._strName.size()>MAX_NAME_LENGTH) )
+        if( (c_nmtEntry.lpTensor==nullptr)||
+            (c_nmtEntry.strName.size()>MAX_NAME_LENGTH) )
         {
             throw std::runtime_error(
-                "Model::save: invalid state entry: "+c_nmtEntry._strName
+                "Model::save: invalid state entry: "+c_nmtEntry.strName
             );
         }
 
         const std::uint32_t c_nNameLength =static_cast<std::uint32_t>(
-            c_nmtEntry._strName.size()
+            c_nmtEntry.strName.size()
         );
-        const std::int32_t c_nRows =c_nmtEntry._lpTensor->_mData._nRows;
-        const std::int32_t c_nCols =c_nmtEntry._lpTensor->_mData._nCols;
+        const std::int32_t c_nRows =c_nmtEntry.lpTensor->_mData._nRows;
+        const std::int32_t c_nCols =c_nmtEntry.lpTensor->_mData._nCols;
         Mat mHost( c_nRows,c_nCols );
-        c_nmtEntry._lpTensor->_mData.upload( mHost );
+        c_nmtEntry.lpTensor->_mData.upload( mHost );
 
         writeValue( filFile.get(),c_nNameLength );
         writeExact(
             filFile.get(),
-            c_nmtEntry._strName.data(),
+            c_nmtEntry.strName.data(),
             c_nNameLength
         );
         writeValue( filFile.get(),c_nRows );
@@ -299,7 +307,7 @@ void Model::load(const char* lpszFileName)
         throw std::runtime_error("Model::load: failed to open file");
     }
 
-    char szMagic[sizeof(MODEL_MAGIC)]{};
+    char szMagic[sizeof(MODEL_MAGIC)]   ={0};
     readExact( filFile.get(),szMagic,sizeof(szMagic) );
     if( std::memcmp(szMagic,MODEL_MAGIC,sizeof(MODEL_MAGIC))!=0 )
     {
@@ -314,14 +322,14 @@ void Model::load(const char* lpszFileName)
     std::unordered_map<std::string,Tensor*> umpDestinations;
     for( const NamedTensor& c_nmtEntry : nmtState )
     {
-        if( (c_nmtEntry._lpTensor==nullptr)||
+        if( (c_nmtEntry.lpTensor==nullptr)||
             !umpDestinations.emplace(
-                c_nmtEntry._strName,
-                c_nmtEntry._lpTensor
+                c_nmtEntry.strName,
+                c_nmtEntry.lpTensor
             ).second )
         {
             throw std::runtime_error(
-                "Model::load: duplicate model state: "+c_nmtEntry._strName
+                "Model::load: duplicate model state: "+c_nmtEntry.strName
             );
         }
     }

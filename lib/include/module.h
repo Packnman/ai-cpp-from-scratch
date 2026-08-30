@@ -9,8 +9,8 @@
 
 struct NamedTensor
 {
-    std::string _strName;
-    Tensor* _lpTensor;
+    std::string strName;
+    Tensor* lpTensor;
 };
 
 using StateDict =std::vector<NamedTensor>;
@@ -46,8 +46,8 @@ protected:
 private:
     struct NamedModule
     {
-        std::string _strName;
-        Module* _lpModule;
+        std::string strName;
+        Module* lpModule;
     };
 
     void validateRegistrationName(const std::string& c_strName) const;

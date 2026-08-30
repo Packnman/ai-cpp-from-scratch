@@ -15,21 +15,22 @@
 #include "optimizer.h"
 
 struct TrainConfig {
-    int             _nEpochs;
-    int             _nBatchSize;
-    std::uint32_t   _nSeed;
+    int             nEpochs;       // 学習するエポック数
+    int             nBatchSize;    // 1バッチあたりのサンプル数
+    std::uint32_t   nSeed;         // 乱数生成用のシード値
+    float           fLearningRate;   // Optimizerの学習率
 };
 
 struct SupervisedBatch {
-    std::shared_ptr<Tensor> _spmInput;
-    std::shared_ptr<Tensor> _spmTarget;
-    std::size_t             _nSize;
+    std::shared_ptr<Tensor> spmInput;      // 入力データtensor
+    std::shared_ptr<Tensor> spmTarget;     // 正解データtensor
+    std::size_t             nSize;         // このバッチに含まれるサンプル数
 };
 
 struct TrainingState
 {
-    int _nEpoch =0;
-    std::uint64_t _nGlobalStep =0;
+    int nEpoch =0;                     // 現在のエポック番号
+    std::uint64_t nGlobalStep =0;      // 学習開始からの累計更新回数
 };
 
 namespace trainer_detail {
@@ -61,13 +62,13 @@ inline float readScalar(const std::shared_ptr<Tensor>& c_spmTensor)
 
 inline void validateConfig(const TrainConfig& c_cfgConfig)
 {
-    if( c_cfgConfig._nEpochs<=0 )
+    if( c_cfgConfig.nEpochs<=0 )
     {
         throw std::runtime_error(
             "trainer: epochs must be positive"
         );
     }
-    if( c_cfgConfig._nBatchSize<=0 )
+    if( c_cfgConfig.nBatchSize<=0 )
     {
         throw std::runtime_error(
             "trainer: batch size must be positive"
@@ -96,11 +97,11 @@ void train(
     std::vector<std::size_t> nIndices =trainer_detail::makeIndices(
         c_dtsDataset.size()
     );
-    std::mt19937 rngRandom( c_cfgConfig._nSeed );
+    std::mt19937 rngRandom( c_cfgConfig.nSeed );
 
     optOptimizer.init();
 
-    for( int nEpoch=0;nEpoch<c_cfgConfig._nEpochs;++nEpoch )
+    for( int nEpoch=0;nEpoch<c_cfgConfig.nEpochs;++nEpoch )
     {
         std::shuffle( nIndices.begin(),nIndices.end(),rngRandom );
 
@@ -109,10 +110,10 @@ void train(
 
         for( std::size_t nBegin=0;
              nBegin<nIndices.size();
-             nBegin+=static_cast<std::size_t>(c_cfgConfig._nBatchSize) )
+             nBegin+=static_cast<std::size_t>(c_cfgConfig.nBatchSize) )
         {
             std::size_t nCount =std::min<std::size_t>(
-                static_cast<std::size_t>(c_cfgConfig._nBatchSize),
+                static_cast<std::size_t>(c_cfgConfig.nBatchSize),
                 nIndices.size()-nBegin
             );
             SupervisedBatch batBatch =c_dtsDataset.makeBatch(
@@ -120,9 +121,9 @@ void train(
                 nBegin,
                 nCount
             );
-            if( (batBatch._spmInput==nullptr)||
-                (batBatch._spmTarget==nullptr)||
-                (batBatch._nSize!=nCount) )
+            if( (batBatch.spmInput==nullptr)||
+                (batBatch.spmTarget==nullptr)||
+                (batBatch.nSize!=nCount) )
             {
                 throw std::runtime_error(
                     "train: dataset returned an invalid batch"
@@ -132,22 +133,22 @@ void train(
             optOptimizer.zero_grads();
 
             std::shared_ptr<Tensor> spmLoss =mdlModel.loss(
-                batBatch._spmInput,
-                batBatch._spmTarget
+                batBatch.spmInput,
+                batBatch.spmTarget
             );
             spmLoss->backward();
 
             float fBatchLoss =trainer_detail::readScalar( spmLoss );
             optOptimizer.update();
 
-            dblLossSum +=static_cast<double>(fBatchLoss)*batBatch._nSize;
-            nSampleCount +=batBatch._nSize;
+            dblLossSum +=static_cast<double>(fBatchLoss)*batBatch.nSize;
+            nSampleCount +=batBatch.nSize;
         }
 
         printf(
             "epoch %d/%d  loss=%.6f\n",
             nEpoch + 1,
-            c_cfgConfig._nEpochs,
+            c_cfgConfig.nEpochs,
             dblLossSum /static_cast<double>(nSampleCount)
         );
     }
@@ -191,9 +192,9 @@ float evaluate(
             nBegin,
             nCount
         );
-        if( (batBatch._spmInput==nullptr)||
-            (batBatch._spmTarget==nullptr)||
-            (batBatch._nSize!=nCount) )
+        if( (batBatch.spmInput==nullptr)||
+            (batBatch.spmTarget==nullptr)||
+            (batBatch.nSize!=nCount) )
         {
             throw std::runtime_error(
                 "evaluate: dataset returned an invalid batch"
@@ -201,13 +202,13 @@ float evaluate(
         }
 
         std::vector<std::shared_ptr<Tensor>> spmInputs{
-            batBatch._spmInput
+            batBatch.spmInput
         };
         std::shared_ptr<Tensor> spmOutput =mdlModel.forward( spmInputs );
 
         nCorrect +=metMetric(
             spmOutput,
-            batBatch._spmTarget
+            batBatch.spmTarget
         );
     }
 

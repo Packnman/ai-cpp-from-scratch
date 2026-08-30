@@ -20,7 +20,7 @@ namespace {
     // 通常はdeleteをカスタマイズしないため、
     // MyClass* lpValue =new MyClass(); 
     // std::unique_ptr<MyClass> upValue(lpValue);
-    // std::unique_ptr<MyClass> upValue =lpValue; <- unique_ptrの生ポインタコンストラクタはexplicitなので不可
+    //    std::unique_ptr<MyClass> upValue =lpValue; <- unique_ptrの生ポインタコンストラクタはexplicitなので不可
     // もしくは、
     // std::unique_ptr<MyClass> upValue(new MyClass());
     using FilePtr =std::unique_ptr<
@@ -206,9 +206,9 @@ std::size_t MnistDataset::size() const
 }
 
 SupervisedBatch MnistDataset::makeBatch(
-    const std::vector<std::size_t>& c_nIndices,
-    std::size_t nBegin,
-    std::size_t nCount
+    const std::vector<std::size_t>& c_nIndices, // シャッフルされた画像番号
+    std::size_t nBegin,                         // indicesのどこから使うか
+    std::size_t nCount                          // 今回何枚使うか
 ) const
 {
     // 1. Tensor(784,count)とTensor(10,count)を生成する。
@@ -255,11 +255,11 @@ SupervisedBatch MnistDataset::makeBatch(
         mHostTarget(nLabel,nBatch) =1.0f;
     }
 
-    std::shared_ptr<Tensor> spmInput =std::make_shared<Tensor>(
+    auto spmInput   =std::make_shared<Tensor>(
         c_nImageSize,
         static_cast<int>(nCount)
     );
-    std::shared_ptr<Tensor> spmTarget =std::make_shared<Tensor>(
+    auto spmTarget  =std::make_shared<Tensor>(
         c_nClassCount,
         static_cast<int>(nCount)
     );

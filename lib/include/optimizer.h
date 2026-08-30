@@ -13,9 +13,9 @@ class Tensor;
 template<class ParameterState>
 struct OptimizerState
 {
-    float _fLearningRate =0.0f;
-    std::uint64_t _nStep =0;
-    std::vector<ParameterState> _prmParameters;
+    float fLearningRate =0.0f;
+    std::uint64_t nStep =0;
+    std::vector<ParameterState> prmParameters;
 };
 
 // --------------------------
@@ -88,9 +88,9 @@ protected:
 // --------------------------
 struct NamedAdamState
 {
-    std::string _strName;
-    cuMat* _lpmFirstMoment =nullptr;
-    cuMat* _lpmSecondMoment =nullptr;
+    std::string strName;
+    cuMat* lpmFirstMoment =nullptr;
+    cuMat* lpmSecondMoment =nullptr;
 };
 
 using AdamState =OptimizerState<NamedAdamState>;

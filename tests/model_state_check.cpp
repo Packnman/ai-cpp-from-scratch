@@ -61,7 +61,7 @@ int main()
         require( named.size()==expectedNames.size(),"parameter count mismatch" );
         for( std::size_t i=0;i<named.size();++i )
         {
-            require( named[i]._strName==expectedNames[i],"parameter name mismatch" );
+            require( named[i].strName==expectedNames[i],"parameter name mismatch" );
         }
         require( source.getParams().size()==named.size(),"getParams count mismatch" );
         require( source.stateDict().size()==named.size(),"stateDict count mismatch" );
@@ -74,8 +74,8 @@ int main()
         require( sourceState.size()==destinationState.size(),"loaded state count mismatch" );
         for( std::size_t i=0;i<sourceState.size();++i )
         {
-            require( sourceState[i]._strName==destinationState[i]._strName,"loaded state name mismatch" );
-            requireSameTensor( *sourceState[i]._lpTensor,*destinationState[i]._lpTensor );
+            require( sourceState[i].strName==destinationState[i].strName,"loaded state name mismatch" );
+            requireSameTensor( *sourceState[i].lpTensor,*destinationState[i].lpTensor );
         }
 
         std::remove( FILE_NAME );

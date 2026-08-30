@@ -51,22 +51,21 @@ void Optimizer::init()
     _lpParams   =_lpModel->getParams();
     _spOptimizerParams.clear();
 
-    for( int nParam=0;nParam<static_cast<int>(_lpParams.size());++nParam )
+    for( auto lpParam : _lpParams )
     {
-        std::shared_ptr<OptimizerParams> spParams =createOptimizerParams(
-            _lpParams[nParam]
-        );
+        auto spParams =createOptimizerParams( lpParam );
         _spOptimizerParams.push_back( spParams );
     }
 }
 void Optimizer::update()
 {
     _nStep++;
-    for( int nParam=0;nParam<static_cast<int>(_lpParams.size());++nParam )
+    // for( std::size_t i=0;i<_lpParams.size();i++ )    // i++は処理内でコピーが発生するため遅いことがある。
+    for( std::size_t i=0;i<_lpParams.size();++i )       // ++iは自信を増加させるためコピーが発生しないことから推奨される
     {
         update_param(
-            _lpParams[nParam],
-            _spOptimizerParams[nParam].get()
+            _lpParams[i],
+            _spOptimizerParams[i].get()
         );
     }
 }
@@ -74,24 +73,6 @@ void Optimizer::zero_grads()
 {
     _lpModel->zero_grads();
 }
-std::shared_ptr<OptimizerParams> Optimizer::createOptimizerParams(Tensor* lpTensor)
-{
-    (void)lpTensor;     // 警告除去
-
-    throw std::runtime_error(
-        "Optimizer::createOptimizerParams is not implemented"
-    );
-}
-void Optimizer::update_param(Tensor* lpTensor,OptimizerParams* lpOptimizerParams)
-{
-    (void)lpTensor;             // 警告除去
-    (void)lpOptimizerParams;    // 警告除去
-
-    throw std::runtime_error(
-        "Optimizer::update_param is not implemented"
-    );
-}
-
 
 // --------------------------
 // SGDParams
@@ -121,12 +102,8 @@ std::shared_ptr<OptimizerParams>
 SGD::createOptimizerParams(Tensor* lpTensor)
 {
     (void)lpTensor;
-    SGDParams* lpParamsSGD  =new SGDParams(
-        // Non
-    );
-    std::shared_ptr<SGDParams> spParams =std::shared_ptr<SGDParams>(lpParamsSGD);
-
-    return spParams;
+    //
+    return std::make_shared<SGDParams>();
 }
 void SGD::update_param(Tensor* lpTensor,OptimizerParams* lpOptimizerParams)
 {
@@ -170,13 +147,10 @@ Adam::~Adam()
 std::shared_ptr<OptimizerParams>
 Adam::createOptimizerParams(Tensor* lpTensor)
 {
-    AdamParams* lpParamsAdam    =new AdamParams(
+    return std::make_shared<AdamParams>(
         lpTensor->_mData._nRows,
         lpTensor->_mData._nCols
     );
-    std::shared_ptr<AdamParams> spParams    =std::shared_ptr<AdamParams>(lpParamsAdam);
-
-    return spParams;
 }
 void Adam::update_param(Tensor* lpTensor,OptimizerParams* lpOptimizerParams)
 {

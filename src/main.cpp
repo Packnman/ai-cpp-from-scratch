@@ -25,17 +25,15 @@ int main(int nArgCount,char** lpszArgs)
             c_strDataDirectory + "/t10k-labels-idx1-ubyte"
         );
 
-        constexpr std::uint32_t c_nSeed =42;
-        constexpr float c_fLearningRate =1.0e-3f;
-
-        NeuralNet nntModel( c_nSeed );
-        Adam admOptimizer( &nntModel,c_fLearningRate );
-
         TrainConfig cfgConfig{
-            ._nEpochs =5,
-            ._nBatchSize =128,
-            ._nSeed =c_nSeed
+            .nEpochs        =5,
+            .nBatchSize     =128,
+            .nSeed          =42,
+            .fLearningRate  =1.0e-3f
         };
+
+        NeuralNet nntModel( cfgConfig.nSeed );
+        Adam admOptimizer( &nntModel,cfgConfig.fLearningRate );
 
         train(
             nntModel,
@@ -47,14 +45,14 @@ int main(int nArgCount,char** lpszArgs)
         float fAccuracy =evaluate(
             nntModel,
             mnsTestDataset,
-            cfgConfig._nBatchSize,
+            cfgConfig.nBatchSize,
             countClassificationCorrect
         );
 
-        std::cout
-            << "test_accuracy="
-            << fAccuracy*100.0f
-            << "%\n";
+        printf(
+            "test_accuracy=%.2f",
+            fAccuracy*100.0f
+        );
 
         nntModel.save( "mnist_model.bin" );
     }
