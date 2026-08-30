@@ -33,11 +33,12 @@ int main(int nArgCount,char** lpszArgs)
             .nEpochs        =5,
             .nBatchSize     =128,
             .nSeed          =42,
-            .fLearningRate  =1.0e-3f,
+            .fLearningRate  =1.0e-6f,
             .fDropoutRate   =0.2f
         };
 
         NeuralNet nntModel( cfgConfig.nSeed,cfgConfig.fDropoutRate );
+        //nntModel.load( "mnist_model_batchnorm.bin" );
         Adam admOptimizer( &nntModel,cfgConfig.fLearningRate );
 
         train(
@@ -59,10 +60,9 @@ int main(int nArgCount,char** lpszArgs)
             fAccuracy*100.0f
         );
 
-        std::filesystem::create_directories( c_pthModelDirectory );
-        const std::filesystem::path c_pthModelFile =
-            c_pthModelDirectory/"mnist_model_batchnorm.bin";
-        nntModel.save( c_pthModelFile.c_str() );
+        nntModel.save( std::string(
+            c_pthModelDirectory/"mnist_model_batchnorm.bin"
+        ).c_str() );
     }
     catch( const std::exception& c_excError )
     {
