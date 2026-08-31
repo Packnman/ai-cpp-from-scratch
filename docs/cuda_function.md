@@ -94,7 +94,50 @@ momentumは0〜1、epsilonは正数。既定値は0.1と1e-5。
 
 入力と出力はfeatures × batch。学習時はバッチ統計を使ってrunning統計を更新し、評価時はrunning統計を使う。backwardはinput、gamma、betaの勾配へ加算する。
 
-同じインスタンスは最新forwardの一時状態だけを保持するため、複数の未完了グラフを同時に保持してはならない。詳細な数式はルートREADMEの「BatchNorm」を参照する。
+同じインスタンスは最新forwardの一時状態だけを保持するため、複数の未完了グラフを同時に保持してはならない。
+
+特徴量を$f$、バッチ内サンプルを$b$、バッチサイズを$B$とする。学習時は特徴量ごとに母分散を使って正規化する。
+
+$$
+\mu_f=\frac{1}{B}\sum_{b=1}^{B}x_{fb},\qquad
+\sigma_f^2=\frac{1}{B}\sum_{b=1}^{B}(x_{fb}-\mu_f)^2
+$$
+
+$$
+\hat{x}_{fb}=\frac{x_{fb}-\mu_f}{\sqrt{\sigma_f^2+\epsilon}},\qquad
+y_{fb}=\gamma_f\hat{x}_{fb}+\beta_f
+$$
+
+running meanはmomentum $m$でバッチ平均へ更新する。running varianceには$B>1$の場合だけ$B/(B-1)$を掛けた不偏分散を使用し、$B=1$では補正しない。
+
+$$
+\mathrm{running\_mean}_f\leftarrow(1-m)\mathrm{running\_mean}_f+m\mu_f
+$$
+
+$$
+\mathrm{running\_var}_f\leftarrow
+(1-m)\mathrm{running\_var}_f+m\frac{B}{B-1}\sigma_f^2\qquad(B>1)
+$$
+
+評価時はバッチ統計を更新せず、running meanとrunning varianceを$\mu_f$と$\sigma_f^2$の代わりに使用する。
+
+上流勾配を$g_{fb}=\partial L/\partial y_{fb}$とすると、Parameterの勾配は次のとおりである。
+
+$$
+\frac{\partial L}{\partial\beta_f}=\sum_{b=1}^{B}g_{fb},\qquad
+\frac{\partial L}{\partial\gamma_f}=\sum_{b=1}^{B}g_{fb}\hat{x}_{fb}
+$$
+
+学習時の入力勾配は次の式で計算する。
+
+$$
+\frac{\partial L}{\partial x_{fb}}=
+\frac{\gamma_f}{B\sqrt{\sigma_f^2+\epsilon}}
+\left[
+Bg_{fb}-\sum_{j=1}^{B}g_{fj}
+-\hat{x}_{fb}\sum_{j=1}^{B}g_{fj}\hat{x}_{fj}
+\right]
+$$
 
 ## Linear
 

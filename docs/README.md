@@ -25,7 +25,27 @@
 ## 共通規約
 
 - ニューラルネットワークの行列は「特徴量またはクラス数 × バッチ数」で表す。
-- `Mat`と`cuMat`はcolumn-majorであり、要素位置は `column * rows + row` である。
+- `Mat`と`cuMat`はcolumn-majorであり、要素位置は`column * rows + row`である。
 - `Tensor`のデータと勾配はGPU上に置く。
-- 学習パラメータとBufferの所有権は派生`Module`が持ち、基底`Module`は非所有ポインタを登録する。
+- 学習ParameterとBufferの所有権は派生`Module`が持ち、基底`Module`は非所有pointerを登録する。
 - CUDA演算のbackwardは、原則として既存の勾配へ加算する。
+
+### 命名規則
+
+変数名は型や所有関係を示すprefixと、意味を示す大文字始まりの本体を組み合わせる。constやpointerなど複数の性質がある場合は、`c_spmInput`のようにprefixを重ねる。
+
+| 優先度 | prefix・形式 | 対象 |
+| --- | --- | --- |
+| 1 | `g_` | global関数・変数 |
+| 2 | `_` | メンバー変数 |
+| 3 | `c_` | const。global定数はprefixを付けず全大文字、またはmacroとする |
+| 4 | `lp` | raw pointer |
+| 5 | `sp` | `shared_ptr` |
+| 6 | `wp` | `weak_ptr` |
+| 7 | `n` | 整数 |
+| 8 | `f` | `float` |
+| 9 | `dbl` | `double` |
+| 10 | `is` / `can` | `bool` |
+| 11 | `str` | 文字列 |
+| 12 | クラス名の3文字略称 | クラス型の変数 |
+| 13 | 本体を複数形 | `vector`などのコレクション |
