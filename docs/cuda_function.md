@@ -157,6 +157,21 @@ biasGrad   += outputGrad * ones
 
 `_mTmp`は1 × batchのonesを再利用する作業領域。weightとbiasの所有権は呼び出し側Moduleにある。
 
+## Conv2D
+
+入力は `(inputHeight * inputWidth * inputChannels) x batch`、weightは `outputChannels x (kernelSize^2 * inputChannels)`、biasは`outputChannels x 1`。HWCのrow番号は `(y * width + x) * channels + channel` とする。kernelを反転しないcross-correlationをim2colとcuBLAS GEMMで計算する。
+
+```text
+outputHeight = floor((inputHeight + 2 * padding - kernelSize) / stride) + 1
+outputWidth  = floor((inputWidth  + 2 * padding - kernelSize) / stride) + 1
+```
+
+出力もHWC順の `(outputHeight * outputWidth * outputChannels) x batch`。backwardは入力、weight、biasの既存勾配へ加算する。v1は正方形kernel、共通stride、対称padding、必須biasのみで、groups、dilation、非正方形kernelには対応しない。
+
+## MaxPool2D
+
+入力・出力は同じHWC規約を使う。出力サイズはpaddingなしで `floor((input - kernelSize) / stride) + 1`。backwardは各windowを再走査し、最大位置へ勾配を加算する。最大値が同じ要素はHWC走査順の最初を選ぶ。重複windowから同じ入力へ流れる勾配はatomic加算する。v1は正方形kernel、共通strideのみ対応する。
+
 ## GELU
 
 tanh近似によるGELUを同形状Tensorへ適用する。backwardは近似式の解析導関数を使って入力勾配へ加算する。

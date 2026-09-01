@@ -53,6 +53,12 @@ Function自体がModuleではない場合、派生Moduleがforward時にモー�
 
 派生クラスが実装する純粋virtual API。入力はshared Tensor配列、戻り値は単一Tensorである。Functionの複数出力APIとは別のModuleレベル規約。
 
+## LayerConv2D
+
+Conv2D用のweightとbiasを所有し、それぞれ`weight`、`bias`としてParameter登録する。constructor引数はinput/output channels、固定input height/width、正方形kernel、stride、padding。`outputChannels()`、`outputHeight()`、`outputWidth()`で出力geometryを取得できる。
+
+`init(std::mt19937&)`はfan-inを`kernelSize^2 * inputChannels`としてweightをHe正規分布、biasを0で初期化する。forwardは単一入力を所有するConv2D Functionへ渡す。
+
 ## Model
 
 Moduleを継承し、stateDictのファイル保存と読込を提供する。

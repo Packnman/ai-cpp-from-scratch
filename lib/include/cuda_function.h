@@ -151,6 +151,75 @@ public:
 };
 
 // --------------------------
+// Conv2D
+// --------------------------
+class Conv2D : public Function
+{
+public:
+    Conv2D(
+        Tensor* lpWeight,
+        Tensor* lpBias,
+        int nInputChannels,
+        int nInputHeight,
+        int nInputWidth,
+        int nKernelSize,
+        int nStride =1,
+        int nPadding =0
+    );
+    ~Conv2D() override;
+    void backward(
+        const TensorGradList& c_lpmOutputGrads,
+        const TensorList& c_spmInputs,
+        const TensorList& c_spmOutputs
+    ) override;
+    TensorList forward(const TensorList& c_spmInputs) override;
+
+private:
+    Tensor* _lpmWeight;
+    Tensor* _lpmBias;
+    int _nInputChannels;
+    int _nInputHeight;
+    int _nInputWidth;
+    int _nKernelSize;
+    int _nStride;
+    int _nPadding;
+    int _nOutputChannels;
+    int _nOutputHeight;
+    int _nOutputWidth;
+};
+
+// --------------------------
+// MaxPool2D
+// --------------------------
+class MaxPool2D : public Function
+{
+public:
+    MaxPool2D(
+        int nChannels,
+        int nInputHeight,
+        int nInputWidth,
+        int nKernelSize =2,
+        int nStride =2
+    );
+    ~MaxPool2D() override;
+    void backward(
+        const TensorGradList& c_lpmOutputGrads,
+        const TensorList& c_spmInputs,
+        const TensorList& c_spmOutputs
+    ) override;
+    TensorList forward( const TensorList& c_spmInputs ) override;
+
+private:
+    int _nChannels;
+    int _nInputHeight;
+    int _nInputWidth;
+    int _nKernelSize;
+    int _nStride;
+    int _nOutputHeight;
+    int _nOutputWidth;
+};
+
+// --------------------------
 // GELU
 // --------------------------
 class GELU: public Function

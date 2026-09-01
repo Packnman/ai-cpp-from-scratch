@@ -49,3 +49,30 @@
 | 11 | `str` | 文字列 |
 | 12 | クラス名の3文字略称 | クラス型の変数 |
 | 13 | 本体を複数形 | `vector`などのコレクション |
+
+### コーディングスタイル
+
+- インデントは半角スペース4個とし、タブ文字は使用しない。
+- `namespace`、`class`、`struct`、関数、制御文の開始波括弧は宣言または条件の次行に置く。
+- `if`、`else`、`for`、`while`などの制御文は、本体が1文だけでも必ず波括弧で囲む。
+- 1行には原則として1文だけを記述する。
+- pointerとreferenceの記号は型側へ寄せ、`Tensor* lpTensor`、`const cuMat& c_mValue`のように記述する。
+- 代入演算子と二項演算子の前後、およびカンマの後には半角スペースを置く。
+- 空でない丸括弧の内側には半角スペースを置く。空の引数リストは`()`と記述する。
+- 長い関数宣言、関数呼出し、条件式は意味のまとまりで改行し、継続行もスペースで整列する。
+- formatterを使用する場合も、インデント幅4、タブ不使用、Allman形式、制御文への波括弧追加を維持する。
+
+```cpp
+void updateTensor( Tensor* lpTensor, const cuMat& c_mGradient )
+{
+    if( lpTensor == nullptr )
+    {
+        throw std::invalid_argument( "tensor must not be null" );
+    }
+
+    for( int nRow = 0; nRow < lpTensor->_mData._nRows; ++nRow )
+    {
+        updateRow( lpTensor, c_mGradient, nRow );
+    }
+}
+```

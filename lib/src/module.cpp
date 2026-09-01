@@ -12,80 +12,51 @@
 
 #include "matrix.h"
 
-namespace {
-    constexpr char MODEL_MAGIC[8] ={'A','I','C','P','P','M','D','L'};
-    constexpr std::uint32_t MODEL_VERSION =1;
-    constexpr std::uint32_t MAX_NAME_LENGTH =4096;
 
-    struct FileCloser
+
+void Model::_writeExact(FILE* lpFile,const void* lpData,std::size_t nSize)
+{
+    if( (nSize>0)&&(fwrite(lpData,1,nSize,lpFile)!=nSize) )
     {
-        void operator()(FILE* lpFile) const
-        {
-            if( lpFile!=nullptr )
-            {
-                fclose( lpFile );
-            }
-        }
-    };
-
-    using FilePtr =std::unique_ptr<FILE,FileCloser>;
-
-    void writeExact(FILE* lpFile,const void* lpData,std::size_t nSize)
-    {
-        if( (nSize>0)&&(fwrite(lpData,1,nSize,lpFile)!=nSize) )
-        {
-            throw std::runtime_error("Model::save: failed to write file");
-        }
+        throw std::runtime_error("Model::save: failed to write file");
     }
+}
 
-    void readExact(FILE* lpFile,void* lpData,std::size_t nSize)
+void Model::_readExact(FILE* lpFile,void* lpData,std::size_t nSize)
+{
+    if( (nSize>0)&&(fread(lpData,1,nSize,lpFile)!=nSize) )
     {
-        if( (nSize>0)&&(fread(lpData,1,nSize,lpFile)!=nSize) )
+        throw std::runtime_error("Model::load: truncated model file");
+    }
+}
+
+
+void Module::_appendWithPrefix(
+    std::vector<NamedTensor>& nmtDestinations,
+    const std::string& c_strPrefix,
+    const std::vector<NamedTensor>& c_nmtSources
+) const
+{
+    for( const NamedTensor& c_nmtEntry : c_nmtSources )
+    {
+        nmtDestinations.push_back({
+            c_strPrefix+c_nmtEntry.strName,
+            c_nmtEntry.lpTensor
+        });
+    }
+}
+
+void Module::_zeroGradients(const std::vector<Tensor*>& c_lpParams)
+{
+    for( Tensor* lpTensor : c_lpParams )
+    {
+        if( lpTensor!=nullptr )
         {
-            throw std::runtime_error("Model::load: truncated model file");
-        }
-    }
-
-    template<class Type>
-    void writeValue(FILE* lpFile,const Type& c_typValue)
-    {
-        writeExact( lpFile,&c_typValue,sizeof(Type) );
-    }
-
-    template<class Type>
-    Type readValue(FILE* lpFile)
-    {
-        Type typValue{};
-        readExact( lpFile,&typValue,sizeof(Type) );
-        return typValue;
-    }
-
-    void appendWithPrefix(
-        std::vector<NamedTensor>& nmtDestinations,
-        const std::string& c_strPrefix,
-        const std::vector<NamedTensor>& c_nmtSources
-    )
-    {
-        for( const NamedTensor& c_nmtEntry : c_nmtSources )
-        {
-            nmtDestinations.push_back({
-                c_strPrefix+c_nmtEntry.strName,
-                c_nmtEntry.lpTensor
-            });
-        }
-    }
-
-    void zeroGradients(const std::vector<Tensor*>& c_lpParams)
-    {
-        for( Tensor* lpTensor : c_lpParams )
-        {
-            if( lpTensor!=nullptr )
-            {
-                cuda_fill( lpTensor->_mGrad,0.0f );
-            }
+            cuda_fill( lpTensor->_mGrad,0.0f );
         }
     }
 }
+    
 
 Module::Module()
     :_isTraining( true )
@@ -96,7 +67,7 @@ Module::~Module()
 {
 }
 
-void Module::validateRegistrationName(const std::string& c_strName) const
+void Module::_validateRegistrationName(const std::string& c_strName) const
 {
     if( c_strName.empty() )
     {
@@ -106,13 +77,13 @@ void Module::validateRegistrationName(const std::string& c_strName) const
     {
         throw std::invalid_argument("Module: registration name must not contain '.'");
     }
-    if( containsLocalName(c_strName) )
+    if( _containsLocalName(c_strName) )
     {
         throw std::invalid_argument("Module: duplicate registration name: "+c_strName);
     }
 }
 
-bool Module::containsLocalName(const std::string& c_strName) const
+bool Module::_containsLocalName(const std::string& c_strName) const
 {
     // ラムダ式関数の作成
     auto fnTensorHasName =[&c_strName](const NamedTensor& c_nmtEntry)
@@ -130,9 +101,9 @@ bool Module::containsLocalName(const std::string& c_strName) const
         std::any_of(_nmmModules.begin(),_nmmModules.end(),fnModuleHasName);
 }
 
-void Module::registerParameter(const std::string& c_strName,Tensor* lpTensor)
+void Module::__registerParameter(const std::string& c_strName,Tensor* lpTensor)
 {
-    validateRegistrationName( c_strName );
+    _validateRegistrationName( c_strName );
     if( lpTensor==nullptr )
     {
         throw std::invalid_argument("Module: parameter must not be null: "+c_strName);
@@ -141,9 +112,9 @@ void Module::registerParameter(const std::string& c_strName,Tensor* lpTensor)
     _nmtParams.push_back({c_strName,lpTensor});
 }
 
-void Module::registerBuffer(const std::string& c_strName,Tensor* lpTensor)
+void Module::__registerBuffer(const std::string& c_strName,Tensor* lpTensor)
 {
-    validateRegistrationName( c_strName );
+    _validateRegistrationName( c_strName );
     if( lpTensor==nullptr )
     {
         throw std::invalid_argument("Module: buffer must not be null: "+c_strName);
@@ -152,9 +123,9 @@ void Module::registerBuffer(const std::string& c_strName,Tensor* lpTensor)
     _nmtBuffers.push_back({c_strName,lpTensor});
 }
 
-void Module::registerModule(const std::string& c_strName,Module* lpModule)
+void Module::__registerModule(const std::string& c_strName,Module* lpModule)
 {
-    validateRegistrationName( c_strName );
+    _validateRegistrationName( c_strName );
     if( lpModule==nullptr )
     {
         throw std::invalid_argument("Module: child module must not be null: "+c_strName);
@@ -187,7 +158,7 @@ std::vector<NamedTensor> Module::namedParameters() const
     std::vector<NamedTensor> nmtResults =_nmtParams;
     for( const NamedModule& c_nmmChild : _nmmModules )
     {
-        appendWithPrefix(
+        _appendWithPrefix(
             nmtResults,
             c_nmmChild.strName+".",
             c_nmmChild.lpModule->namedParameters()
@@ -202,7 +173,7 @@ std::vector<NamedTensor> Module::namedBuffers() const
     std::vector<NamedTensor> nmtResults =_nmtBuffers;
     for( const NamedModule& c_nmmChild : _nmmModules )
     {
-        appendWithPrefix(
+        _appendWithPrefix(
             nmtResults,
             c_nmmChild.strName+".",
             c_nmmChild.lpModule->namedBuffers()
@@ -236,7 +207,7 @@ StateDict Module::stateDict() const
 
 void Module::zero_grads()
 {
-    zeroGradients( getParams() );
+    _zeroGradients( getParams() );
 }
 
 void Module::reset_state()
@@ -271,9 +242,9 @@ void Model::save(const char* lpszFileName)
         throw std::runtime_error("Model::save: too many state entries");
     }
 
-    writeExact( filFile.get(),MODEL_MAGIC,sizeof(MODEL_MAGIC) );
-    writeValue( filFile.get(),MODEL_VERSION );
-    writeValue( filFile.get(),static_cast<std::uint32_t>(nmtState.size()) );
+    _writeExact( filFile.get(),MODEL_MAGIC,sizeof(MODEL_MAGIC) );
+    _writeValue( filFile.get(),MODEL_VERSION );
+    _writeValue( filFile.get(),static_cast<std::uint32_t>(nmtState.size()) );
 
     for( const NamedTensor& c_nmtEntry : nmtState )
     {
@@ -293,15 +264,15 @@ void Model::save(const char* lpszFileName)
         Mat mHost( c_nRows,c_nCols );
         c_nmtEntry.lpTensor->_mData.upload( mHost );
 
-        writeValue( filFile.get(),c_nNameLength );
-        writeExact(
+        _writeValue( filFile.get(),c_nNameLength );
+        _writeExact(
             filFile.get(),
             c_nmtEntry.strName.data(),
             c_nNameLength
         );
-        writeValue( filFile.get(),c_nRows );
-        writeValue( filFile.get(),c_nCols );
-        writeExact(
+        _writeValue( filFile.get(),c_nRows );
+        _writeValue( filFile.get(),c_nCols );
+        _writeExact(
             filFile.get(),
             mHost._lpfHost,
             static_cast<std::size_t>(c_nRows)*
@@ -324,12 +295,12 @@ void Model::load(const char* lpszFileName)
     }
 
     char szMagic[sizeof(MODEL_MAGIC)]   ={0};
-    readExact( filFile.get(),szMagic,sizeof(szMagic) );
+    _readExact( filFile.get(),szMagic,sizeof(szMagic) );
     if( std::memcmp(szMagic,MODEL_MAGIC,sizeof(MODEL_MAGIC))!=0 )
     {
         throw std::runtime_error("Model::load: invalid model file");
     }
-    if( readValue<std::uint32_t>(filFile.get())!=MODEL_VERSION )
+    if( _readValue<std::uint32_t>(filFile.get())!=MODEL_VERSION )
     {
         throw std::runtime_error("Model::load: unsupported model version");
     }
@@ -350,7 +321,7 @@ void Model::load(const char* lpszFileName)
         }
     }
 
-    const std::uint32_t c_nEntryCount =readValue<std::uint32_t>(filFile.get());
+    const std::uint32_t c_nEntryCount =_readValue<std::uint32_t>(filFile.get());
     if( c_nEntryCount!=nmtState.size() )
     {
         throw std::runtime_error("Model::load: state entry count mismatch");
@@ -359,7 +330,7 @@ void Model::load(const char* lpszFileName)
     std::unordered_set<std::string> ustLoadedNames;
     for( std::uint32_t nEntry=0;nEntry<c_nEntryCount;++nEntry )
     {
-        const std::uint32_t c_nNameLength =readValue<std::uint32_t>(
+        const std::uint32_t c_nNameLength =_readValue<std::uint32_t>(
             filFile.get()
         );
         if( (c_nNameLength==0)||(c_nNameLength>MAX_NAME_LENGTH) )
@@ -368,9 +339,9 @@ void Model::load(const char* lpszFileName)
         }
 
         std::string strName( c_nNameLength,'\0' );
-        readExact( filFile.get(),strName.data(),c_nNameLength );
-        const std::int32_t c_nRows =readValue<std::int32_t>(filFile.get());
-        const std::int32_t c_nCols =readValue<std::int32_t>(filFile.get());
+        _readExact( filFile.get(),strName.data(),c_nNameLength );
+        const std::int32_t c_nRows =_readValue<std::int32_t>(filFile.get());
+        const std::int32_t c_nCols =_readValue<std::int32_t>(filFile.get());
 
         auto itrDestination =umpDestinations.find( strName );
         if( itrDestination==umpDestinations.end() )
@@ -390,7 +361,7 @@ void Model::load(const char* lpszFileName)
         }
 
         Mat mHost( c_nRows,c_nCols );
-        readExact(
+        _readExact(
             filFile.get(),
             mHost._lpfHost,
             static_cast<std::size_t>(c_nRows)*

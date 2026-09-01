@@ -19,9 +19,12 @@ set(AI_CPP_CUDA_ARCHITECTURES "86" CACHE STRING
 add_library(ai_cpp STATIC
     lib/src/cuda_matrix.cpp
     lib/src/cuda_matrix.cu
+    lib/src/cuda_spatial.cu
+    lib/src/cuda_spatial_function.cpp
     lib/src/cuda_function.cpp
     lib/src/cuda_tensor.cpp
     lib/src/module.cpp
+    lib/src/layer_conv2d.cpp
     lib/src/matrix.cpp
     lib/src/optimizer.cpp
 )
@@ -81,9 +84,23 @@ if(BUILD_TESTING)
     )
     target_link_libraries(batchnorm_check PRIVATE ai_cpp)
 
+    add_executable(conv2d_check tests/conv2d_check.cpp)
+    target_include_directories(conv2d_check PRIVATE
+        ${PROJECT_SOURCE_DIR}/lib/include
+    )
+    target_link_libraries(conv2d_check PRIVATE ai_cpp)
+
+    add_executable(maxpool2d_check tests/maxpool2d_check.cpp)
+    target_include_directories(maxpool2d_check PRIVATE
+        ${PROJECT_SOURCE_DIR}/lib/include
+    )
+    target_link_libraries(maxpool2d_check PRIVATE ai_cpp)
+
     add_test(NAME cuda_check COMMAND cuda_check)
     add_test(NAME multi_output_check COMMAND multi_output_check)
     add_test(NAME model_state_check COMMAND model_state_check)
     add_test(NAME dropout_check COMMAND dropout_check)
     add_test(NAME batchnorm_check COMMAND batchnorm_check)
+    add_test(NAME conv2d_check COMMAND conv2d_check)
+    add_test(NAME maxpool2d_check COMMAND maxpool2d_check)
 endif()

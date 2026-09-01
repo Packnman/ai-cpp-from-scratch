@@ -81,10 +81,12 @@ cmake --build build/debug
 | `model_state_check` | Parameter、Buffer、モード、モデル保存・読込のテスト |
 | `dropout_check` | Dropoutの値検証、再現性、学習・評価モードのテスト |
 | `batchnorm_check` | BatchNormのforward、backward、running統計のテスト |
+| `conv2d_check` | Conv2D、LayerConv2D、勾配、shape、初期化のテスト |
+| `maxpool2d_check` | MaxPool2Dのforward、backward、tie、重複領域のテスト |
 
 ## テスト
 
-CTestには5件のテストが登録されています。
+CTestには7件のテストが登録されています。
 
 ```sh
 ctest --test-dir build/debug --output-on-failure
@@ -140,6 +142,8 @@ ctest --test-dir build/debug --output-on-failure
 ```
 
 ## 現在の制約
+
+画像演算のTensorは `(height * width * channels) x batch` の2次元で、rowは `(y * width + x) * channels + channel` のHWC順です。Conv2Dはkernelを反転しないcross-correlationで、正方形kernel、縦横共通stride、対称padding、必須biasに対応します。MaxPool2Dはpaddingなしで、最大値が同値ならHWC走査順の最初を選びます。
 
 - NVIDIA GPUとCUDA環境が必須で、CPU-only実行には対応していません。
 - epoch、batch size、Optimizer、学習率などを変更するCLIはなく、ハイパーパラメータは`src/main.cpp`に固定されています。

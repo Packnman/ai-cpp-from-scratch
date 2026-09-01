@@ -111,6 +111,73 @@ void cuda_SoftmaxCrossEntropy_backward(
     const cuMat& c_mGrad
 );
 
+// Spatial operators use HWC-flattened image rows and batch columns.
+void cuda_Conv2D_im2col(
+    cuMat& mColumns,
+    const cuMat& c_mInput,
+    int nInputChannels,
+    int nInputHeight,
+    int nInputWidth,
+    int nKernelSize,
+    int nStride,
+    int nPadding,
+    int nOutputHeight,
+    int nOutputWidth
+);
+void cuda_Conv2D_pack_output(
+    cuMat& mOutput,
+    const cuMat& c_mGemm,
+    const cuMat& c_mBias,
+    int nOutputHeight,
+    int nOutputWidth
+);
+void cuda_Conv2D_unpack_grad(
+    cuMat& mGemmGrad,
+    const cuMat& c_mOutputGrad,
+    int nOutputChannels,
+    int nOutputHeight,
+    int nOutputWidth
+);
+void cuda_Conv2D_col2im(
+    cuMat& mInputGrad,
+    const cuMat& c_mColumnGrad,
+    int nInputChannels,
+    int nInputHeight,
+    int nInputWidth,
+    int nKernelSize,
+    int nStride,
+    int nPadding,
+    int nOutputHeight,
+    int nOutputWidth
+);
+void cuda_Conv2D_bias_backward(
+    cuMat& mBiasGrad,
+    const cuMat& c_mGemmGrad
+);
+void cuda_MaxPool2D_forward(
+    cuMat& mOutput,
+    const cuMat& c_mInput,
+    int nChannels,
+    int nInputHeight,
+    int nInputWidth,
+    int nKernelSize,
+    int nStride,
+    int nOutputHeight,
+    int nOutputWidth
+);
+void cuda_MaxPool2D_backward(
+    cuMat& mInputGrad,
+    const cuMat& c_mInput,
+    const cuMat& c_mOutputGrad,
+    int nChannels,
+    int nInputHeight,
+    int nInputWidth,
+    int nKernelSize,
+    int nStride,
+    int nOutputHeight,
+    int nOutputWidth
+);
+
 void cuda_Adam_update(
     cuMat& mData,
     const cuMat& c_mGrad,
