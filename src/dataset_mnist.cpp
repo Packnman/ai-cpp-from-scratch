@@ -1,4 +1,4 @@
-#include "mnist.h"
+#include "dataset_mnist.h"
 #include <cstdio>
 #include <limits>
 #include <memory>
@@ -214,7 +214,10 @@ SupervisedBatch MnistDataset::makeBatch(
     // 1. Tensor(784,count)とTensor(10,count)を生成する。
     // 2. 画像を0.0～1.0へ正規化して入力Tensorへ転送する。
     // 3. ラベルをone-hotへ変換してtarget Tensorへ転送する。
-    if( nBegin+nCount>c_nIndices.size() )
+    if( (nCount==0)||
+        (nCount>static_cast<std::size_t>(std::numeric_limits<int>::max()))||
+        (nBegin>c_nIndices.size())||
+        (nCount>c_nIndices.size()-nBegin) )
     {
         throw std::runtime_error(
             "MnistDataset::makeBatch: invalid range"
@@ -240,6 +243,13 @@ SupervisedBatch MnistDataset::makeBatch(
     {
         // シャッフル後の並びから画像番号を取得
         std::size_t nImageIndex =c_nIndices[nBegin+nBatch];
+        if( nImageIndex>=size() )
+        {
+            throw std::runtime_error(
+                "MnistDataset::makeBatch: index out of range"
+            );
+        }
+
 
         // 画像の784ピクセルを1列へ入れる
         for( int nPixel=0;nPixel<c_nImageSize;++nPixel )
@@ -276,68 +286,3 @@ SupervisedBatch MnistDataset::makeBatch(
 }
 
 // --------------------------
-// Mnist
-// --------------------------
-// 役割：
-//  ・1バッチ内で「予測した数字」と「正解ラベル」が一致した画像数を返す
-// --------------------------
-std::size_t countClassificationCorrect(
-    const std::shared_ptr<Tensor>& c_spmOutput, // NeuralNetの出力 logits
-    const std::shared_ptr<Tensor>& c_spmTarget  // 正解one-hot
-)
-{
-    if( (c_spmOutput==nullptr)||(c_spmTarget==nullptr) )
-    {
-        throw std::runtime_error(
-            "countClassificationCorrect: tensor is null"
-        );
-    }
-    if( (c_spmOutput->_mData._nRows!=c_spmTarget->_mData._nRows)||
-        (c_spmOutput->_mData._nCols!=c_spmTarget->_mData._nCols)||
-        (c_spmOutput->_mData._nRows<=0)||
-        (c_spmOutput->_mData._nCols<=0) )
-    {
-        throw std::runtime_error(
-            "countClassificationCorrect: tensor size mismatch"
-        );
-    }
-
-    Mat mHostOutput(
-        c_spmOutput->_mData._nRows,
-        c_spmOutput->_mData._nCols
-    );
-    Mat mHostTarget(
-        c_spmTarget->_mData._nRows,
-        c_spmTarget->_mData._nCols
-    );
-    c_spmOutput->_mData.upload( mHostOutput );
-    c_spmTarget->_mData.upload( mHostTarget );
-
-    std::size_t nCorrect =0;
-
-    for( int nBatch=0;nBatch<mHostOutput._nCols;++nBatch )
-    {
-        int nPredicted =0;
-        int nExpected =0;
-
-        // 各画像について、outputの値が最も大きい行番号を探します。
-        for( int nRow=1;nRow<mHostOutput._nRows;++nRow )
-        {
-            if( mHostOutput(nRow,nBatch)>mHostOutput(nPredicted,nBatch) )
-            {
-                nPredicted =nRow;
-            }
-            if( mHostTarget(nRow,nBatch)>mHostTarget(nExpected,nBatch) )
-            {
-                nExpected =nRow;
-            }
-        }
-
-        if( nPredicted==nExpected )
-        {
-            nCorrect++;
-        }
-    }
-
-    return nCorrect;
-}

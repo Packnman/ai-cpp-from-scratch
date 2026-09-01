@@ -126,7 +126,7 @@ void cuda_Conv2D_col2im(
     int nOutputWidth
 )
 {
-    int nSize       =mResult._nRows * mResult._nCols;
+    int nSize       =c_mColumnGrad._nRows * c_mColumnGrad._nCols;
     int nThreads    =256;
     int nBlocks     =(nSize + nThreads - 1)/nThreads;
     if( nSize<=0 )    {return;}
@@ -159,7 +159,7 @@ void cuda_Conv2D_bias_backward(
     const cuMat& c_mGemmGrad
 )
 {
-    int nSize       =mResult._nRows * mResult._nCols;
+    int nSize       =c_mGemmGrad._nRows * c_mGemmGrad._nCols;
     int nThreads    =256;
     int nBlocks     =(nSize + nThreads - 1)/nThreads;
     if( nSize<=0 )    {return;}
@@ -232,7 +232,7 @@ void cuda_MaxPool2D_backward(
     int nOutputWidth
 )
 {
-    int nSize       =mResult._nRows * mResult._nCols;
+    int nSize       =c_mOutputGrad._nRows * c_mOutputGrad._nCols;
     int nThreads    =256;
     int nBlocks     =(nSize + nThreads - 1)/nThreads;
     if( nSize<=0 )    {return;}

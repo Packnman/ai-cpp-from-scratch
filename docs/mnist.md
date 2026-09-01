@@ -1,10 +1,10 @@
 # mnist.h 設計仕様
 
-対象: `include/mnist.h`
+対象: `include/dataset_mnist.h`
 
 ## 目的
 
-MNISTのIDXファイルを読み込み、学習ループが要求する`SupervisedBatch`へ変換する。また、分類結果の正解数を計算する評価関数を提供する。
+MNISTのIDXファイルを読み込み、学習ループが要求する`SupervisedBatch`へ変換する。
 
 ## MnistDataset
 
@@ -45,9 +45,3 @@ IDXヘッダーをbig-endianとして読み取る。画像magicは2051、ラベ�
 | target | 10 × count | ラベルのone-hot表現 |
 
 戻り値の`nSize`は`count`と等しい。範囲が`indices`を超える場合は例外となる。呼び出し側は、各インデックスがデータセットサイズ未満であることと、`count`がTensorで表現可能な範囲であることを保証する。
-
-## countClassificationCorrect
-
-出力logitsとone-hot targetをGPUからCPUへ転送し、各バッチ列でargmaxが一致する件数を返す。
-
-両Tensorは非nullで、同じ正の形状でなければならない。この関数は確率化を必要とせず、logitsを直接比較する。

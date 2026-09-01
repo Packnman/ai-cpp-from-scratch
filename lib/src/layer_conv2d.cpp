@@ -82,8 +82,8 @@ LayerConv2D::LayerConv2D(int nInputChannels, int nOutputChannels, int nInputHeig
      _nOutputWidth( _outputSize(nInputWidth,nKernelSize,nStride,nPadding) ),
      _nFanIn( _fanIn(nInputChannels,nKernelSize) )
 {
-    __registerParameter( "weight",_spmWeight.get() );
-    __registerParameter( "bias",_spmBias.get() );
+    registerParameter( "weight",_spmWeight.get() );
+    registerParameter( "bias",_spmBias.get() );
 }
 LayerConv2D::~LayerConv2D() = default;
 

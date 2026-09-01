@@ -6,8 +6,10 @@
 
 | ヘッダー | 設計仕様 |
 | --- | --- |
-| `include/mnist.h` | [mnist.md](mnist.md) |
-| `include/neuralnet.h` | [neuralnet.md](neuralnet.md) |
+| `include/dataset_mnist.h` | [mnist.md](mnist.md) |
+| `include/neuralnet_mnist.h` | [mnist_neuralnet.md](mnist_neuralnet.md) |
+| `include/dataset_cifar10.h` | [cifar10.md](cifar10.md) |
+| `include/neuralnet_cifar10.h` | [neuralnet.md](neuralnet.md) |
 | `include/trainer.h` | [trainer.md](trainer.md) |
 
 ## ライブラリ層

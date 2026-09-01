@@ -7,7 +7,7 @@
 #include "cuda_function.h"
 #include "cuda_tensor.h"
 #include "matrix.h"
-#include "neuralnet.h"
+#include "neuralnet_mnist.h"
 
 namespace {
 void require(bool condition,const std::string& message)
@@ -101,8 +101,8 @@ void testMaskAndBackward()
 
 void testEvaluationBypassesDropout()
 {
-    NeuralNet withDropout( 77,0.2f );
-    NeuralNet withoutDropout( 77,0.0f );
+    MnistNeuralNet withDropout( 77,0.2f );
+    MnistNeuralNet withoutDropout( 77,0.0f );
     withDropout.setTraining( false );
     withoutDropout.setTraining( false );
     require( !withDropout.isTraining(),"evaluation mode was not set" );

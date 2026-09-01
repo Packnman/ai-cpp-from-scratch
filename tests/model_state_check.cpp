@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "matrix.h"
-#include "neuralnet.h"
+#include "neuralnet_mnist.h"
 
 namespace {
     void require(bool condition,const std::string& message)
@@ -46,8 +46,8 @@ int main()
 
     try
     {
-        NeuralNet source( 1 );
-        NeuralNet destination( 2 );
+        MnistNeuralNet source( 1 );
+        MnistNeuralNet destination( 2 );
 
         const std::vector<std::string> expectedNames{
             "hidden1.weight",

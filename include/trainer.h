@@ -79,6 +79,63 @@ inline void validateConfig(const TrainConfig& c_cfgConfig)
 
 }  // namespace trainer_detail
 
+inline std::size_t countClassificationCorrect(
+    const std::shared_ptr<Tensor>& c_spmOutput,
+    const std::shared_ptr<Tensor>& c_spmTarget
+)
+{
+    if( (c_spmOutput==nullptr)||(c_spmTarget==nullptr) )
+    {
+        throw std::runtime_error(
+            "countClassificationCorrect: tensor is null"
+        );
+    }
+    if( (c_spmOutput->_mData._nRows!=c_spmTarget->_mData._nRows)||
+        (c_spmOutput->_mData._nCols!=c_spmTarget->_mData._nCols)||
+        (c_spmOutput->_mData._nRows<=0)||
+        (c_spmOutput->_mData._nCols<=0) )
+    {
+        throw std::runtime_error(
+            "countClassificationCorrect: tensor size mismatch"
+        );
+    }
+
+    Mat mHostOutput(
+        c_spmOutput->_mData._nRows,
+        c_spmOutput->_mData._nCols
+    );
+    Mat mHostTarget(
+        c_spmTarget->_mData._nRows,
+        c_spmTarget->_mData._nCols
+    );
+    c_spmOutput->_mData.upload( mHostOutput );
+    c_spmTarget->_mData.upload( mHostTarget );
+
+    std::size_t nCorrect =0;
+    for( int nBatch=0;nBatch<mHostOutput._nCols;++nBatch )
+    {
+        int nPredicted =0;
+        int nExpected =0;
+        for( int nRow=1;nRow<mHostOutput._nRows;++nRow )
+        {
+            if( mHostOutput(nRow,nBatch)>mHostOutput(nPredicted,nBatch) )
+            {
+                nPredicted =nRow;
+            }
+            if( mHostTarget(nRow,nBatch)>mHostTarget(nExpected,nBatch) )
+            {
+                nExpected =nRow;
+            }
+        }
+        if( nPredicted==nExpected )
+        {
+            ++nCorrect;
+        }
+    }
+
+    return nCorrect;
+}
+
 template<class ModelType,class DatasetType>
 void train(
     ModelType& mdlModel,

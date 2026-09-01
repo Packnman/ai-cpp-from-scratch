@@ -41,15 +41,26 @@ set_target_properties(cuda_check PROPERTIES
 )
 
 add_executable(mnist_train
-    src/main.cpp
-    src/mnist.cpp
-    src/neuralnet.cpp
+    src/main_mnist.cpp
+    src/dataset_mnist.cpp
+    src/neuralnet_mnist.cpp
 )
 target_include_directories(mnist_train PRIVATE
     ${PROJECT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/lib/include
 )
 target_link_libraries(mnist_train PRIVATE ai_cpp)
+
+add_executable(cifar10_train
+    src/main_cifar10.cpp
+    src/dataset_cifar10.cpp
+    src/neuralnet_cifar10.cpp
+)
+target_include_directories(cifar10_train PRIVATE
+    ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/lib/include
+)
+target_link_libraries(cifar10_train PRIVATE ai_cpp)
 
 if(BUILD_TESTING)
     add_executable(multi_output_check tests/multi_output_check.cpp)
@@ -60,7 +71,7 @@ if(BUILD_TESTING)
 
     add_executable(model_state_check
         tests/model_state_check.cpp
-        src/neuralnet.cpp
+        src/neuralnet_mnist.cpp
     )
     target_include_directories(model_state_check PRIVATE
         ${PROJECT_SOURCE_DIR}/include
@@ -70,7 +81,7 @@ if(BUILD_TESTING)
 
     add_executable(dropout_check
         tests/dropout_check.cpp
-        src/neuralnet.cpp
+        src/neuralnet_mnist.cpp
     )
     target_include_directories(dropout_check PRIVATE
         ${PROJECT_SOURCE_DIR}/include
@@ -96,6 +107,26 @@ if(BUILD_TESTING)
     )
     target_link_libraries(maxpool2d_check PRIVATE ai_cpp)
 
+    add_executable(cifar10_dataset_check
+        tests/cifar10_dataset_check.cpp
+        src/dataset_cifar10.cpp
+    )
+    target_include_directories(cifar10_dataset_check PRIVATE
+        ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/lib/include
+    )
+    target_link_libraries(cifar10_dataset_check PRIVATE ai_cpp)
+
+    add_executable(cifar10_model_check
+        tests/cifar10_model_check.cpp
+        src/neuralnet_cifar10.cpp
+    )
+    target_include_directories(cifar10_model_check PRIVATE
+        ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/lib/include
+    )
+    target_link_libraries(cifar10_model_check PRIVATE ai_cpp)
+
     add_test(NAME cuda_check COMMAND cuda_check)
     add_test(NAME multi_output_check COMMAND multi_output_check)
     add_test(NAME model_state_check COMMAND model_state_check)
@@ -103,4 +134,6 @@ if(BUILD_TESTING)
     add_test(NAME batchnorm_check COMMAND batchnorm_check)
     add_test(NAME conv2d_check COMMAND conv2d_check)
     add_test(NAME maxpool2d_check COMMAND maxpool2d_check)
+    add_test(NAME cifar10_dataset_check COMMAND cifar10_dataset_check)
+    add_test(NAME cifar10_model_check COMMAND cifar10_model_check)
 endif()

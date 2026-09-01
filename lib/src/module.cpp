@@ -101,7 +101,7 @@ bool Module::_containsLocalName(const std::string& c_strName) const
         std::any_of(_nmmModules.begin(),_nmmModules.end(),fnModuleHasName);
 }
 
-void Module::__registerParameter(const std::string& c_strName,Tensor* lpTensor)
+void Module::registerParameter(const std::string& c_strName,Tensor* lpTensor)
 {
     _validateRegistrationName( c_strName );
     if( lpTensor==nullptr )
@@ -112,7 +112,7 @@ void Module::__registerParameter(const std::string& c_strName,Tensor* lpTensor)
     _nmtParams.push_back({c_strName,lpTensor});
 }
 
-void Module::__registerBuffer(const std::string& c_strName,Tensor* lpTensor)
+void Module::registerBuffer(const std::string& c_strName,Tensor* lpTensor)
 {
     _validateRegistrationName( c_strName );
     if( lpTensor==nullptr )
@@ -123,7 +123,7 @@ void Module::__registerBuffer(const std::string& c_strName,Tensor* lpTensor)
     _nmtBuffers.push_back({c_strName,lpTensor});
 }
 
-void Module::__registerModule(const std::string& c_strName,Module* lpModule)
+void Module::registerModule(const std::string& c_strName,Module* lpModule)
 {
     _validateRegistrationName( c_strName );
     if( lpModule==nullptr )

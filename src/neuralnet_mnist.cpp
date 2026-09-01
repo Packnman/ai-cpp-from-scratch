@@ -4,7 +4,7 @@
 #include <math.h>
 
 #include "matrix.h"
-#include "neuralnet.h"
+#include "neuralnet_mnist.h"
 
 namespace {
     void init_Weight(Tensor& mTensor,int nFan,std::mt19937& rngRandom)
@@ -25,38 +25,38 @@ namespace {
 }
 
 // --------------------------
-// LayerInput
+// MnistInputLayer
 // --------------------------
 // 役割：
 //  ・前処理
 // --------------------------
-LayerInput::LayerInput()
+MnistInputLayer::MnistInputLayer()
     :Module()
 {
 
 }
-LayerInput::~LayerInput()
+MnistInputLayer::~MnistInputLayer()
 {
 
 }
-void LayerInput::init(std::mt19937& rngRandom)
+void MnistInputLayer::init(std::mt19937& rngRandom)
 {
     (void)rngRandom;
     // Non
 }
-std::shared_ptr<Tensor> LayerInput::forward(
+std::shared_ptr<Tensor> MnistInputLayer::forward(
     std::vector<std::shared_ptr<Tensor>>& spmInputs
 )
 {
     return spmInputs[0];
 }
 // --------------------------
-// LayerHidden
+// MnistHiddenLayer
 // --------------------------
 // 役割：
 //  ・1層目からn-1層目までの処理
 // --------------------------
-LayerHidden::LayerHidden(int nInput,int nOutput,float fDropoutRate,std::uint64_t nDropoutSeed)
+MnistHiddenLayer::MnistHiddenLayer(int nInput,int nOutput,float fDropoutRate,std::uint64_t nDropoutSeed)
     :Module(),
      _spmWeight( std::make_shared<Tensor>(nOutput,nInput) ),
      _spmBias( std::make_shared<Tensor>(nOutput,1) ),
@@ -75,11 +75,11 @@ LayerHidden::LayerHidden(int nInput,int nOutput,float fDropoutRate,std::uint64_t
     registerBuffer( "running_mean",_spmRunningMean.get() );
     registerBuffer( "running_var",_spmRunningVar.get() );
 }
-LayerHidden::~LayerHidden()
+MnistHiddenLayer::~MnistHiddenLayer()
 {
 
 }
-void LayerHidden::init(std::mt19937& rngRandom)
+void MnistHiddenLayer::init(std::mt19937& rngRandom)
 {
     init_Weight( *_spmWeight,_spmWeight->_mData._nCols,rngRandom );
     cuda_fill( _spmBias.get()->_mData,0 );
@@ -88,7 +88,7 @@ void LayerHidden::init(std::mt19937& rngRandom)
     cuda_fill( _spmRunningMean.get()->_mData,0.0f );
     cuda_fill( _spmRunningVar.get()->_mData,1.0f );
 }
-std::shared_ptr<Tensor> LayerHidden::forward(
+std::shared_ptr<Tensor> MnistHiddenLayer::forward(
     std::vector<std::shared_ptr<Tensor>>& spmInputs
 )
 {
@@ -111,12 +111,12 @@ std::shared_ptr<Tensor> LayerHidden::forward(
     return spmOutput;
 }
 // --------------------------
-// LayerOutput
+// MnistOutputLayer
 // --------------------------
 // 役割：
 //  ・n層目の処理
 // --------------------------
-LayerOutput::LayerOutput(int nInput,int nOutput)
+MnistOutputLayer::MnistOutputLayer(int nInput,int nOutput)
     :Module(),
      _spmWeight( std::make_shared<Tensor>(nOutput,nInput) ),
      _spmBias( std::make_shared<Tensor>(nOutput,1) ),
@@ -125,16 +125,16 @@ LayerOutput::LayerOutput(int nInput,int nOutput)
     registerParameter( "weight",_spmWeight.get() );
     registerParameter( "bias",_spmBias.get() );
 }
-LayerOutput::~LayerOutput()
+MnistOutputLayer::~MnistOutputLayer()
 {
 
 }
-void LayerOutput::init(std::mt19937& rngRandom)
+void MnistOutputLayer::init(std::mt19937& rngRandom)
 {
     init_Weight( *_spmWeight,_spmWeight->_mData._nCols,rngRandom );
     cuda_fill( _spmBias.get()->_mData,0 );
 }
-std::shared_ptr<Tensor> LayerOutput::forward(
+std::shared_ptr<Tensor> MnistOutputLayer::forward(
     std::vector<std::shared_ptr<Tensor>>& spmInputs
 )
 {
@@ -142,12 +142,12 @@ std::shared_ptr<Tensor> LayerOutput::forward(
     return _lnrLinear( spmInputs );
 }
 // --------------------------
-// NeuralNet
+// MnistNeuralNet
 // --------------------------
 // 役割：
 //  ・
 // --------------------------
-NeuralNet::NeuralNet(std::uint32_t nSeed,float fDropoutRate)
+MnistNeuralNet::MnistNeuralNet(std::uint32_t nSeed,float fDropoutRate)
     :Model(),
      _lyrInput(),
      _lyrHidden1(784,256,fDropoutRate,static_cast<std::uint64_t>(nSeed)+1),
@@ -165,25 +165,25 @@ NeuralNet::NeuralNet(std::uint32_t nSeed,float fDropoutRate)
     _lyrHidden2.init( rngRandom );
     _lyrOutput.init( rngRandom );
 }
-NeuralNet::~NeuralNet()
+MnistNeuralNet::~MnistNeuralNet()
 {
 
 }
-std::shared_ptr<Tensor> NeuralNet::forward(
+std::shared_ptr<Tensor> MnistNeuralNet::forward(
     std::vector<std::shared_ptr<Tensor>>& spmInputs
 )
 {
     if( (spmInputs.size()!=1)||(spmInputs[0]==nullptr) )
     {
         throw std::runtime_error(
-            "NeuralNet::forward: exactly one non-null input is required"
+            "MnistNeuralNet::forward: exactly one non-null input is required"
         );
     }
     if( (spmInputs[0]->_mData._nRows!=784)||
         (spmInputs[0]->_mData._nCols<=0) )
     {
         throw std::runtime_error(
-            "NeuralNet::forward: input must have shape 784 x batch"
+            "MnistNeuralNet::forward: input must have shape 784 x batch"
         );
     }
     //
@@ -202,7 +202,7 @@ std::shared_ptr<Tensor> NeuralNet::forward(
     // Output Layer
     return _lyrOutput.forward( spmOutputs );
 }
-std::shared_ptr<Tensor> NeuralNet::loss(
+std::shared_ptr<Tensor> MnistNeuralNet::loss(
     const std::shared_ptr<Tensor>& c_spmInput,
     const std::shared_ptr<Tensor>& c_spmTarget
 )
@@ -210,14 +210,14 @@ std::shared_ptr<Tensor> NeuralNet::loss(
     if( (c_spmInput==nullptr)||(c_spmTarget==nullptr) )
     {
         throw std::runtime_error(
-            "NeuralNet::loss: input and target must be non-null"
+            "MnistNeuralNet::loss: input and target must be non-null"
         );
     }
     if( (c_spmTarget->_mData._nRows!=10)||
         (c_spmTarget->_mData._nCols!=c_spmInput->_mData._nCols) )
     {
         throw std::runtime_error(
-            "NeuralNet::loss: target must have shape 10 x batch"
+            "MnistNeuralNet::loss: target must have shape 10 x batch"
         );
     }
     //

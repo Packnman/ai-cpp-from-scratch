@@ -4,8 +4,8 @@
 #include <iostream>
 #include <string>
 
-#include "mnist.h"
-#include "neuralnet.h"
+#include "dataset_mnist.h"
+#include "neuralnet_mnist.h"
 #include "optimizer.h"
 #include "trainer.h"
 
@@ -37,7 +37,7 @@ int main(int nArgCount,char** lpszArgs)
             .fDropoutRate   =0.2f
         };
 
-        NeuralNet nntModel( cfgConfig.nSeed,cfgConfig.fDropoutRate );
+        MnistNeuralNet nntModel( cfgConfig.nSeed,cfgConfig.fDropoutRate );
         //nntModel.load( "mnist_model_batchnorm.bin" );
         Adam admOptimizer( &nntModel,cfgConfig.fLearningRate );
 

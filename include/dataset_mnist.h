@@ -27,8 +27,3 @@ private:
     std::vector<std::uint8_t> _nImages;
     std::vector<std::uint8_t> _nLabels;
 };
-
-std::size_t countClassificationCorrect(
-    const std::shared_ptr<Tensor>& c_spmOutput,
-    const std::shared_ptr<Tensor>& c_spmTarget
-);

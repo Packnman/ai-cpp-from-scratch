@@ -64,3 +64,7 @@ SupervisedBatch makeBatch(
 - `makeIndices`: 0からsize-1までの連番を生成
 - `readScalar`: 1 × 1 TensorをGPUからCPUへ転送
 - `validateConfig`: epochsとbatch sizeを検証
+
+## countClassificationCorrect
+
+MNISTとCIFAR-10で共有する分類精度metricである。同じ正のshapeを持つlogitsとone-hot targetをGPUからCPUへ転送し、各batch列のargmaxが一致する件数を返す。Softmaxは不要である。nullまたはshape不一致は例外となる。

@@ -59,9 +59,9 @@ public:
     ) =0;
 
 protected:
-    void __registerParameter(const std::string& c_strName,Tensor* lpTensor);
-    void __registerBuffer(const std::string& c_strName,Tensor* lpTensor);
-    void __registerModule(const std::string& c_strName,Module* lpModule);
+    void registerParameter(const std::string& c_strName,Tensor* lpTensor);
+    void registerBuffer(const std::string& c_strName,Tensor* lpTensor);
+    void registerModule(const std::string& c_strName,Module* lpModule);
 
 private:
     struct NamedModule

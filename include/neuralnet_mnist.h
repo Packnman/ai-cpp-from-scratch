@@ -6,15 +6,15 @@
 #include "module.h"
 
 // --------------------------
-// LayerInput
+// MnistInputLayer
 // --------------------------
 // 役割：
 //  ・前処理
 // --------------------------
-class LayerInput : public Module{
+class MnistInputLayer : public Module{
 public:
-    LayerInput();
-    ~LayerInput() override;
+    MnistInputLayer();
+    ~MnistInputLayer() override;
 
 public:
     void init(std::mt19937& rngRandom);
@@ -26,15 +26,15 @@ public:
 
 
 // --------------------------
-// LayerHidden
+// MnistHiddenLayer
 // --------------------------
 // 役割：
 //  ・1層目からn-1層目までの処理
 // --------------------------
-class LayerHidden : public Module{
+class MnistHiddenLayer : public Module{
 public:
-    LayerHidden(int nInput,int nOutput,float fDropoutRate,std::uint64_t nDropoutSeed);
-    ~LayerHidden() override;
+    MnistHiddenLayer(int nInput,int nOutput,float fDropoutRate,std::uint64_t nDropoutSeed);
+    ~MnistHiddenLayer() override;
 
 private:
     std::shared_ptr<Tensor> _spmWeight;
@@ -59,15 +59,15 @@ public:
 };
 
 // --------------------------
-// LayerOutput
+// MnistOutputLayer
 // --------------------------
 // 役割：
 //  ・n層目の処理
 // --------------------------
-class LayerOutput : public Module{
+class MnistOutputLayer : public Module{
 public:
-    LayerOutput(int nInput,int nOutput);
-    ~LayerOutput() override;
+    MnistOutputLayer(int nInput,int nOutput);
+    ~MnistOutputLayer() override;
 
 private:
     std::shared_ptr<Tensor> _spmWeight;
@@ -84,20 +84,20 @@ public:
 };
 
 // --------------------------
-// NeuralNet
+// MnistNeuralNet
 // --------------------------
 // 役割：
 //  ・
 // --------------------------
-class NeuralNet : public Model{
+class MnistNeuralNet : public Model{
 public:
-    NeuralNet(std::uint32_t nSeed,float fDropoutRate=0.2f);
-    ~NeuralNet() override;
+    MnistNeuralNet(std::uint32_t nSeed,float fDropoutRate=0.2f);
+    ~MnistNeuralNet() override;
 private:
-    LayerInput  _lyrInput;
-    LayerHidden _lyrHidden1;
-    LayerHidden _lyrHidden2;
-    LayerOutput _lyrOutput;
+    MnistInputLayer  _lyrInput;
+    MnistHiddenLayer _lyrHidden1;
+    MnistHiddenLayer _lyrHidden2;
+    MnistOutputLayer _lyrOutput;
     //
     SoftmaxCrossEntropy     _sceEntropy;
 public:

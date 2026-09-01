@@ -1,5 +1,6 @@
 #include "cuda_function.h"
 #include "cuda_tensor.h"
+#include <cuda_runtime_api.h>
 #include "matrix.h"
 #include <cmath>
 #include <iostream>
@@ -86,12 +87,14 @@ void channels()
     req( isArgumentRejected && isShapeRejected, "validation" );
 }
 } // namespace
+void cifarBatchBackward();
 int main()
 {
     try
     {
         pooling();
         channels();
+        cifarBatchBackward();
         std::cout << "maxpool2d check passed\n";
         return 0;
     }
@@ -100,4 +103,28 @@ int main()
         std::cerr << c_errError.what() << '\n';
         return 1;
     }
+}
+void cifarBatchBackward()
+{
+    constexpr int CHANNELS =32;
+    constexpr int HEIGHT =32;
+    constexpr int WIDTH =32;
+    constexpr int BATCH =128;
+    auto spmInput =std::make_shared<Tensor>(
+        CHANNELS*HEIGHT*WIDTH,
+        BATCH
+    );
+    cuda_fill( spmInput->_mData,1.0f );
+    MaxPool2D mplPool( CHANNELS,HEIGHT,WIDTH );
+    auto spmOutput =mplPool( {spmInput} );
+    req(
+        (spmOutput->_mData._nRows==CHANNELS*16*16)&&
+        (spmOutput->_mData._nCols==BATCH),
+        "CIFAR batch output shape"
+    );
+    cuMat mOutputGrad( CHANNELS*16*16,BATCH );
+    cuda_fill( mOutputGrad,1.0f );
+    mplPool.backward( {&mOutputGrad},{spmInput},{spmOutput} );
+    const cudaError_t cudError =cudaDeviceSynchronize();
+    req( cudError==cudaSuccess,"CIFAR batch backward CUDA error" );
 }
