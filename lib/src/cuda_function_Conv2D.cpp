@@ -1,27 +1,6 @@
-#include "cuda_function.h"
 #include "cuda_tensor.h"
+#include "cuda_function_Conv2D.h"
 
-#include <climits>
-#include <stdexcept>
-#include <string>
-
-namespace
-{
-const cuMat& singleGrad(
-    const TensorGradList& c_lpmOutputGrads,
-    const char* c_lpszFunctionName
-)
-{
-    if( (c_lpmOutputGrads.size()!=1)||(c_lpmOutputGrads[0]==nullptr) )
-    {
-        throw std::runtime_error(
-            std::string( c_lpszFunctionName ) +
-            ": exactly one output gradient is required"
-        );
-    }
-    return *c_lpmOutputGrads[0];
-}
-} // namespace
 
 Conv2D::Conv2D( Tensor* lpWeight, Tensor* lpBias, int nInputChannels, int nInputHeight,
                 int nInputWidth, int nKernelSize, int nStride, int nPadding )
@@ -85,7 +64,9 @@ Conv2D::Conv2D( Tensor* lpWeight, Tensor* lpBias, int nInputChannels, int nInput
 }
 Conv2D::~Conv2D() = default;
 
-TensorList Conv2D::forward(const TensorList& c_spmInputs)
+std::vector<std::shared_ptr<Tensor>> Conv2D::forward(
+    const std::vector<std::shared_ptr<Tensor>>& c_spmInputs
+)
 {
     if( (c_spmInputs.size()!=1)||!c_spmInputs[0] )
     {
@@ -146,9 +127,9 @@ TensorList Conv2D::forward(const TensorList& c_spmInputs)
 }
 
 void Conv2D::backward(
-    const TensorGradList& c_lpmOutputGrads,
-    const TensorList& c_spmInputs,
-    const TensorList& c_spmOutputs
+        const std::vector<const cuMat*>& c_lpmOutputGrads,
+        const std::vector<std::shared_ptr<Tensor>>& c_spmInputs,
+        const std::vector<std::shared_ptr<Tensor>>& c_spmOutputs
 )
 {
     (void)c_spmOutputs;
@@ -234,122 +215,4 @@ void Conv2D::backward(
     );
     // dL/db[c_o] += sum_(n,o) G[c_o,n*(H_out*W_out)+o]
     cuda_Conv2D_bias_backward( _lpmBias->_mGrad,mProductGrad );
-}
-
-MaxPool2D::MaxPool2D( int nChannels, int nInputHeight, int nInputWidth, int nKernelSize,
-                      int nStride )
-    :_nChannels( nChannels ),
-     _nInputHeight( nInputHeight ),
-     _nInputWidth( nInputWidth ),
-     _nKernelSize( nKernelSize ),
-     _nStride( nStride ),
-     _nOutputHeight( 0 ),
-     _nOutputWidth( 0 )
-{
-    if( (nChannels<=0)||(nInputHeight<=0)||(nInputWidth<=0)||
-        (nKernelSize<=0)||(nStride<=0) )
-    {
-        throw std::invalid_argument(
-            "MaxPool2D: invalid channels, image, kernel, or stride"
-        );
-    }
-    if( (nKernelSize>nInputHeight)||(nKernelSize>nInputWidth) )
-    {
-        throw std::invalid_argument( "MaxPool2D: kernel exceeds input" );
-    }
-    const long long nInputRows      =static_cast<long long>( nInputHeight ) * nInputWidth * nChannels;
-    // H_out = floor((H_in - K) / S) + 1
-    // W_out = floor((W_in - K) / S) + 1
-    const long long nOutputHeight   =( nInputHeight - nKernelSize ) / nStride + 1;
-    const long long nOutputWidth    =( nInputWidth - nKernelSize ) / nStride + 1;
-    if( (nInputRows>INT_MAX)||(nOutputHeight*nOutputWidth*nChannels>INT_MAX) )
-    {
-        throw std::overflow_error(
-            "MaxPool2D: dimensions exceed int range"
-        );
-    }
-    _nOutputHeight  =static_cast<int>( nOutputHeight );
-    _nOutputWidth   =static_cast<int>( nOutputWidth );
-}
-MaxPool2D::~MaxPool2D() = default;
-
-TensorList MaxPool2D::forward( const TensorList& c_spmInputs )
-{
-    if( (c_spmInputs.size()!=1)||!c_spmInputs[0] )
-    {
-        throw std::runtime_error(
-            "MaxPool2D::forward: exactly one non-null input is required"
-        );
-    }
-    const int nInputRows    =_nInputHeight * _nInputWidth * _nChannels;
-    const int nOutputRows   =_nOutputHeight * _nOutputWidth * _nChannels;
-    if( (c_spmInputs[0]->_mData._nRows!=nInputRows)||(c_spmInputs[0]->_mData._nCols<=0) )
-    {
-        throw std::runtime_error( "MaxPool2D::forward: input shape mismatch" );
-    }
-    if( static_cast<long long>(nOutputRows)*c_spmInputs[0]->_mData._nCols>INT_MAX )
-    {
-        throw std::overflow_error(
-            "MaxPool2D::forward: output exceeds int range"
-        );
-    }
-    auto spmOutput  =std::make_shared<Tensor>( nOutputRows, c_spmInputs[0]->_mData._nCols );
-    // Y[n,y_out,x_out,c]
-    //   = max_(0<=k_y,k_x<K) X[n,y_out*S+k_y,x_out*S+k_x,c]
-    cuda_MaxPool2D_forward(
-        spmOutput->_mData,
-        c_spmInputs[0]->_mData,
-        _nChannels,
-        _nInputHeight,
-        _nInputWidth,
-        _nKernelSize,
-        _nStride,
-        _nOutputHeight,
-        _nOutputWidth
-    );
-    //
-    return { spmOutput };
-}
-
-void MaxPool2D::backward( const TensorGradList& c_lpmOutputGrads, const TensorList& c_spmInputs,
-                          const TensorList& c_spmOutputs )
-{
-    (void)c_spmOutputs;
-    //
-    if( (c_spmInputs.size()!=1)||!c_spmInputs[0] )
-    {
-        throw std::runtime_error(
-            "MaxPool2D::backward: exactly one non-null input is required"
-        );
-    }
-    const cuMat& c_mOutputGrad  =singleGrad( c_lpmOutputGrads, "MaxPool2D::backward" );
-    const int nOutputRows       =_nOutputHeight * _nOutputWidth * _nChannels;
-    if( (c_mOutputGrad._nRows!=nOutputRows)||
-        (c_mOutputGrad._nCols!=c_spmInputs[0]->_mData._nCols) )
-    {
-        throw std::runtime_error(
-            "MaxPool2D::backward: output gradient shape mismatch"
-        );
-    }
-    if( static_cast<long long>(nOutputRows)*c_spmInputs[0]->_mData._nCols>INT_MAX )
-    {
-        throw std::overflow_error(
-            "MaxPool2D::backward: gradient exceeds int range"
-        );
-    }
-    // a(n,y_out,x_out,c) = argmax_(k_y,k_x) X[n,y_out*S+k_y,x_out*S+k_x,c]
-    // dL/dX[n,y,x,c] += sum_(y_out,x_out) 1[(y,x)=a] * dL/dY[n,y_out,x_out,c]
-    // 最大値が同値なら(k_y,k_x)の走査順で最初の位置をaとする。
-    cuda_MaxPool2D_backward(
-        c_spmInputs[0]->_mGrad,
-        c_spmInputs[0]->_mData,
-        c_mOutputGrad,
-        _nChannels,
-        _nInputHeight,
-        _nInputWidth,
-        _nKernelSize,
-        _nStride,
-        _nOutputHeight,
-        _nOutputWidth
-    );
 }

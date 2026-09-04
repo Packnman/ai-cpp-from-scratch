@@ -8,10 +8,6 @@
 
 class Tensor;
 
-using TensorPtr =std::shared_ptr<Tensor>;
-using TensorList =std::vector<TensorPtr>;
-using TensorGradList =std::vector<const cuMat*>;
-
 // --------------------------
 // Function
 // --------------------------
@@ -20,16 +16,33 @@ public:
     Function();
     virtual ~Function();
 
+protected:
+    void checkCurand(curandStatus_t crnStatus,const char* c_lpszOperation);
+    const cuMat& requireSingleOutputGrad(
+        const std::vector<const cuMat*>& c_lpmOutputGrads,
+        const char* c_lpszFunctionName
+    );
+    const cuMat& singleGrad(
+        const std::vector<const cuMat*>& c_lpmOutputGrads,
+        const char* c_lpszFunctionName
+    );
+
 public:
     virtual void backward(
-        const TensorGradList& c_lpmOutputGrads,
-        const TensorList& c_spmInputs,
-        const TensorList& c_spmOutputs
+        const std::vector<const cuMat*>& c_lpmOutputGrads,
+        const std::vector<std::shared_ptr<Tensor>>& c_spmInputs,
+        const std::vector<std::shared_ptr<Tensor>>& c_spmOutputs
     ) =0;
-    virtual TensorList forward(const TensorList& c_spmInputs) =0;
+    virtual std::vector<std::shared_ptr<Tensor>> forward(
+        const std::vector<std::shared_ptr<Tensor>>& c_spmInputs
+    ) =0;
 
-    TensorList apply(const TensorList& c_spmInputs);
-    TensorPtr operator()(const TensorList& c_spmInputs);
+    std::vector<std::shared_ptr<Tensor>> apply(
+        const std::vector<std::shared_ptr<Tensor>>& c_spmInputs
+    );
+    std::shared_ptr<Tensor> operator()(
+        const std::vector<std::shared_ptr<Tensor>>& c_spmInputs
+    );
 };
 
 // --------------------------
@@ -43,214 +56,7 @@ public:
 public:
     Function* _lpFunc;
 
-    TensorList _spmInputs;
+    std::vector<std::shared_ptr<Tensor>> _spmInputs;
     std::vector<std::weak_ptr<Tensor>> _wpmOutputs;
 };
 
-// --------------------------
-// ReLU
-// --------------------------
-class ReLU: public Function
-{
-public:
-    ReLU();
-    ~ReLU();
-
-public:
-    void backward(
-        const TensorGradList& c_lpmOutputGrads,
-        const TensorList& c_spmInputs,
-        const TensorList& c_spmOutputs
-    ) override;
-    TensorList forward(const TensorList& c_spmInputs) override;
-};
-
-// --------------------------
-// Dropout
-// --------------------------
-class Dropout: public Function
-{
-public:
-    Dropout(float fDropProbability,std::uint64_t nSeed);
-    ~Dropout() override;
-
-private:
-    float _fDropProbability;
-    curandGenerator_t _crnGenerator;
-    cuMat _mMask;
-
-public:
-    void backward(
-        const TensorGradList& c_lpmOutputGrads,
-        const TensorList& c_spmInputs,
-        const TensorList& c_spmOutputs
-    ) override;
-    TensorList forward(const TensorList& c_spmInputs) override;
-};
-
-// --------------------------
-// BatchNorm
-// --------------------------
-class BatchNorm: public Function
-{
-public:
-    BatchNorm(
-        Tensor* lpGamma,
-        Tensor* lpBeta,
-        Tensor* lpRunningMean,
-        Tensor* lpRunningVar,
-        float fMomentum=0.1f,
-        float fEpsilon=1.0e-5f
-    );
-    ~BatchNorm() override;
-
-private:
-    Tensor* _lpmGamma;
-    Tensor* _lpmBeta;
-    Tensor* _lpmRunningMean;
-    Tensor* _lpmRunningVar;
-    float   _fMomentum;
-    float   _fEpsilon;
-    bool    _isTraining;
-    bool    _wasTraining;
-    cuMat   _mNormalized;
-    cuMat   _mInvStd;
-
-public:
-    void setTraining(bool isTraining);
-    bool isTraining() const;
-
-    void backward(
-        const TensorGradList& c_lpmOutputGrads,
-        const TensorList& c_spmInputs,
-        const TensorList& c_spmOutputs
-    ) override;
-    TensorList forward(const TensorList& c_spmInputs) override;
-};
-
-// --------------------------
-// Linear
-// --------------------------
-class Linear: public Function
-{
-public:
-    Linear(Tensor* lpWeight,Tensor* lpBias);
-    ~Linear();
-
-public:
-    Tensor* _lpmWeight;
-    Tensor* _lpmBias;
-    cuMat   _mTmp;
-public:
-    void backward(
-        const TensorGradList& c_lpmOutputGrads,
-        const TensorList& c_spmInputs,
-        const TensorList& c_spmOutputs
-    ) override;
-    TensorList forward(const TensorList& c_spmInputs) override;
-};
-
-// --------------------------
-// Conv2D
-// --------------------------
-class Conv2D : public Function
-{
-public:
-    Conv2D(
-        Tensor* lpWeight,
-        Tensor* lpBias,
-        int nInputChannels,
-        int nInputHeight,
-        int nInputWidth,
-        int nKernelSize,
-        int nStride =1,
-        int nPadding =0
-    );
-    ~Conv2D() override;
-    void backward(
-        const TensorGradList& c_lpmOutputGrads,
-        const TensorList& c_spmInputs,
-        const TensorList& c_spmOutputs
-    ) override;
-    TensorList forward(const TensorList& c_spmInputs) override;
-
-private:
-    Tensor* _lpmWeight;
-    Tensor* _lpmBias;
-    int _nInputChannels;
-    int _nInputHeight;
-    int _nInputWidth;
-    int _nKernelSize;
-    int _nStride;
-    int _nPadding;
-    int _nOutputChannels;
-    int _nOutputHeight;
-    int _nOutputWidth;
-};
-
-// --------------------------
-// MaxPool2D
-// --------------------------
-class MaxPool2D : public Function
-{
-public:
-    MaxPool2D(
-        int nChannels,
-        int nInputHeight,
-        int nInputWidth,
-        int nKernelSize =2,
-        int nStride =2
-    );
-    ~MaxPool2D() override;
-    void backward(
-        const TensorGradList& c_lpmOutputGrads,
-        const TensorList& c_spmInputs,
-        const TensorList& c_spmOutputs
-    ) override;
-    TensorList forward( const TensorList& c_spmInputs ) override;
-
-private:
-    int _nChannels;
-    int _nInputHeight;
-    int _nInputWidth;
-    int _nKernelSize;
-    int _nStride;
-    int _nOutputHeight;
-    int _nOutputWidth;
-};
-
-// --------------------------
-// GELU
-// --------------------------
-class GELU: public Function
-{
-public:
-    GELU();
-    ~GELU();
-
-public:
-    void backward(
-        const TensorGradList& c_lpmOutputGrads,
-        const TensorList& c_spmInputs,
-        const TensorList& c_spmOutputs
-    ) override;
-    TensorList forward(const TensorList& c_spmInputs) override;
-};
-
-// --------------------------
-// SoftmaxCrossEntropy
-// --------------------------
-class SoftmaxCrossEntropy: public Function
-{
-public:
-    SoftmaxCrossEntropy();
-    ~SoftmaxCrossEntropy();
-
-public:
-    void backward(
-        const TensorGradList& c_lpmOutputGrads,
-        const TensorList& c_spmInputs,
-        const TensorList& c_spmOutputs
-    ) override;
-    TensorList forward(const TensorList& c_spmInputs) override;
-};

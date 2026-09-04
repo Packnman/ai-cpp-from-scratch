@@ -38,8 +38,8 @@ void Tensor::backward()
 
         // 出力番号を保ったまま、それぞれの出力勾配をFunctionへ渡す。
         // 破棄済みの出力はnullptrとなり、勾配なしとして扱う。
-        TensorList spmOutputs( lpContext->_wpmOutputs.size() );
-        TensorGradList lpmOutputGrads(
+        std::vector<std::shared_ptr<Tensor>> spmOutputs( lpContext->_wpmOutputs.size() );
+        std::vector<const cuMat*> lpmOutputGrads(
             lpContext->_wpmOutputs.size(),
             nullptr
         );

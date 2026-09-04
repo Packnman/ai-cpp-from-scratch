@@ -72,7 +72,7 @@ void checkIntermediateShapes()
     std::mt19937 rngRandom( 3 );
     Cifar10ConvBlock lyrFirst( 3,32,32,32 );
     lyrFirst.init( rngRandom );
-    TensorList spmValues{makeInput(1)};
+    std::vector<std::shared_ptr<Tensor>> spmValues{makeInput(1)};
     auto spmFirst =lyrFirst.forward( spmValues );
     require(
         (spmFirst->_mData._nRows==32*16*16)&&
@@ -96,7 +96,7 @@ void checkIntermediateShapes()
 void checkModel()
 {
     constexpr const char* FILE_NAME ="cifar10_model_check.bin";
-    Cifar10NeuralNet nntModel( 7,0.2f );
+    NeuralNet_Cifar10 nntModel( 7,0.2f );
     auto spmInput =makeInput( 2 );
     auto spmTarget =std::make_shared<Tensor>( 10,2 );
     Mat mTarget( 10,2 );
@@ -108,7 +108,7 @@ void checkModel()
     mTarget(7,1) =1.0f;
     spmTarget->_mData.download( mTarget );
 
-    TensorList spmInputs{spmInput};
+    std::vector<std::shared_ptr<Tensor>> spmInputs{spmInput};
     auto spmLogits =nntModel.forward( spmInputs );
     require(
         (spmLogits->_mData._nRows==10)&&
@@ -126,7 +126,7 @@ void checkModel()
 
     nntModel.setTraining( false );
     require( !nntModel.isTraining(),"evaluation mode was not set" );
-    spmInputs ={spmInput};
+    std::vector<std::shared_ptr<Tensor>> spmInputs{spmInput};
     auto spmFirst =nntModel.forward( spmInputs );
     spmInputs ={spmInput};
     auto spmSecond =nntModel.forward( spmInputs );
@@ -145,7 +145,7 @@ void checkModel()
     const StateDict nmtState =nntModel.stateDict();
     require( nmtState.size()==12,"unexpected state entry count" );
     nntModel.save( FILE_NAME );
-    Cifar10NeuralNet nntLoaded( 19 );
+    NeuralNet_Cifar10 nntLoaded( 19 );
     nntLoaded.load( FILE_NAME );
     requireSameState( nmtState,nntLoaded.stateDict() );
     std::remove( FILE_NAME );
@@ -154,7 +154,7 @@ void checkModel()
     bool isTargetRejected =false;
     try
     {
-        TensorList spmBad{std::make_shared<Tensor>(3071,1)};
+        std::vector<std::shared_ptr<Tensor>> spmBad{std::make_shared<Tensor>(3071,1)};
         nntModel.forward( spmBad );
     }
     catch( const std::runtime_error& )

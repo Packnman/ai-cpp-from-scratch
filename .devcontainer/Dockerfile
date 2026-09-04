@@ -34,7 +34,7 @@ RUN mkdir -p /workspaces && \
 
 USER ${USERNAME}
 ENV PATH="/home/${USERNAME}/.local/bin:${PATH}"
-ENV CODEX_HOME="/workspaces/.codex-logs"
+ENV CODEX_HOME="/home/${USERNAME}/.codex"
 RUN curl -fsSL https://chatgpt.com/codex/install.sh | sh
 
 WORKDIR /workspaces

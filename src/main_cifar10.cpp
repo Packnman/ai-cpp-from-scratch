@@ -33,7 +33,7 @@ int main(int nArgCount,char** lpszArgs)
             .fDropoutRate =0.2f
         };
 
-        Cifar10NeuralNet nntModel(
+        NeuralNet_Cifar10 nntModel(
             cfgConfig.nSeed,
             cfgConfig.fDropoutRate
         );

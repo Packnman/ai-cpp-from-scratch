@@ -36,7 +36,7 @@ void pooling()
     auto spmInput = std::make_shared<Tensor>( 9, 1 );
     fill( spmInput->_mData, { 5, 5, 1, 5, 0, 4, 2, 3, 6 } );
     cuda_fill( spmInput->_mGrad, .5f );
-    MaxPool2D mplPool( 1, 3, 3, 2, 1 );
+    Pooling mplPool( 1, 3, 3, 2, 1 );
     auto spmOutput = mplPool( { spmInput } );
     Mat mOutputHost = host( spmOutput->_mData );
     float fExpectedOutput[]{ 5, 5, 5, 6 };
@@ -59,7 +59,7 @@ void channels()
 {
     auto spmInput = std::make_shared<Tensor>( 8, 2 );
     fill( spmInput->_mData, { 1, 8, 3, 2, 4, 7, 6, 5, 9, 1, 2, 10, 3, 4, 8, 7 } );
-    MaxPool2D mplPool( 2, 2, 2 );
+    Pooling mplPool( 2, 2, 2 );
     auto spmOutput = mplPool( { spmInput } );
     Mat mOutputHost = host( spmOutput->_mData );
     req( mOutputHost( 0, 0 ) == 6 && mOutputHost( 1, 0 ) == 8 && mOutputHost( 0, 1 ) == 9 &&
@@ -69,7 +69,7 @@ void channels()
     bool isShapeRejected = false;
     try
     {
-        MaxPool2D mplInvalid( 1, 1, 1, 2 );
+        Pooling mplInvalid( 1, 1, 1, 2 );
     }
     catch( const std::invalid_argument& )
     {
@@ -77,7 +77,7 @@ void channels()
     }
     try
     {
-        MaxPool2D mplValid( 1, 2, 2 );
+        Pooling mplValid( 1, 2, 2 );
         mplValid( { std::make_shared<Tensor>( 3, 1 ) } );
     }
     catch( const std::runtime_error& )
@@ -115,7 +115,7 @@ void cifarBatchBackward()
         BATCH
     );
     cuda_fill( spmInput->_mData,1.0f );
-    MaxPool2D mplPool( CHANNELS,HEIGHT,WIDTH );
+    Pooling mplPool( CHANNELS,HEIGHT,WIDTH );
     auto spmOutput =mplPool( {spmInput} );
     req(
         (spmOutput->_mData._nRows==CHANNELS*16*16)&&

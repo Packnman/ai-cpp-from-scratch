@@ -15,7 +15,13 @@ constexpr std::uint32_t MAX_NAME_LENGTH =4096;
 struct NamedTensor
 {
     std::string strName;
-    Tensor* lpTensor;
+    Tensor*     lpTensor;
+};
+
+struct NamedModule
+{
+    std::string strName;
+    Module*     lpModule;
 };
 
 struct FileCloser
@@ -32,6 +38,9 @@ struct FileCloser
 using FilePtr =std::unique_ptr<FILE,FileCloser>;
 using StateDict =std::vector<NamedTensor>;
 
+// --------------------------
+// Module
+// --------------------------
 // Tensorと子Moduleの所有権は派生クラスが持ち、Moduleは参照だけを登録する。
 class Module
 {
@@ -44,19 +53,19 @@ public:
     Module(Module&&) =delete;
     Module& operator=(Module&&) =delete;
 
-    std::vector<NamedTensor> namedParameters() const;
-    std::vector<NamedTensor> namedBuffers() const;
-    std::vector<Tensor*> getParams() const;
-    StateDict stateDict() const;
+private:
+    std::vector<NamedTensor> _nmtParams;
+    std::vector<NamedTensor> _nmtBuffers;
+    std::vector<NamedModule> _nmmModules;
+    bool _isTraining;
 
+public: // propaties
+    std::vector<NamedTensor>    namedParameters() const;
+    std::vector<NamedTensor>    namedBuffers() const;
+    std::vector<NamedTensor>    stateDict() const;
+    std::vector<Tensor*>        getParams() const;
     void setTraining(bool isTraining);
     bool isTraining() const;
-
-    virtual void zero_grads();
-    virtual void reset_state();
-    virtual std::shared_ptr<Tensor> forward(
-        std::vector<std::shared_ptr<Tensor>>& spmInputs
-    ) =0;
 
 protected:
     void registerParameter(const std::string& c_strName,Tensor* lpTensor);
@@ -64,11 +73,6 @@ protected:
     void registerModule(const std::string& c_strName,Module* lpModule);
 
 private:
-    struct NamedModule
-    {
-        std::string strName;
-        Module* lpModule;
-    };
 
     void _validateRegistrationName(const std::string& c_strName) const;
     bool _containsLocalName(const std::string& c_strName) const;
@@ -79,12 +83,17 @@ private:
     ) const;
     void _zeroGradients(const std::vector<Tensor*>& c_lpParams);
 
-    std::vector<NamedTensor> _nmtParams;
-    std::vector<NamedTensor> _nmtBuffers;
-    std::vector<NamedModule> _nmmModules;
-    bool _isTraining;
+public:
+    virtual void zero_grads();
+    virtual void reset_state();
+    virtual std::shared_ptr<Tensor> forward(
+        std::vector<std::shared_ptr<Tensor>>& spmInputs
+    ) =0;
 };
 
+// --------------------------
+// Model
+// --------------------------
 class Model : public Module
 {
 public:
@@ -111,45 +120,4 @@ private:
 public:
     virtual void save(const char* lpszFileName);
     virtual void load(const char* lpszFileName);
-};
-
-// 汎用Layer
-class LayerConv2D : public Module
-{
-public:
-    LayerConv2D(
-        int nInputChannels,
-        int nOutputChannels,
-        int nInputHeight,
-        int nInputWidth,
-        int nKernelSize,
-        int nStride =1,
-        int nPadding =0
-    );
-    ~LayerConv2D() override;
-
-private:
-    std::shared_ptr<Tensor> _spmWeight;
-    std::shared_ptr<Tensor> _spmBias;
-    Conv2D _cnvConv2D;
-    int _nOutputChannels;
-    int _nOutputHeight;
-    int _nOutputWidth;
-    int _nFanIn;
-public: // propaties
-    int outputChannels() const;
-    int outputHeight() const;
-    int outputWidth() const;
-
-private:
-    int _checkedWeightRows(int nOutputChannels,int nInputChannels,int nKernelSize) const;
-    int _checkedOutputChannels(int nOutputChannels) const;
-    int _outputSize(int nInputSize,int nKernelSize,int nStride,int nPadding) const;
-    int _fanIn(int nInputChannels,int nKernelSize) const;
-public:
-    void init(std::mt19937& rngRandom);
-    //
-    std::shared_ptr<Tensor> forward(
-        std::vector<std::shared_ptr<Tensor>>& spmInputs
-    ) override;
 };

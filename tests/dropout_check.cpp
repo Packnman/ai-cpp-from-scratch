@@ -4,7 +4,7 @@
 #include <stdexcept>
 #include <string>
 
-#include "cuda_function.h"
+#include "cuda_function_Dropout.h"
 #include "cuda_tensor.h"
 #include "matrix.h"
 #include "neuralnet_mnist.h"
@@ -114,7 +114,7 @@ void testEvaluationBypassesDropout()
         host._lpfHost[i] =static_cast<float>((i%17)-8)/8.0f;
     }
     input->_mData.download( host );
-    TensorList args{input};
+    std::vector<std::shared_ptr<Tensor>> args{input};
     auto first =withDropout.forward( args );
     auto second =withDropout.forward( args );
     auto baseline =withoutDropout.forward( args );
