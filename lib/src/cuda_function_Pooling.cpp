@@ -70,7 +70,7 @@ Pooling::forward(
     auto spmOutput  =std::make_shared<Tensor>( nOutputRows, c_spmInputs[0]->_mData._nCols );
     // Y[n,y_out,x_out,c]
     //   = max_(0<=k_y,k_x<K) X[n,y_out*S+k_y,x_out*S+k_x,c]
-    cuda_MaxPool2D_forward(
+    cuda_Pooling_forward(
         spmOutput->_mData,
         c_spmInputs[0]->_mData,
         _nChannels,
@@ -118,7 +118,7 @@ Pooling::backward(
     // a(n,y_out,x_out,c) = argmax_(k_y,k_x) X[n,y_out*S+k_y,x_out*S+k_x,c]
     // dL/dX[n,y,x,c] += sum_(y_out,x_out) 1[(y,x)=a] * dL/dY[n,y_out,x_out,c]
     // 最大値が同値なら(k_y,k_x)の走査順で最初の位置をaとする。
-    cuda_MaxPool2D_backward(
+    cuda_Pooling_backward(
         c_spmInputs[0]->_mGrad,
         c_spmInputs[0]->_mData,
         c_mOutputGrad,

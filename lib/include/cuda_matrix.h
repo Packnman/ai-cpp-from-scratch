@@ -154,7 +154,7 @@ void cuda_Conv2D_bias_backward(
     cuMat& mBiasGrad,
     const cuMat& c_mGemmGrad
 );
-void cuda_MaxPool2D_forward(
+void cuda_Pooling_forward(
     cuMat& mOutput,
     const cuMat& c_mInput,
     int nChannels,
@@ -165,7 +165,7 @@ void cuda_MaxPool2D_forward(
     int nOutputHeight,
     int nOutputWidth
 );
-void cuda_MaxPool2D_backward(
+void cuda_Pooling_backward(
     cuMat& mInputGrad,
     const cuMat& c_mInput,
     const cuMat& c_mOutputGrad,
