@@ -14,7 +14,7 @@ GELU::~GELU()
 
 }
 void GELU::backward(
-    const std::vector<const cuMat*>& c_lpmOutputGrads,
+    const std::vector<const cufMat*>& c_lpmOutputGrads,
     const std::vector<std::shared_ptr<Tensor>>& c_spmInputs,
     const std::vector<std::shared_ptr<Tensor>>& c_spmOutputs
 )
@@ -47,10 +47,7 @@ GELU::forward(
         );
     }
 
-    auto spmResult =std::make_shared<Tensor>(
-        c_spmInputs[0]->_mData._nRows,
-        c_spmInputs[0]->_mData._nCols
-    );
+    auto spmResult =std::make_shared<Tensor>(c_spmInputs[0]->_mData.shape());
     //
     cuda_GELU_forward(
         spmResult->_mData,

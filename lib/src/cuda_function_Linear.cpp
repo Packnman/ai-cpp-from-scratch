@@ -16,7 +16,7 @@ Linear::~Linear()
 
 }
 void Linear::backward(
-    const std::vector<const cuMat*>& c_lpmOutputGrads,
+    const std::vector<const cufMat*>& c_lpmOutputGrads,
     const std::vector<std::shared_ptr<Tensor>>& c_spmInputs,
     const std::vector<std::shared_ptr<Tensor>>& c_spmOutputs
 )
@@ -36,14 +36,14 @@ void Linear::backward(
             "Linear::backward: Linear requires exactly one input"
         );
     }
-    const cuMat& c_mGrad =requireSingleOutputGrad(
+    const cufMat& c_mGrad =requireSingleOutputGrad(
         c_lpmOutputGrads,
         "Linear::backward"
     );
     // 全要素1行列の作成
-    if( (_mTmp._nRows!=1)||(_mTmp._nCols!=c_spmInputs[0]->_mData._nCols) )
+    if( _mTmp.shape()!=std::vector<std::int64_t>{1,c_spmInputs[0]->_mData.cols()} )
     {
-        _mTmp   =cuMat( 1,c_spmInputs[0]->_mData._nCols );
+        _mTmp   =cufMat( 1,c_spmInputs[0]->_mData.cols() );
         cuda_fill( _mTmp,1.0f );
     }
 
@@ -93,15 +93,15 @@ Linear::forward(
         );
     }
     // 全要素1行列の作成
-    if( (_mTmp._nRows!=1)||(_mTmp._nCols!=c_spmInputs[0]->_mData._nCols) )
+    if( _mTmp.shape()!=std::vector<std::int64_t>{1,c_spmInputs[0]->_mData.cols()} )
     {
-        _mTmp   =cuMat( 1,c_spmInputs[0]->_mData._nCols );
+        _mTmp   =cufMat( 1,c_spmInputs[0]->_mData.cols() );
         cuda_fill( _mTmp,1.0f );
     }
     //
     auto spmResult =std::make_shared<Tensor>(
-        _lpmWeight->_mData._nRows,
-        c_spmInputs[0]->_mData._nCols
+        _lpmWeight->_mData.rows(),
+        c_spmInputs[0]->_mData.cols()
     );
     
     // u = W * X

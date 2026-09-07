@@ -23,9 +23,9 @@ void requireNear(float actual,float expected,float tolerance,const std::string& 
     }
 }
 
-Mat upload(const cuMat& value)
+Mat upload(const cufMat& value)
 {
-    Mat host( value._nRows,value._nCols );
+    Mat host( value.rows(),value.cols() );
     value.upload( host );
     return host;
 }
@@ -33,10 +33,10 @@ Mat upload(const cuMat& value)
 void fillTensor(Tensor& tensor,const std::vector<float>& values)
 {
     require(
-        values.size()==static_cast<std::size_t>(tensor._mData._nRows*tensor._mData._nCols),
+        values.size()==static_cast<std::size_t>(tensor._mData.rows()*tensor._mData.cols()),
         "test data size mismatch"
     );
-    Mat host( tensor._mData._nRows,tensor._mData._nCols );
+    Mat host( tensor._mData.rows(),tensor._mData.cols() );
     for( std::size_t i=0;i<values.size();++i ) {host._lpfHost[i]=values[i];}
     tensor._mData.download( host );
 }
@@ -70,7 +70,7 @@ void testForwardBackwardAndEvaluation()
     fillTensor( runningVar,{1.0f,1.0f} );
 
     auto input =std::make_shared<Tensor>( FEATURES,BATCH );
-    const std::vector<float> values{1.0f,2.0f,2.0f,4.0f,3.0f,6.0f};
+    const std::vector<float> values{1.0f,2.0f,3.0f,2.0f,4.0f,6.0f};
     fillTensor( *input,values );
 
     BatchNorm batchNorm( &gamma,&beta,&runningMean,&runningVar,0.1f,EPSILON );
@@ -85,7 +85,7 @@ void testForwardBackwardAndEvaluation()
     {
         for( int feature=0;feature<FEATURES;++feature )
         {
-            const int index =batch*FEATURES+feature;
+            const int index =feature*BATCH+batch;
             const float normalized =(values[index]-means[feature])/
                 std::sqrt(variances[feature]+EPSILON);
             requireNear(
@@ -104,9 +104,9 @@ void testForwardBackwardAndEvaluation()
     requireNear( runningVarHost(0,0),1.0f,1.0e-6f,"running variance mismatch" );
     requireNear( runningVarHost(1,0),1.3f,1.0e-6f,"running variance mismatch" );
 
-    cuMat outputGrad( FEATURES,BATCH );
+    cufMat outputGrad( FEATURES,BATCH );
     Mat outputGradHost( FEATURES,BATCH );
-    const std::vector<float> gradients{1.0f,-1.0f,2.0f,3.0f,4.0f,2.0f};
+    const std::vector<float> gradients{1.0f,2.0f,4.0f,-1.0f,3.0f,2.0f};
     for( std::size_t i=0;i<gradients.size();++i ) {outputGradHost._lpfHost[i]=gradients[i];}
     outputGrad.download( outputGradHost );
     batchNorm.backward( {&outputGrad},{input},{output} );
@@ -120,7 +120,7 @@ void testForwardBackwardAndEvaluation()
         float gradNormalizedSum =0.0f;
         for( int batch=0;batch<BATCH;++batch )
         {
-            const int index =batch*FEATURES+feature;
+            const int index =feature*BATCH+batch;
             const float normalized =(values[index]-means[feature])/
                 std::sqrt(variances[feature]+EPSILON);
             gradSum +=gradients[index];
@@ -130,7 +130,7 @@ void testForwardBackwardAndEvaluation()
         requireNear( betaGradHost(feature,0),gradSum,2.0e-5f,"beta gradient mismatch" );
         for( int batch=0;batch<BATCH;++batch )
         {
-            const int index =batch*FEATURES+feature;
+            const int index =feature*BATCH+batch;
             const float normalized =(values[index]-means[feature])/
                 std::sqrt(variances[feature]+EPSILON);
             const float expected =gammas[feature]/
@@ -149,7 +149,7 @@ void testForwardBackwardAndEvaluation()
     {
         for( int feature=0;feature<FEATURES;++feature )
         {
-            const int index =batch*FEATURES+feature;
+            const int index =feature*BATCH+batch;
             const float expected =gammas[feature]*
                 (values[index]-runningMeanHost(feature,0))/
                 std::sqrt(runningVarHost(feature,0)+EPSILON)+betas[feature];

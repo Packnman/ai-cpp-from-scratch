@@ -33,7 +33,7 @@ Dropout::~Dropout()
     }
 }
 void Dropout::backward(
-    const std::vector<const cuMat*>& c_lpmOutputGrads,
+    const std::vector<const cufMat*>& c_lpmOutputGrads,
     const std::vector<std::shared_ptr<Tensor>>& c_spmInputs,
     const std::vector<std::shared_ptr<Tensor>>& c_spmOutputs
 )
@@ -60,21 +60,19 @@ Dropout::forward(
     {
         throw std::runtime_error("Dropout::forward: Dropout requires exactly one input");
     }
-    const int nRows =c_spmInputs[0]->_mData._nRows;
-    const int nCols =c_spmInputs[0]->_mData._nCols;
-    //
-    _mMask =cuMat( nRows,nCols );
-    const std::size_t nSize =static_cast<std::size_t>(nRows)*static_cast<std::size_t>(nCols);
+    const auto& shape =c_spmInputs[0]->_mData.shape();
+    _mMask =cufMat( shape );
+    const std::size_t nSize =c_spmInputs[0]->_mData.numel();
     if( _fDropProbability==0.0f )
     {
         cuda_fill( _mMask,1.0f );
     }
     else if( nSize>0 )
     {
-        checkCurand(curandGenerateUniform(_crnGenerator,_mMask._lpfDevice,nSize),"Dropout::forward");
+        checkCurand(curandGenerateUniform(_crnGenerator,_mMask.data(),nSize),"Dropout::forward");
     }
     //
-    auto spmResult  =std::make_shared<Tensor>( nRows,nCols );
+    auto spmResult  =std::make_shared<Tensor>( shape );
     //
     cuda_Dropout_forward(
         spmResult->_mData,

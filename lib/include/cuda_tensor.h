@@ -7,11 +7,13 @@
 class Tensor{
 public:
     Tensor(int nRows,int nCols);
+    explicit Tensor(const std::vector<std::int64_t>& shape);
+    Tensor(std::initializer_list<std::int64_t> shape);
     ~Tensor();
 private:
 public:
-    cuMat   _mData; // 行列内容
-    cuMat   _mGrad; // 微分値
+    cufMat   _mData; // 行列内容
+    cufMat   _mGrad; // 微分値
 
     std::shared_ptr<Context> _spContext;   // 使用関数
 public:

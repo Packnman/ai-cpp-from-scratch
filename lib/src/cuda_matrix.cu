@@ -27,15 +27,20 @@ __global__ void kernel_Conv2D_bias(float* lpfBiasGrad,const float* c_lpfGemmGrad
 __global__ void kernel_Pooling_forward(float* lpfOutput,const float* c_lpfInput,int nChannels,int nInputHeight,int nInputWidth,int nKernelSize,int nStride,int nOutputWidth,int nPositions,int nSize);
 __global__ void kernel_Pooling_backward(float* lpfInputGrad,const float* c_lpfInput,const float* c_lpfOutputGrad,int nChannels,int nInputHeight,int nInputWidth,int nKernelSize,int nStride,int nOutputWidth,int nPositions,int nSize);
 
-void cuMat::ones()
+static void requireContiguousTensor(const cufMat& value,const char* operation)
 {
-    int nSize       =_nRows * _nCols;
+    if(!value.isContiguous()) throw std::invalid_argument(std::string(operation)+": contiguous tensor required");
+}
+
+void cu_detail::fillOnes(float* destination,std::size_t elements)
+{
+    int nSize       =static_cast<int>(elements);
     int nThreads    =256;
     int nBlocks     =(nSize + nThreads - 1)/nThreads;
     if( nSize<=0 )    {return;}
     //
     kernel_fill<<<nBlocks,nThreads>>>(
-        _lpfDevice,
+        destination,
         1.0f,
         nSize
     );
@@ -49,17 +54,18 @@ void cuMat::ones()
         );
     }
 }
-void cuda_fill(cuMat& mResult,float fValue)
+void cuda_fill(cufMat& mResult,float fValue)
 {
     // R[:] = fValue
 
-    int nSize       =mResult._nRows * mResult._nCols;
+    requireContiguousTensor(mResult,"cuda_fill");
+    int nSize       =static_cast<int>(mResult.numel());
     int nThreads    =256;
     int nBlocks     =(nSize + nThreads - 1)/nThreads;
     if( nSize<=0 )    {return;}
     //
     kernel_fill<<<nBlocks,nThreads>>>(
-        mResult._lpfDevice,
+        mResult.data(),
         fValue,nSize
     );
     //
@@ -72,33 +78,36 @@ void cuda_fill(cuMat& mResult,float fValue)
         );
     }
 }
-void cuda_mul_elementwise(cuMat& mResult,const cuMat& c_mA,const cuMat& c_mB)
+void cuda_mul_elementwise(cufMat& mResult,const cufMat& c_mA,const cufMat& c_mB)
 {
     // R = c_mA ⦿ c_mB
 
     // 行列数の確認
-    if( (c_mA._nRows!=c_mB._nRows)||(c_mA._nCols!=c_mB._nCols) )
+    requireContiguousTensor(mResult,"cuda_mul_elementwise");
+    requireContiguousTensor(c_mA,"cuda_mul_elementwise");
+    requireContiguousTensor(c_mB,"cuda_mul_elementwise");
+    if( c_mA.shape()!=c_mB.shape() )
     {
         throw std::runtime_error(
             "cuda_mul_elementwise: A and B size mismatch"
         );
     }
-    if( (mResult._nRows!=c_mA._nRows)||(mResult._nCols!=c_mA._nCols) )
+    if( mResult.shape()!=c_mA.shape() )
     {
         throw std::runtime_error(
             "cuda_mul_elementwise: result size mismatch"
         );
     }
 
-    int nSize    =c_mA._nRows * c_mA._nCols;
+    int nSize    =static_cast<int>(c_mA.numel());
     int nThreads =256;
     int nBlocks  =(nSize + nThreads - 1) / nThreads;
     if( nSize<=0 )   {return;}
     //
     kernel_mul_elementwise<<<nBlocks, nThreads>>>(
-        mResult._lpfDevice,
-        c_mA._lpfDevice,
-        c_mB._lpfDevice,
+        mResult.data(),
+        c_mA.data(),
+        c_mB.data(),
         nSize
     );
 
@@ -110,23 +119,25 @@ void cuda_mul_elementwise(cuMat& mResult,const cuMat& c_mA,const cuMat& c_mB)
         );
     }
 }
-void cuda_ReLU_forward(cuMat& mResult,const cuMat& c_mValue)
+void cuda_ReLU_forward(cufMat& mResult,const cufMat& c_mValue)
 {
-    if( (mResult._nRows!=c_mValue._nRows)||(mResult._nCols!=c_mValue._nCols) )
+    requireContiguousTensor(mResult,"cuda_ReLU_forward");
+    requireContiguousTensor(c_mValue,"cuda_ReLU_forward");
+    if( mResult.shape()!=c_mValue.shape() )
     {
         throw std::runtime_error(
             "cuda_ReLU_forward: matrix size mismatch"
         );
     }
     //
-    int nSize       =c_mValue._nRows * c_mValue._nCols;
+    int nSize       =static_cast<int>(c_mValue.numel());
     int nThreads    =256;
     int nBlocks     =(nSize + nThreads - 1)/nThreads;
     if( nSize<=0 )   {return;}
     //
     kernel_ReLU_forward<<<nBlocks,nThreads>>>(
-        mResult._lpfDevice,
-        c_mValue._lpfDevice,
+        mResult.data(),
+        c_mValue.data(),
         nSize
     );
 
@@ -138,25 +149,27 @@ void cuda_ReLU_forward(cuMat& mResult,const cuMat& c_mValue)
         );
     }
 }
-void cuda_ReLU_backward(cuMat& mResult,const cuMat& c_mData,const cuMat& c_mGrad)
+void cuda_ReLU_backward(cufMat& mResult,const cufMat& c_mData,const cufMat& c_mGrad)
 {
-    if( (mResult._nRows!=c_mData._nRows)||(mResult._nCols!=c_mData._nCols)||
-        (c_mData._nRows!=c_mGrad._nRows)||(c_mData._nCols!=c_mGrad._nCols) )
+    requireContiguousTensor(mResult,"cuda_ReLU_backward");
+    requireContiguousTensor(c_mData,"cuda_ReLU_backward");
+    requireContiguousTensor(c_mGrad,"cuda_ReLU_backward");
+    if( mResult.shape()!=c_mData.shape()||c_mData.shape()!=c_mGrad.shape() )
     {
         throw std::runtime_error(
             "cuda_ReLU_backward: matrix size mismatch"
         );
     }
     //
-    int nSize       =c_mData._nRows * c_mData._nCols;
+    int nSize       =static_cast<int>(c_mData.numel());
     int nThreads    =256;
     int nBlocks     =(nSize + nThreads - 1)/nThreads;
     if( nSize<=0 )   {return;}
     //
     kernel_ReLU_backward<<<nBlocks,nThreads>>>(
-        mResult._lpfDevice,
-        c_mData._lpfDevice,
-        c_mGrad._lpfDevice,
+        mResult.data(),
+        c_mData.data(),
+        c_mGrad.data(),
         nSize
     );
 
@@ -168,23 +181,25 @@ void cuda_ReLU_backward(cuMat& mResult,const cuMat& c_mData,const cuMat& c_mGrad
         );
     }
 }
-void cuda_GELU_forward(cuMat& mResult,const cuMat& c_mValue)
+void cuda_GELU_forward(cufMat& mResult,const cufMat& c_mValue)
 {
-    if( (mResult._nRows!=c_mValue._nRows)||(mResult._nCols!=c_mValue._nCols) )
+    requireContiguousTensor(mResult,"cuda_GELU_forward");
+    requireContiguousTensor(c_mValue,"cuda_GELU_forward");
+    if( mResult.shape()!=c_mValue.shape() )
     {
         throw std::runtime_error(
             "cuda_ReLU_forward: matrix size mismatch"
         );
     }
     //
-    int nSize       =c_mValue._nRows * c_mValue._nCols;
+    int nSize       =static_cast<int>(c_mValue.numel());
     int nThreads    =256;
     int nBlocks     =(nSize + nThreads - 1)/nThreads;
     if( nSize<=0 )   {return;}
     //
     kernel_GELU_forward<<<nBlocks,nThreads>>>(
-        mResult._lpfDevice,
-        c_mValue._lpfDevice,
+        mResult.data(),
+        c_mValue.data(),
         nSize
     );
     //
@@ -196,25 +211,27 @@ void cuda_GELU_forward(cuMat& mResult,const cuMat& c_mValue)
         );
     }
 }
-void cuda_GELU_backward(cuMat& mResult,const cuMat& c_mData,const cuMat& c_mGrad)
+void cuda_GELU_backward(cufMat& mResult,const cufMat& c_mData,const cufMat& c_mGrad)
 {
-    if( (mResult._nRows!=c_mData._nRows)||(mResult._nCols!=c_mData._nCols)||
-        (c_mData._nRows!=c_mGrad._nRows)||(c_mData._nCols!=c_mGrad._nCols) )
+    requireContiguousTensor(mResult,"cuda_GELU_backward");
+    requireContiguousTensor(c_mData,"cuda_GELU_backward");
+    requireContiguousTensor(c_mGrad,"cuda_GELU_backward");
+    if( mResult.shape()!=c_mData.shape()||c_mData.shape()!=c_mGrad.shape() )
     {
         throw std::runtime_error(
             "cuda_GELU_backward: matrix size mismatch"
         );
     }
     //
-    int nSize       =c_mData._nRows * c_mData._nCols;
+    int nSize       =static_cast<int>(c_mData.numel());
     int nThreads    =256;
     int nBlocks     =(nSize + nThreads - 1)/nThreads;
     if( nSize<=0 )   {return;}
     //
     kernel_GELU_backward<<<nBlocks,nThreads>>>(
-        mResult._lpfDevice,
-        c_mData._lpfDevice,
-        c_mGrad._lpfDevice,
+        mResult.data(),
+        c_mData.data(),
+        c_mGrad.data(),
         nSize
     );
     //
@@ -226,19 +243,21 @@ void cuda_GELU_backward(cuMat& mResult,const cuMat& c_mData,const cuMat& c_mGrad
         );
     }
 }
-void cuda_Dropout_forward(cuMat& mResult,const cuMat& c_mValue,cuMat& mMask,float fDropProbability)
+void cuda_Dropout_forward(cufMat& mResult,const cufMat& c_mValue,cufMat& mMask,float fDropProbability)
 {
-    if( (mResult._nRows!=c_mValue._nRows)||(mResult._nCols!=c_mValue._nCols)||
-        (mMask._nRows!=c_mValue._nRows)||(mMask._nCols!=c_mValue._nCols) )
+    requireContiguousTensor(mResult,"cuda_Dropout_forward");
+    requireContiguousTensor(c_mValue,"cuda_Dropout_forward");
+    requireContiguousTensor(mMask,"cuda_Dropout_forward");
+    if( mResult.shape()!=c_mValue.shape()||mMask.shape()!=c_mValue.shape() )
     {
         throw std::runtime_error("cuda_Dropout_forward: matrix size mismatch");
     }
-    const int nSize =c_mValue._nRows*c_mValue._nCols;
+    const int nSize =static_cast<int>(c_mValue.numel());
     if( nSize<=0 ) {return;}
     const int nThreads =256;
     const int nBlocks =(nSize+nThreads-1)/nThreads;
     kernel_Dropout_forward<<<nBlocks,nThreads>>>(
-        mResult._lpfDevice,c_mValue._lpfDevice,mMask._lpfDevice,
+        mResult.data(),c_mValue.data(),mMask.data(),
         fDropProbability,1.0f/(1.0f-fDropProbability),nSize
     );
     cudaError_t cudError =cudaGetLastError();
@@ -247,18 +266,20 @@ void cuda_Dropout_forward(cuMat& mResult,const cuMat& c_mValue,cuMat& mMask,floa
         throw std::runtime_error(std::string("cuda_Dropout_forward: kernel launch failed: ")+cudaGetErrorString(cudError));
     }
 }
-void cuda_Dropout_backward(cuMat& mResult,const cuMat& c_mGrad,const cuMat& c_mMask)
+void cuda_Dropout_backward(cufMat& mResult,const cufMat& c_mGrad,const cufMat& c_mMask)
 {
-    if( (mResult._nRows!=c_mGrad._nRows)||(mResult._nCols!=c_mGrad._nCols)||
-        (c_mMask._nRows!=c_mGrad._nRows)||(c_mMask._nCols!=c_mGrad._nCols) )
+    requireContiguousTensor(mResult,"cuda_Dropout_backward");
+    requireContiguousTensor(c_mGrad,"cuda_Dropout_backward");
+    requireContiguousTensor(c_mMask,"cuda_Dropout_backward");
+    if( mResult.shape()!=c_mGrad.shape()||c_mMask.shape()!=c_mGrad.shape() )
     {
         throw std::runtime_error("cuda_Dropout_backward: matrix size mismatch");
     }
-    const int nSize =c_mGrad._nRows*c_mGrad._nCols;
+    const int nSize =static_cast<int>(c_mGrad.numel());
     if( nSize<=0 ) {return;}
     const int nThreads =256;
     const int nBlocks =(nSize+nThreads-1)/nThreads;
-    kernel_Dropout_backward<<<nBlocks,nThreads>>>(mResult._lpfDevice,c_mGrad._lpfDevice,c_mMask._lpfDevice,nSize);
+    kernel_Dropout_backward<<<nBlocks,nThreads>>>(mResult.data(),c_mGrad.data(),c_mMask.data(),nSize);
     cudaError_t cudError =cudaGetLastError();
     if( cudError!=cudaSuccess )
     {
@@ -266,22 +287,22 @@ void cuda_Dropout_backward(cuMat& mResult,const cuMat& c_mGrad,const cuMat& c_mM
     }
 }
 void cuda_BatchNorm_forward_training(
-    cuMat& mResult,const cuMat& c_mValue,
-    const cuMat& c_mGamma,const cuMat& c_mBeta,
-    cuMat& mRunningMean,cuMat& mRunningVar,
-    cuMat& mNormalized,cuMat& mInvStd,
+    cufMat& mResult,const cufMat& c_mValue,
+    const cufMat& c_mGamma,const cufMat& c_mBeta,
+    cufMat& mRunningMean,cufMat& mRunningVar,
+    cufMat& mNormalized,cufMat& mInvStd,
     float fMomentum,float fEpsilon
 )
 {
-    const int nFeatures =c_mValue._nRows;
-    const int nBatch    =c_mValue._nCols;
-    if( (nBatch<=0)||(mResult._nRows!=nFeatures)||(mResult._nCols!=nBatch)||
-        (c_mGamma._nRows!=nFeatures)||(c_mGamma._nCols!=1)||
-        (c_mBeta._nRows!=nFeatures)||(c_mBeta._nCols!=1)||
-        (mRunningMean._nRows!=nFeatures)||(mRunningMean._nCols!=1)||
-        (mRunningVar._nRows!=nFeatures)||(mRunningVar._nCols!=1)||
-        (mNormalized._nRows!=nFeatures)||(mNormalized._nCols!=nBatch)||
-        (mInvStd._nRows!=nFeatures)||(mInvStd._nCols!=1) )
+    const int nFeatures =c_mValue.rows();
+    const int nBatch    =c_mValue.cols();
+    if( (nBatch<=0)||(mResult.rows()!=nFeatures)||(mResult.cols()!=nBatch)||
+        (c_mGamma.rows()!=nFeatures)||(c_mGamma.cols()!=1)||
+        (c_mBeta.rows()!=nFeatures)||(c_mBeta.cols()!=1)||
+        (mRunningMean.rows()!=nFeatures)||(mRunningMean.cols()!=1)||
+        (mRunningVar.rows()!=nFeatures)||(mRunningVar.cols()!=1)||
+        (mNormalized.rows()!=nFeatures)||(mNormalized.cols()!=nBatch)||
+        (mInvStd.rows()!=nFeatures)||(mInvStd.cols()!=1) )
     {
         throw std::runtime_error("cuda_BatchNorm_forward_training: matrix size mismatch");
     }
@@ -290,14 +311,14 @@ void cuda_BatchNorm_forward_training(
     const int nBlocks =(nFeatures+nThreads-1)/nThreads;
     //
     kernel_BatchNorm_forward_training<<<nBlocks,nThreads>>>(
-        mResult._lpfDevice,
-        c_mValue._lpfDevice,
-        c_mGamma._lpfDevice,
-        c_mBeta._lpfDevice,
-        mRunningMean._lpfDevice,
-        mRunningVar._lpfDevice,
-        mNormalized._lpfDevice,
-        mInvStd._lpfDevice,
+        mResult.data(),
+        c_mValue.data(),
+        c_mGamma.data(),
+        c_mBeta.data(),
+        mRunningMean.data(),
+        mRunningVar.data(),
+        mNormalized.data(),
+        mInvStd.data(),
         fMomentum,
         fEpsilon,
         nFeatures,
@@ -313,21 +334,21 @@ void cuda_BatchNorm_forward_training(
     }
 }
 void cuda_BatchNorm_forward_evaluation(
-    cuMat& mResult,const cuMat& c_mValue,
-    const cuMat& c_mGamma,const cuMat& c_mBeta,
-    const cuMat& c_mRunningMean,const cuMat& c_mRunningVar,
-    cuMat& mNormalized,cuMat& mInvStd,float fEpsilon
+    cufMat& mResult,const cufMat& c_mValue,
+    const cufMat& c_mGamma,const cufMat& c_mBeta,
+    const cufMat& c_mRunningMean,const cufMat& c_mRunningVar,
+    cufMat& mNormalized,cufMat& mInvStd,float fEpsilon
 )
 {
-    const int nFeatures =c_mValue._nRows;
-    const int nBatch =c_mValue._nCols;
-    if( (nBatch<=0)||(mResult._nRows!=nFeatures)||(mResult._nCols!=nBatch)||
-        (c_mGamma._nRows!=nFeatures)||(c_mGamma._nCols!=1)||
-        (c_mBeta._nRows!=nFeatures)||(c_mBeta._nCols!=1)||
-        (c_mRunningMean._nRows!=nFeatures)||(c_mRunningMean._nCols!=1)||
-        (c_mRunningVar._nRows!=nFeatures)||(c_mRunningVar._nCols!=1)||
-        (mNormalized._nRows!=nFeatures)||(mNormalized._nCols!=nBatch)||
-        (mInvStd._nRows!=nFeatures)||(mInvStd._nCols!=1) )
+    const int nFeatures =c_mValue.rows();
+    const int nBatch =c_mValue.cols();
+    if( (nBatch<=0)||(mResult.rows()!=nFeatures)||(mResult.cols()!=nBatch)||
+        (c_mGamma.rows()!=nFeatures)||(c_mGamma.cols()!=1)||
+        (c_mBeta.rows()!=nFeatures)||(c_mBeta.cols()!=1)||
+        (c_mRunningMean.rows()!=nFeatures)||(c_mRunningMean.cols()!=1)||
+        (c_mRunningVar.rows()!=nFeatures)||(c_mRunningVar.cols()!=1)||
+        (mNormalized.rows()!=nFeatures)||(mNormalized.cols()!=nBatch)||
+        (mInvStd.rows()!=nFeatures)||(mInvStd.cols()!=1) )
     {
         throw std::runtime_error("cuda_BatchNorm_forward_evaluation: matrix size mismatch");
     }
@@ -336,14 +357,14 @@ void cuda_BatchNorm_forward_evaluation(
     const int nBlocks =(nFeatures+nThreads-1)/nThreads;
     //
     kernel_BatchNorm_forward_evaluation<<<nBlocks,nThreads>>>(
-        mResult._lpfDevice,
-        c_mValue._lpfDevice,
-        c_mGamma._lpfDevice,
-        c_mBeta._lpfDevice,
-        c_mRunningMean._lpfDevice,
-        c_mRunningVar._lpfDevice,
-        mNormalized._lpfDevice,
-        mInvStd._lpfDevice,
+        mResult.data(),
+        c_mValue.data(),
+        c_mGamma.data(),
+        c_mBeta.data(),
+        c_mRunningMean.data(),
+        c_mRunningVar.data(),
+        mNormalized.data(),
+        mInvStd.data(),
         fEpsilon,
         nFeatures,
         nBatch
@@ -358,20 +379,20 @@ void cuda_BatchNorm_forward_evaluation(
     }
 }
 void cuda_BatchNorm_backward(
-    cuMat& mInputGrad,cuMat& mGammaGrad,cuMat& mBetaGrad,
-    const cuMat& c_mOutputGrad,const cuMat& c_mGamma,
-    const cuMat& c_mNormalized,const cuMat& c_mInvStd,
+    cufMat& mInputGrad,cufMat& mGammaGrad,cufMat& mBetaGrad,
+    const cufMat& c_mOutputGrad,const cufMat& c_mGamma,
+    const cufMat& c_mNormalized,const cufMat& c_mInvStd,
     bool isTraining
 )
 {
-    const int nFeatures =c_mOutputGrad._nRows;
-    const int nBatch =c_mOutputGrad._nCols;
-    if( (nBatch<=0)||(mInputGrad._nRows!=nFeatures)||(mInputGrad._nCols!=nBatch)||
-        (mGammaGrad._nRows!=nFeatures)||(mGammaGrad._nCols!=1)||
-        (mBetaGrad._nRows!=nFeatures)||(mBetaGrad._nCols!=1)||
-        (c_mGamma._nRows!=nFeatures)||(c_mGamma._nCols!=1)||
-        (c_mNormalized._nRows!=nFeatures)||(c_mNormalized._nCols!=nBatch)||
-        (c_mInvStd._nRows!=nFeatures)||(c_mInvStd._nCols!=1) )
+    const int nFeatures =c_mOutputGrad.rows();
+    const int nBatch =c_mOutputGrad.cols();
+    if( (nBatch<=0)||(mInputGrad.rows()!=nFeatures)||(mInputGrad.cols()!=nBatch)||
+        (mGammaGrad.rows()!=nFeatures)||(mGammaGrad.cols()!=1)||
+        (mBetaGrad.rows()!=nFeatures)||(mBetaGrad.cols()!=1)||
+        (c_mGamma.rows()!=nFeatures)||(c_mGamma.cols()!=1)||
+        (c_mNormalized.rows()!=nFeatures)||(c_mNormalized.cols()!=nBatch)||
+        (c_mInvStd.rows()!=nFeatures)||(c_mInvStd.cols()!=1) )
     {
         throw std::runtime_error("cuda_BatchNorm_backward: matrix size mismatch");
     }
@@ -380,13 +401,13 @@ void cuda_BatchNorm_backward(
     const int nBlocks   =(nFeatures+nThreads-1)/nThreads;
     //
     kernel_BatchNorm_backward<<<nBlocks,nThreads>>>(
-        mInputGrad._lpfDevice,
-        mGammaGrad._lpfDevice,
-        mBetaGrad._lpfDevice,
-        c_mOutputGrad._lpfDevice,
-        c_mGamma._lpfDevice,
-        c_mNormalized._lpfDevice,
-        c_mInvStd._lpfDevice,
+        mInputGrad.data(),
+        mGammaGrad.data(),
+        mBetaGrad.data(),
+        c_mOutputGrad.data(),
+        c_mGamma.data(),
+        c_mNormalized.data(),
+        c_mInvStd.data(),
         isTraining,
         nFeatures,
         nBatch
@@ -399,35 +420,35 @@ void cuda_BatchNorm_backward(
     }
 }
 void cuda_SoftmaxCrossEntropy_forward(
-    cuMat& mResult,
-    const cuMat& c_mLogits,
-    const cuMat& c_mTarget
+    cufMat& mResult,
+    const cufMat& c_mLogits,
+    const cufMat& c_mTarget
 )
 {
-    if( (c_mLogits._nRows!=c_mTarget._nRows)||(c_mLogits._nCols!=c_mTarget._nCols) )
+    if( (c_mLogits.rows()!=c_mTarget.rows())||(c_mLogits.cols()!=c_mTarget.cols()) )
     {
         throw std::runtime_error(
             "cuda_SoftmaxCrossEntropy_forward: matrix size mismatch"
         );
     }
-    if( (mResult._nRows!=1)||(mResult._nCols!=1) )
+    if( (mResult.rows()!=1)||(mResult.cols()!=1) )
     {
         throw std::runtime_error(
             "cuda_SoftmaxCrossEntropy_forward: result must be 1x1"
         );
     }
     //
-    int nClass      =c_mLogits._nRows;
-    int nBatch      =c_mLogits._nCols;
+    int nClass      =c_mLogits.rows();
+    int nBatch      =c_mLogits.cols();
     int nThreads    =256;
     int nBlocks     =(nBatch + nThreads - 1)/nThreads;
     if( (nClass<=0)||(nBatch<=0) )  {return;}
     //
     cuda_fill( mResult,0.0f );      // atomicAddするので最初は0
     kernel_SoftmaxCrossEntropy_forward<<<nBlocks,nThreads>>>(
-        mResult._lpfDevice,
-        c_mLogits._lpfDevice,
-        c_mTarget._lpfDevice,
+        mResult.data(),
+        c_mLogits.data(),
+        c_mTarget.data(),
         nClass,
         nBatch
     );
@@ -441,42 +462,42 @@ void cuda_SoftmaxCrossEntropy_forward(
     }
 }
 void cuda_SoftmaxCrossEntropy_backward(
-    cuMat& mLogitsGrad,
-    const cuMat& c_mLogits,
-    const cuMat& c_mTarget,
-    const cuMat& c_mGrad
+    cufMat& mLogitsGrad,
+    const cufMat& c_mLogits,
+    const cufMat& c_mTarget,
+    const cufMat& c_mGrad
 )
 {
-    if( (c_mLogits._nRows!=c_mTarget._nRows)||(c_mLogits._nCols!=c_mTarget._nCols) )
+    if( (c_mLogits.rows()!=c_mTarget.rows())||(c_mLogits.cols()!=c_mTarget.cols()) )
     {
         throw std::runtime_error(
             "cuda_SoftmaxCrossEntropy_backward: matrix size mismatch"
         );
     }
-    if( (c_mLogits._nRows!=mLogitsGrad._nRows)||(c_mLogits._nCols!=mLogitsGrad._nCols) )
+    if( (c_mLogits.rows()!=mLogitsGrad.rows())||(c_mLogits.cols()!=mLogitsGrad.cols()) )
     {
         throw std::runtime_error(
             "cuda_SoftmaxCrossEntropy_backward: gradient size mismatch"
         );
     }
-    if( (c_mGrad._nRows!=1)||(c_mGrad._nCols!=1) )
+    if( (c_mGrad.rows()!=1)||(c_mGrad.cols()!=1) )
     {
         throw std::runtime_error(
             "cuda_SoftmaxCrossEntropy_backward: grad must be 1x1"
         );
     }
     //
-    int nClass      =c_mLogits._nRows;
-    int nBatch      =c_mLogits._nCols;
+    int nClass      =c_mLogits.rows();
+    int nBatch      =c_mLogits.cols();
     int nThreads    =256;
     int nBlocks     =(nBatch + nThreads - 1)/nThreads;
     if( (nClass<=0)||(nBatch<=0) )  {return;}
     //
     kernel_SoftmaxCrossEntropy_backward<<<nBlocks,nThreads>>>(
-        mLogitsGrad._lpfDevice,
-        c_mLogits._lpfDevice,
-        c_mTarget._lpfDevice,
-        c_mGrad._lpfDevice,
+        mLogitsGrad.data(),
+        c_mLogits.data(),
+        c_mTarget.data(),
+        c_mGrad.data(),
         nClass,
         nBatch
     );
@@ -490,10 +511,10 @@ void cuda_SoftmaxCrossEntropy_backward(
     }
 }
 void cuda_Adam_update(
-    cuMat& mData,
-    const cuMat& c_mGrad,
-    cuMat& mFirstMoment,
-    cuMat& mSecondMoment,
+    cufMat& mData,
+    const cufMat& c_mGrad,
+    cufMat& mFirstMoment,
+    cufMat& mSecondMoment,
     float fLearningRate,
     float fBeta1,
     float fBeta2,
@@ -502,25 +523,28 @@ void cuda_Adam_update(
     float fEpsilon
 )
 {
-    if( (mData._nRows!=c_mGrad._nRows)||(mData._nCols!=c_mGrad._nCols)||
-        (mData._nRows!=mFirstMoment._nRows)||(mData._nCols!=mFirstMoment._nCols)||
-        (mData._nRows!=mSecondMoment._nRows)||(mData._nCols!=mSecondMoment._nCols) )
+    requireContiguousTensor(mData,"cuda_Adam_update");
+    requireContiguousTensor(c_mGrad,"cuda_Adam_update");
+    requireContiguousTensor(mFirstMoment,"cuda_Adam_update");
+    requireContiguousTensor(mSecondMoment,"cuda_Adam_update");
+    if( mData.shape()!=c_mGrad.shape()||mData.shape()!=mFirstMoment.shape()||
+        mData.shape()!=mSecondMoment.shape() )
     {
         throw std::runtime_error(
             "cuda_Adam_update: matrix size mismatch"
         );
     }
 
-    int nSize       =mData._nRows*mData._nCols;
+    int nSize       =static_cast<int>(mData.numel());
     int nThreads    =256;
     int nBlocks     =(nSize+nThreads-1)/nThreads;
     if( nSize<=0 )  {return;}
     //
     kernel_Adam_update<<<nBlocks,nThreads>>>(
-        mData._lpfDevice,
-        c_mGrad._lpfDevice,
-        mFirstMoment._lpfDevice,
-        mSecondMoment._lpfDevice,
+        mData.data(),
+        c_mGrad.data(),
+        mFirstMoment.data(),
+        mSecondMoment.data(),
         fLearningRate,
         fBeta1,
         fBeta2,
@@ -539,8 +563,8 @@ void cuda_Adam_update(
     }
 }
 void cuda_Conv2D_im2col(
-    cuMat& mResult,
-    const cuMat& c_mInput,
+    cufMat& mResult,
+    const cufMat& c_mInput,
     int nInputChannels,
     int nInputHeight,
     int nInputWidth,
@@ -551,14 +575,14 @@ void cuda_Conv2D_im2col(
     int nOutputWidth
 )
 {
-    int nSize       =mResult._nRows * mResult._nCols;
+    int nSize       =static_cast<int>(mResult.numel());
     int nThreads    =256;
     int nBlocks     =(nSize + nThreads - 1)/nThreads;
     if( nSize<=0 )    {return;}
     //
     kernel_Conv2D_im2col<<<nBlocks,nThreads>>>(
-        mResult._lpfDevice,
-        c_mInput._lpfDevice,
+        mResult.data(),
+        c_mInput.data(),
         nInputChannels,
         nInputHeight,
         nInputWidth,
@@ -567,7 +591,7 @@ void cuda_Conv2D_im2col(
         nPadding,
         nOutputHeight,
         nOutputWidth,
-        c_mInput._nCols,
+        c_mInput.cols(),
         nSize
     );
     //
@@ -581,25 +605,25 @@ void cuda_Conv2D_im2col(
     }
 }
 void cuda_Conv2D_pack_output(
-    cuMat& mResult,
-    const cuMat& c_mGemm,
-    const cuMat& c_mBias,
+    cufMat& mResult,
+    const cufMat& c_mGemm,
+    const cufMat& c_mBias,
     int nOutputHeight,
     int nOutputWidth
 )
 {
-    int nSize       =mResult._nRows * mResult._nCols;
+    int nSize       =static_cast<int>(mResult.numel());
     int nThreads    =256;
     int nBlocks     =(nSize + nThreads - 1)/nThreads;
     if( nSize<=0 )    {return;}
     //
     kernel_Conv2D_pack<<<nBlocks, nThreads>>>(
-        mResult._lpfDevice,
-        c_mGemm._lpfDevice,
-        c_mBias._lpfDevice,
-        c_mGemm._nRows,
+        mResult.data(),
+        c_mGemm.data(),
+        c_mBias.data(),
+        c_mGemm.rows(),
         nOutputHeight*nOutputWidth,
-        mResult._nCols,
+        mResult.cols(),
         nSize
     );
     //
@@ -612,17 +636,17 @@ void cuda_Conv2D_pack_output(
         );
     }
 }
-void cuda_Conv2D_unpack_grad( cuMat& mResult, const cuMat& c_mOutputGrad, int nOutputChannels,
+void cuda_Conv2D_unpack_grad( cufMat& mResult, const cufMat& c_mOutputGrad, int nOutputChannels,
                               int nOutputHeight, int nOutputWidth )
 {
-    int nSize       =mResult._nRows * mResult._nCols;
+    int nSize       =static_cast<int>(mResult.numel());
     int nThreads    =256;
     int nBlocks     =(nSize + nThreads - 1)/nThreads;
     if( nSize<=0 )    {return;}
     //
     kernel_Conv2D_unpack<<<nBlocks, nThreads>>>(
-        mResult._lpfDevice,
-        c_mOutputGrad._lpfDevice,
+        mResult.data(),
+        c_mOutputGrad.data(),
         nOutputChannels, nOutputHeight * nOutputWidth,
         nSize
     );
@@ -637,8 +661,8 @@ void cuda_Conv2D_unpack_grad( cuMat& mResult, const cuMat& c_mOutputGrad, int nO
     }
 }
 void cuda_Conv2D_col2im(
-    cuMat& mResult,
-    const cuMat& c_mColumnGrad,
+    cufMat& mResult,
+    const cufMat& c_mColumnGrad,
     int nInputChannels,
     int nInputHeight,
     int nInputWidth,
@@ -649,14 +673,14 @@ void cuda_Conv2D_col2im(
     int nOutputWidth
 )
 {
-    int nSize       =c_mColumnGrad._nRows * c_mColumnGrad._nCols;
+    int nSize       =c_mColumnGrad.rows() * c_mColumnGrad.cols();
     int nThreads    =256;
     int nBlocks     =(nSize + nThreads - 1)/nThreads;
     if( nSize<=0 )    {return;}
     //
     kernel_Conv2D_col2im<<<nBlocks, nThreads>>>(
-        mResult._lpfDevice,
-        c_mColumnGrad._lpfDevice,
+        mResult.data(),
+        c_mColumnGrad.data(),
         nInputChannels,
         nInputHeight,
         nInputWidth,
@@ -678,19 +702,19 @@ void cuda_Conv2D_col2im(
     }
 }
 void cuda_Conv2D_bias_backward(
-    cuMat& mResult,
-    const cuMat& c_mGemmGrad
+    cufMat& mResult,
+    const cufMat& c_mGemmGrad
 )
 {
-    int nSize       =c_mGemmGrad._nRows * c_mGemmGrad._nCols;
+    int nSize       =c_mGemmGrad.rows() * c_mGemmGrad.cols();
     int nThreads    =256;
     int nBlocks     =(nSize + nThreads - 1)/nThreads;
     if( nSize<=0 )    {return;}
     //
     kernel_Conv2D_bias<<<nBlocks, nThreads>>>(
-        mResult._lpfDevice,
-        c_mGemmGrad._lpfDevice,
-        c_mGemmGrad._nRows,
+        mResult.data(),
+        c_mGemmGrad.data(),
+        c_mGemmGrad.rows(),
         nSize
     );
     //
@@ -704,8 +728,8 @@ void cuda_Conv2D_bias_backward(
     }
 }
 void cuda_Pooling_forward(
-    cuMat& mResult,
-    const cuMat& c_mInput,
+    cufMat& mResult,
+    const cufMat& c_mInput,
     int nChannels,
     int nInputHeight,
     int nInputWidth,
@@ -715,14 +739,14 @@ void cuda_Pooling_forward(
     int nOutputWidth
 )
 {
-    int nSize       =mResult._nRows * mResult._nCols;
+    int nSize       =static_cast<int>(mResult.numel());
     int nThreads    =256;
     int nBlocks     =(nSize + nThreads - 1)/nThreads;
     if( nSize<=0 )    {return;}
     //
     kernel_Pooling_forward<<<nBlocks, nThreads>>>(
-        mResult._lpfDevice,
-        c_mInput._lpfDevice,
+        mResult.data(),
+        c_mInput.data(),
         nChannels,
         nInputHeight,
         nInputWidth,
@@ -743,9 +767,9 @@ void cuda_Pooling_forward(
     }
 }
 void cuda_Pooling_backward(
-    cuMat& mResult,
-    const cuMat& c_mInput,
-    const cuMat& c_mOutputGrad,
+    cufMat& mResult,
+    const cufMat& c_mInput,
+    const cufMat& c_mOutputGrad,
     int nChannels,
     int nInputHeight,
     int nInputWidth,
@@ -755,15 +779,15 @@ void cuda_Pooling_backward(
     int nOutputWidth
 )
 {
-    int nSize       =c_mOutputGrad._nRows * c_mOutputGrad._nCols;
+    int nSize       =c_mOutputGrad.rows() * c_mOutputGrad.cols();
     int nThreads    =256;
     int nBlocks     =(nSize + nThreads - 1)/nThreads;
     if( nSize<=0 )    {return;}
     //
     kernel_Pooling_backward<<<nBlocks, nThreads>>>(
-        mResult._lpfDevice,
-        c_mInput._lpfDevice,
-        c_mOutputGrad._lpfDevice,
+        mResult.data(),
+        c_mInput.data(),
+        c_mOutputGrad.data(),
         nChannels,
         nInputHeight,
         nInputWidth,
@@ -887,26 +911,26 @@ __global__ void kernel_SoftmaxCrossEntropy_forward(float* lpfResult,const float*
     if( nBatchIndex<nBatch )
     {
         // max(c_lpfLogits)を求める
-        float fMaxLogits    =c_lpfLogits[nBatchIndex*nClass];
+        float fMaxLogits    =c_lpfLogits[nBatchIndex];
         for( int nClassIndex=1;nClassIndex<nClass;nClassIndex++ )
         {
-            if( c_lpfLogits[nBatchIndex*nClass+nClassIndex]>fMaxLogits )
+            if( c_lpfLogits[nClassIndex*nBatch+nBatchIndex]>fMaxLogits )
             {
-                fMaxLogits =c_lpfLogits[nBatchIndex*nClass+nClassIndex];
+                fMaxLogits =c_lpfLogits[nClassIndex*nBatch+nBatchIndex];
             }
         }
         // expの合計
         float fSumExp       =0.0f;
         for( int nClassIndex=0;nClassIndex<nClass;nClassIndex++ )
         {
-            fSumExp +=expf(c_lpfLogits[nBatchIndex*nClass+nClassIndex]-fMaxLogits);
+            fSumExp +=expf(c_lpfLogits[nClassIndex*nBatch+nBatchIndex]-fMaxLogits);
         }
         // CrossEntropy
         float fLoss         =0.0;
         float fSumExpLog    =fMaxLogits + logf( fSumExp );
         for( int nClassIndex=0;nClassIndex<nClass;nClassIndex++ )
         {
-            int nIndex =nBatchIndex*nClass+nClassIndex;
+            int nIndex =nClassIndex*nBatch+nBatchIndex;
 
             fLoss   -=c_lpfTarget[nIndex] * (c_lpfLogits[nIndex] - fSumExpLog);
         }
@@ -924,24 +948,24 @@ __global__ void kernel_SoftmaxCrossEntropy_backward(float* lpfResult,const float
     if( nBatchIndex<nBatch )
     {
         // max(c_lpfLogits)
-        float fMaxLogits    =c_lpfLogits[nBatchIndex*nClass];
+        float fMaxLogits    =c_lpfLogits[nBatchIndex];
         for( int nClassIndex=0;nClassIndex<nClass;nClassIndex++ )
         {
-            if( c_lpfLogits[nBatchIndex*nClass+nClassIndex]>fMaxLogits )
+            if( c_lpfLogits[nClassIndex*nBatch+nBatchIndex]>fMaxLogits )
             {
-                fMaxLogits =c_lpfLogits[nBatchIndex*nClass+nClassIndex];
+                fMaxLogits =c_lpfLogits[nClassIndex*nBatch+nBatchIndex];
             }
         }
         // expの合計
         float fSumExp   =0.0f;
         for( int nClassIndex=0;nClassIndex<nClass;nClassIndex++ )
         {
-            fSumExp +=expf(c_lpfLogits[nBatchIndex*nClass+nClassIndex]-fMaxLogits);
+            fSumExp +=expf(c_lpfLogits[nClassIndex*nBatch+nBatchIndex]-fMaxLogits);
         }
         // gradient
         for( int nClassIndex=0;nClassIndex<nClass;nClassIndex++ )
         {
-            int nIndex =nBatchIndex*nClass+nClassIndex;
+            int nIndex =nClassIndex*nBatch+nBatchIndex;
             float fSoftmax  =expf( c_lpfLogits[nIndex]-fMaxLogits )/fSumExp;
 
             lpfResult[nIndex]    +=c_lpfGrad[0]*(fSoftmax-c_lpfTarget[nIndex])/static_cast<float>(nBatch);
@@ -970,7 +994,7 @@ __global__ void kernel_Adam_update(float* lpfData,const float* c_lpfGrad,float* 
 
 // 学習時のBatchNorm。1 CUDA threadが1特徴量 f を担当し、
 // その特徴量についてバッチ方向 b=0,...,B-1 を走査する。
-// cuMatはcolumn-majorなので x_{f,b} の位置は b*F+f になる。
+// Row-major [features,batch]なので x_{f,b} は f*B+b。
 __global__ void kernel_BatchNorm_forward_training(
     float* lpfResult,const float* c_lpfValue,
     const float* c_lpfGamma,const float* c_lpfBeta,
@@ -987,7 +1011,7 @@ __global__ void kernel_BatchNorm_forward_training(
     float fMean =0.0f;
     for( int nBatchIndex=0;nBatchIndex<nBatch;++nBatchIndex )
     {
-        fMean +=c_lpfValue[nBatchIndex*nFeatures+nFeature];
+        fMean +=c_lpfValue[nFeature*nBatch+nBatchIndex];
     }
     fMean /=static_cast<float>(nBatch);
 
@@ -996,7 +1020,7 @@ __global__ void kernel_BatchNorm_forward_training(
     float fVariance =0.0f;
     for( int nBatchIndex=0;nBatchIndex<nBatch;++nBatchIndex )
     {
-        const float fCentered =c_lpfValue[nBatchIndex*nFeatures+nFeature]-fMean;
+        const float fCentered =c_lpfValue[nFeature*nBatch+nBatchIndex]-fMean;
         fVariance +=fCentered*fCentered;
     }
     fVariance /=static_cast<float>(nBatch);
@@ -1017,7 +1041,7 @@ __global__ void kernel_BatchNorm_forward_training(
     lpfRunningVar[nFeature] =(1.0f-fMomentum)*lpfRunningVar[nFeature]+fMomentum*fRunningVariance;
     for( int nBatchIndex=0;nBatchIndex<nBatch;++nBatchIndex )
     {
-        const int nIndex        =nBatchIndex*nFeatures+nFeature;
+        const int nIndex        =nFeature*nBatch+nBatchIndex;
 
         // x_hat_{f,b} = (x_{f,b}-mu_f)/sqrt(sigma_f^2+epsilon)
         // y_{f,b} = gamma_f*x_hat_{f,b}+beta_f
@@ -1046,7 +1070,7 @@ __global__ void kernel_BatchNorm_forward_evaluation(
     lpfInvStd[nFeature] =fInvStd;
     for( int nBatchIndex=0;nBatchIndex<nBatch;++nBatchIndex )
     {
-        const int nIndex        =nBatchIndex*nFeatures+nFeature;
+        const int nIndex        =nFeature*nBatch+nBatchIndex;
         const float fNormalized =(c_lpfValue[nIndex]-c_lpfRunningMean[nFeature])*fInvStd;
 
         lpfNormalized[nIndex]   =fNormalized;
@@ -1071,7 +1095,7 @@ __global__ void kernel_BatchNorm_backward(
     float fGradNormalizedSum    =0.0f;
     for( int nBatchIndex=0;nBatchIndex<nBatch;++nBatchIndex )
     {
-        const int nIndex    =nBatchIndex*nFeatures+nFeature;
+        const int nIndex    =nFeature*nBatch+nBatchIndex;
         const float fGrad   =c_lpfOutputGrad[nIndex];
         fGradSum            +=fGrad;
         fGradNormalizedSum  +=fGrad*c_lpfNormalized[nIndex];
@@ -1083,7 +1107,7 @@ __global__ void kernel_BatchNorm_backward(
     const float fGammaInvStd =c_lpfGamma[nFeature]*c_lpfInvStd[nFeature];
     for( int nBatchIndex=0;nBatchIndex<nBatch;++nBatchIndex )
     {
-        const int nIndex    =nBatchIndex*nFeatures+nFeature;
+        const int nIndex    =nFeature*nBatch+nBatchIndex;
         if( isTraining )
         {
             // dL/dx_{f,b} = gamma_f*inv_std_f/B *
@@ -1123,9 +1147,9 @@ __global__ void kernel_Conv2D_im2col(
     {
         // p = (k_y*K+k_x)*C_in+c_i, q = n*(H_out*W_out)+o
         // C[p,q] = X[n,o_y*S+k_y-P,o_x*S+k_x-P,c_i]
-        const int nPatchSize    = nKernelSize * nKernelSize * nChannels;
-        const int nPatchIndex   = nIndex % nPatchSize;
-        const int nColumn       = nIndex / nPatchSize;
+        const int nColumns      = nBatch * nOutputHeight * nOutputWidth;
+        const int nPatchIndex   = nIndex / nColumns;
+        const int nColumn       = nIndex % nColumns;
         const int nPosition     = nColumn % ( nOutputHeight * nOutputWidth );
         const int nSample       = nColumn / ( nOutputHeight * nOutputWidth );
         const int nChannel      = nPatchIndex % nChannels;
@@ -1139,8 +1163,7 @@ __global__ void kernel_Conv2D_im2col(
 
         lpfColumns[nIndex]  =
             ( (nInputY>=0)&&(nInputY<nInputHeight)&&(nInputX>=0)&&(nInputX<nInputWidth) )
-                ? c_lpfInput[nSample * ( nInputHeight * nInputWidth * nChannels ) +
-                            ( nInputY * nInputWidth + nInputX ) * nChannels + nChannel]
+                ? c_lpfInput[(( nInputY * nInputWidth + nInputX ) * nChannels + nChannel) * nBatch + nSample]
                 : 0.0f;
     }
 }
@@ -1161,13 +1184,13 @@ __global__ void kernel_Conv2D_pack(
     {
         return;
     }
-    const int nRow      = nIndex % ( nPositions * nOutputChannels );
-    const int nSample   = nIndex / ( nPositions * nOutputChannels );
+    const int nRow      = nIndex / nBatch;
+    const int nSample   = nIndex % nBatch;
     const int nChannel  = nRow % nOutputChannels;
     const int nPosition = nRow / nOutputChannels;
     // Y[n,o,c_o] = (W*C)[c_o,n*(H_out*W_out)+o] + b[c_o]
     lpfOutput[nIndex] =
-        c_lpfGemm[( nSample * nPositions + nPosition ) * nOutputChannels + nChannel] +
+        c_lpfGemm[nChannel * (nBatch*nPositions) + nSample * nPositions + nPosition] +
         c_lpfBias[nChannel];
 }
 
@@ -1185,13 +1208,14 @@ __global__ void kernel_Conv2D_unpack(
     {
         return;
     }
-    const int nChannel  = nIndex % nOutputChannels;
-    const int nColumn   = nIndex / nOutputChannels;
+    const int nColumns  = nSize / nOutputChannels;
+    const int nChannel  = nIndex / nColumns;
+    const int nColumn   = nIndex % nColumns;
     const int nSample   = nColumn / nPositions;
     const int nPosition = nColumn % nPositions;
     // G[c_o,n*(H_out*W_out)+o] = dL/dY[n,o,c_o]
-    lpfGemmGrad[nIndex] = c_lpfOutputGrad[nSample * ( nPositions * nOutputChannels ) +
-                                          nPosition * nOutputChannels + nChannel];
+    const int nBatch = nColumns / nPositions;
+    lpfGemmGrad[nIndex] = c_lpfOutputGrad[(nPosition*nOutputChannels+nChannel)*nBatch+nSample];
 }
 
 __global__ void kernel_Conv2D_col2im(
@@ -1215,8 +1239,9 @@ __global__ void kernel_Conv2D_col2im(
         return;
     }
     const int nPatchSize    = nKernelSize * nKernelSize * nChannels;
-    const int nPatchIndex   = nIndex % nPatchSize;
-    const int nColumn       = nIndex / nPatchSize;
+    const int nColumns      = nSize / nPatchSize;
+    const int nPatchIndex   = nIndex / nColumns;
+    const int nColumn       = nIndex % nColumns;
     const int nPosition     = nColumn % ( nOutputHeight * nOutputWidth );
     const int nSample       = nColumn / ( nOutputHeight * nOutputWidth );
     const int nChannel      = nPatchIndex % nChannels;
@@ -1228,8 +1253,8 @@ __global__ void kernel_Conv2D_col2im(
     {
         // dL/dX[n,y,x,c_i] += sum_(o,k_y,k_x) dL/dC[p,q]
         // 複数patchが同じ入力要素へ重なるためatomicAddする。
-        atomicAdd( lpfInputGrad + nSample * ( nInputHeight * nInputWidth * nChannels ) +
-                       ( nInputY * nInputWidth + nInputX ) * nChannels + nChannel,
+        const int nBatch = nColumns / (nOutputHeight*nOutputWidth);
+        atomicAdd( lpfInputGrad + (( nInputY * nInputWidth + nInputX ) * nChannels + nChannel)*nBatch+nSample,
                    c_lpfColumnGrad[nIndex] );
     }
 }
@@ -1246,7 +1271,8 @@ __global__ void kernel_Conv2D_bias(
     if( nIndex<nSize )
     {
         // dL/db[c_o] += sum_(n,o) G[c_o,n*(H_out*W_out)+o]
-        atomicAdd( lpfBiasGrad + nIndex % nChannels, c_lpfGemmGrad[nIndex] );
+        const int nColumns =nSize/nChannels;
+        atomicAdd( lpfBiasGrad + nIndex/nColumns, c_lpfGemmGrad[nIndex] );
     }
 }
 
@@ -1268,9 +1294,11 @@ __global__ void kernel_Pooling_forward(
     {
         return;
     }
-    const int nChannel  = nIndex % nChannels;
-    const int nPosition = ( nIndex / nChannels ) % nPositions;
-    const int nSample   = nIndex / ( nChannels * nPositions );
+    const int nBatch    = nSize/(nChannels*nPositions);
+    const int nFeature  = nIndex/nBatch;
+    const int nSample   = nIndex%nBatch;
+    const int nChannel  = nFeature%nChannels;
+    const int nPosition = nFeature/nChannels;
     const int nOutputY  = nPosition / nOutputWidth;
     const int nOutputX  = nPosition % nOutputWidth;
     // Y[n,o_y,o_x,c] = max_(0<=k_y,k_x<K) X[n,o_y*S+k_y,o_x*S+k_x,c]
@@ -1279,11 +1307,9 @@ __global__ void kernel_Pooling_forward(
     {
         for( int nKernelX = 0; nKernelX < nKernelSize; ++nKernelX )
         {
-            const float fValue = c_lpfInput[nSample * ( nInputHeight * nInputWidth * nChannels ) +
-                                            ( ( nOutputY * nStride + nKernelY ) * nInputWidth +
-                                              nOutputX * nStride + nKernelX ) *
-                                                nChannels +
-                                            nChannel];
+            const int nInputFeature =(( nOutputY*nStride+nKernelY)*nInputWidth+
+                                      nOutputX*nStride+nKernelX)*nChannels+nChannel;
+            const float fValue =c_lpfInput[nInputFeature*nBatch+nSample];
             if( fValue > fMaximum )
             {
                 fMaximum = fValue;
@@ -1313,15 +1339,17 @@ __global__ void kernel_Pooling_backward(
     {
         return;
     }
-    const int nChannel  = nIndex % nChannels;
-    const int nPosition = ( nIndex / nChannels ) % nPositions;
-    const int nSample   = nIndex / ( nChannels * nPositions );
+    const int nBatch    = nSize/(nChannels*nPositions);
+    const int nFeature  = nIndex/nBatch;
+    const int nSample   = nIndex%nBatch;
+    const int nChannel  = nFeature%nChannels;
+    const int nPosition = nFeature/nChannels;
     const int nOutputY  = nPosition / nOutputWidth;
     const int nOutputX  = nPosition % nOutputWidth;
     // a = argmax_(k_y,k_x) X[n,o_y*S+k_y,o_x*S+k_x,c]
     // 比較は > のみなので、同値なら走査順で最初の位置を保持する。
     int nBestRow = ( nOutputY * nStride * nInputWidth + nOutputX * nStride ) * nChannels + nChannel;
-    float fMaximum = c_lpfInput[nSample * ( nInputHeight * nInputWidth * nChannels ) + nBestRow];
+    float fMaximum = c_lpfInput[nBestRow*nBatch+nSample];
     for( int nKernelY = 0; nKernelY < nKernelSize; ++nKernelY )
     {
         for( int nKernelX = 0; nKernelX < nKernelSize; ++nKernelX )
@@ -1330,8 +1358,7 @@ __global__ void kernel_Pooling_backward(
                                nOutputX * nStride + nKernelX ) *
                                  nChannels +
                              nChannel;
-            const float fValue =
-                c_lpfInput[nSample * ( nInputHeight * nInputWidth * nChannels ) + nRow];
+            const float fValue =c_lpfInput[nRow*nBatch+nSample];
             if( fValue > fMaximum )
             {
                 fMaximum = fValue;
@@ -1341,6 +1368,6 @@ __global__ void kernel_Pooling_backward(
     }
     // dL/dX[n,a,c] += dL/dY[n,o_y,o_x,c]
     // windowが重なる場合は同じ入力へ複数の勾配が流れるためatomicAddする。
-    atomicAdd( lpfInputGrad + nSample * ( nInputHeight * nInputWidth * nChannels ) + nBestRow,
+    atomicAdd( lpfInputGrad + nBestRow*nBatch+nSample,
                c_lpfOutputGrad[nIndex] );
 }

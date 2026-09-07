@@ -19,17 +19,17 @@ namespace {
     void requireSameTensor(const Tensor& expected,const Tensor& actual)
     {
         require(
-            (expected._mData._nRows==actual._mData._nRows)&&
-            (expected._mData._nCols==actual._mData._nCols),
+            (expected._mData.rows()==actual._mData.rows())&&
+            (expected._mData.cols()==actual._mData.cols()),
             "tensor shape mismatch"
         );
 
-        Mat expectedHost( expected._mData._nRows,expected._mData._nCols );
-        Mat actualHost( actual._mData._nRows,actual._mData._nCols );
+        Mat expectedHost( expected._mData.rows(),expected._mData.cols() );
+        Mat actualHost( actual._mData.rows(),actual._mData.cols() );
         expected._mData.upload( expectedHost );
         actual._mData.upload( actualHost );
 
-        const int size =expectedHost._nRows*expectedHost._nCols;
+        const int size =expectedHost.rows()*expectedHost.cols();
         for( int i=0;i<size;++i )
         {
             require(

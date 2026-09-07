@@ -35,16 +35,16 @@ void requireSameState(
             "state name mismatch"
         );
         Mat mExpected(
-            c_nmtExpected[nEntry].lpTensor->_mData._nRows,
-            c_nmtExpected[nEntry].lpTensor->_mData._nCols
+            c_nmtExpected[nEntry].lpTensor->_mData.rows(),
+            c_nmtExpected[nEntry].lpTensor->_mData.cols()
         );
         Mat mActual(
-            c_nmtActual[nEntry].lpTensor->_mData._nRows,
-            c_nmtActual[nEntry].lpTensor->_mData._nCols
+            c_nmtActual[nEntry].lpTensor->_mData.rows(),
+            c_nmtActual[nEntry].lpTensor->_mData.cols()
         );
         c_nmtExpected[nEntry].lpTensor->_mData.upload( mExpected );
         c_nmtActual[nEntry].lpTensor->_mData.upload( mActual );
-        for( int nValue=0;nValue<mExpected._nRows*mExpected._nCols;++nValue )
+        for( int nValue=0;nValue<mExpected.rows()*mExpected.cols();++nValue )
         {
             require(
                 mExpected._lpfHost[nValue]==mActual._lpfHost[nValue],
@@ -75,8 +75,8 @@ void checkIntermediateShapes()
     std::vector<std::shared_ptr<Tensor>> spmValues{makeInput(1)};
     auto spmFirst =lyrFirst.forward( spmValues );
     require(
-        (spmFirst->_mData._nRows==32*16*16)&&
-        (spmFirst->_mData._nCols==1)&&
+        (spmFirst->_mData.rows()==32*16*16)&&
+        (spmFirst->_mData.cols()==1)&&
         (lyrFirst.outputHeight()==16),
         "first block shape mismatch"
     );
@@ -86,8 +86,8 @@ void checkIntermediateShapes()
     spmValues ={spmFirst};
     auto spmSecond =lyrSecond.forward( spmValues );
     require(
-        (spmSecond->_mData._nRows==64*8*8)&&
-        (spmSecond->_mData._nCols==1)&&
+        (spmSecond->_mData.rows()==64*8*8)&&
+        (spmSecond->_mData.cols()==1)&&
         (lyrSecond.outputWidth()==8),
         "second block shape mismatch"
     );
@@ -111,14 +111,14 @@ void checkModel()
     std::vector<std::shared_ptr<Tensor>> spmInputs{spmInput};
     auto spmLogits =nntModel.forward( spmInputs );
     require(
-        (spmLogits->_mData._nRows==10)&&
-        (spmLogits->_mData._nCols==2),
+        (spmLogits->_mData.rows()==10)&&
+        (spmLogits->_mData.cols()==2),
         "logits shape mismatch"
     );
 
     auto spmLoss =nntModel.loss( spmInput,spmTarget );
     require(
-        (spmLoss->_mData._nRows==1)&&(spmLoss->_mData._nCols==1),
+        (spmLoss->_mData.rows()==1)&&(spmLoss->_mData.cols()==1),
         "loss shape mismatch"
     );
     nntModel.zero_grads();
@@ -126,7 +126,7 @@ void checkModel()
 
     nntModel.setTraining( false );
     require( !nntModel.isTraining(),"evaluation mode was not set" );
-    std::vector<std::shared_ptr<Tensor>> spmInputs{spmInput};
+    spmInputs ={spmInput};
     auto spmFirst =nntModel.forward( spmInputs );
     spmInputs ={spmInput};
     auto spmSecond =nntModel.forward( spmInputs );

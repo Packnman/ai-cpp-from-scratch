@@ -9,13 +9,13 @@ namespace
 {
 void initWeight(Tensor& mTensor,int nFanIn,std::mt19937& rngRandom)
 {
-    Mat mHost( mTensor._mData._nRows,mTensor._mData._nCols );
+    Mat mHost( mTensor._mData.rows(),mTensor._mData.cols() );
     std::normal_distribution<float> dstNormal(
         0.0f,
         std::sqrt(2.0f/static_cast<float>(nFanIn))
     );
     for( int nIndex=0;
-         nIndex<mHost._nRows*mHost._nCols;
+         nIndex<mHost.rows()*mHost.cols();
          ++nIndex )
     {
         mHost._lpfHost[nIndex] =dstNormal( rngRandom );
@@ -114,14 +114,14 @@ LayerConv2D::~LayerConv2D() = default;
 
 void LayerConv2D::init(std::mt19937& rngRandom)
 {
-    Mat mHost( _spmWeight->_mData._nRows, _spmWeight->_mData._nCols );
+    Mat mHost( _spmWeight->_mData.rows(), _spmWeight->_mData.cols() );
     // fan_in = K^2 * C_in
     // W_ij ~ N(0, 2 / fan_in)  (He initialization)
     std::normal_distribution<float> dstNormal(
         0.0f,
         std::sqrt(2.0f/static_cast<float>(_nFanIn))
     );
-    const int nCount    =mHost._nRows * mHost._nCols;
+    const int nCount    =mHost.rows() * mHost.cols();
     for( int nIndex=0;nIndex<nCount;++nIndex )
     {
         mHost._lpfHost[nIndex]  =dstNormal( rngRandom );
@@ -242,7 +242,7 @@ Cifar10DenseLayer::Cifar10DenseLayer(
 
 void Cifar10DenseLayer::init(std::mt19937& rngRandom)
 {
-    initWeight( *_spmWeight,_spmWeight->_mData._nCols,rngRandom );
+    initWeight( *_spmWeight,_spmWeight->_mData.cols(),rngRandom );
     cuda_fill( _spmBias->_mData,0.0f );
     cuda_fill( _spmGamma->_mData,1.0f );
     cuda_fill( _spmBeta->_mData,0.0f );
@@ -284,7 +284,7 @@ Cifar10OutputLayer::Cifar10OutputLayer(int nInput,int nOutput)
 
 void Cifar10OutputLayer::init(std::mt19937& rngRandom)
 {
-    initWeight( *_spmWeight,_spmWeight->_mData._nCols,rngRandom );
+    initWeight( *_spmWeight,_spmWeight->_mData.cols(),rngRandom );
     cuda_fill( _spmBias->_mData,0.0f );
 }
 
@@ -332,8 +332,8 @@ std::shared_ptr<Tensor> NeuralNet_Cifar10::forward(
             "NeuralNet_Cifar10::forward: exactly one non-null input is required"
         );
     }
-    if( (spmInputs[0]->_mData._nRows!=32*32*3)||
-        (spmInputs[0]->_mData._nCols<=0) )
+    if( (spmInputs[0]->_mData.rows()!=32*32*3)||
+        (spmInputs[0]->_mData.cols()<=0) )
     {
         throw std::runtime_error(
             "NeuralNet_Cifar10::forward: input must have shape 3072 x batch"
@@ -361,8 +361,8 @@ std::shared_ptr<Tensor> NeuralNet_Cifar10::loss(
             "NeuralNet_Cifar10::loss: input and target must be non-null"
         );
     }
-    if( (c_spmTarget->_mData._nRows!=10)||
-        (c_spmTarget->_mData._nCols!=c_spmInput->_mData._nCols) )
+    if( (c_spmTarget->_mData.rows()!=10)||
+        (c_spmTarget->_mData.cols()!=c_spmInput->_mData.cols()) )
     {
         throw std::runtime_error(
             "NeuralNet_Cifar10::loss: target must have shape 10 x batch"

@@ -5,8 +5,16 @@
 
 
 Tensor::Tensor(int nRows,int nCols)
-    :_mData( nRows,nCols ),
-     _mGrad( nRows,nCols ),
+    :Tensor( std::vector<std::int64_t>{nRows,nCols} )
+{
+}
+Tensor::Tensor(std::initializer_list<std::int64_t> shape)
+    :Tensor( std::vector<std::int64_t>(shape) )
+{
+}
+Tensor::Tensor(const std::vector<std::int64_t>& shape)
+    :_mData( shape ),
+     _mGrad( shape ),
      _spContext( nullptr )
 {
     cuda_fill( _mGrad,0.0f );
@@ -39,7 +47,7 @@ void Tensor::backward()
         // 出力番号を保ったまま、それぞれの出力勾配をFunctionへ渡す。
         // 破棄済みの出力はnullptrとなり、勾配なしとして扱う。
         std::vector<std::shared_ptr<Tensor>> spmOutputs( lpContext->_wpmOutputs.size() );
-        std::vector<const cuMat*> lpmOutputGrads(
+        std::vector<const cufMat*> lpmOutputGrads(
             lpContext->_wpmOutputs.size(),
             nullptr
         );

@@ -35,11 +35,11 @@ BatchNorm::BatchNorm(
     {
         throw std::invalid_argument("BatchNorm: epsilon must be positive");
     }
-    const int nFeatures =lpGamma->_mData._nRows;
-    if( (lpGamma->_mData._nCols!=1)||
-        (lpBeta->_mData._nRows!=nFeatures)||(lpBeta->_mData._nCols!=1)||
-        (lpRunningMean->_mData._nRows!=nFeatures)||(lpRunningMean->_mData._nCols!=1)||
-        (lpRunningVar->_mData._nRows!=nFeatures)||(lpRunningVar->_mData._nCols!=1) )
+    const int nFeatures =lpGamma->_mData.rows();
+    if( (lpGamma->_mData.cols()!=1)||
+        (lpBeta->_mData.rows()!=nFeatures)||(lpBeta->_mData.cols()!=1)||
+        (lpRunningMean->_mData.rows()!=nFeatures)||(lpRunningMean->_mData.cols()!=1)||
+        (lpRunningVar->_mData.rows()!=nFeatures)||(lpRunningVar->_mData.cols()!=1) )
     {
         throw std::invalid_argument("BatchNorm: state tensors must have shape features x 1");
     }
@@ -56,7 +56,7 @@ bool BatchNorm::isTraining() const
     return _isTraining;
 }
 void BatchNorm::backward(
-    const std::vector<const cuMat*>& c_lpmOutputGrads,
+    const std::vector<const cufMat*>& c_lpmOutputGrads,
     const std::vector<std::shared_ptr<Tensor>>& c_spmInputs,
     const std::vector<std::shared_ptr<Tensor>>& c_spmOutputs
 )
@@ -88,16 +88,16 @@ BatchNorm::forward(
         throw std::runtime_error("BatchNorm::forward: exactly one input is required");
     }
 
-    const int nFeatures =_lpmGamma->_mData._nRows;
-    const int nBatch    =c_spmInputs[0]->_mData._nCols;
-    if( (c_spmInputs[0]->_mData._nRows!=nFeatures)||
-        (c_spmInputs[0]->_mData._nCols<=0) )
+    const int nFeatures =_lpmGamma->_mData.rows();
+    const int nBatch    =c_spmInputs[0]->_mData.cols();
+    if( (c_spmInputs[0]->_mData.rows()!=nFeatures)||
+        (c_spmInputs[0]->_mData.cols()<=0) )
     {
         throw std::runtime_error("BatchNorm::forward: input must have shape features x batch");
     }
 
-    _mNormalized    =cuMat( nFeatures,nBatch );
-    _mInvStd        =cuMat( nFeatures,1 );
+    _mNormalized    =cufMat( nFeatures,nBatch );
+    _mInvStd        =cufMat( nFeatures,1 );
     auto spmResult  =std::make_shared<Tensor>( nFeatures,nBatch );
     _wasTraining    =_isTraining;
     //

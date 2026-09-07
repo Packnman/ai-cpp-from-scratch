@@ -15,7 +15,7 @@ Euler::Euler()
 Euler::Euler(const Mat& c_mValue)
     :Vec(c_mValue)
 {
-    if( c_mValue._nRows!=3 )
+    if( c_mValue.rows()!=3 )
     {
         throw std::runtime_error(
             "Euler::Euler: vector size must be 3"

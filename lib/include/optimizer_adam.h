@@ -8,8 +8,8 @@
 struct NamedAdamState
 {
     std::string strName;
-    cuMat* lpmFirstMoment =nullptr;
-    cuMat* lpmSecondMoment =nullptr;
+    cufMat* lpmFirstMoment =nullptr;
+    cufMat* lpmSecondMoment =nullptr;
 };
 
 
@@ -20,10 +20,11 @@ using AdamState =OptimizerState<NamedAdamState>;
 class AdamParams : public OptimizerParams{
 public:
     AdamParams(int nRows,int nCols);
+    explicit AdamParams(const std::vector<std::int64_t>& shape);
     ~AdamParams();
 public:
-    cuMat   _mM;    // 勾配の移動平均
-    cuMat   _mV;    // 勾配二乗の移動平均
+    cufMat   _mM;    // 勾配の移動平均
+    cufMat   _mV;    // 勾配二乗の移動平均
 };
 
 // --------------------------

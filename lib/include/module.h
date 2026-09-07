@@ -9,8 +9,10 @@
 #include "cuda_tensor.h"
 
 constexpr char MODEL_MAGIC[8] ={'A','I','C','P','P','M','D','L'};
-constexpr std::uint32_t MODEL_VERSION =1;
+constexpr std::uint32_t MODEL_VERSION =2;
 constexpr std::uint32_t MAX_NAME_LENGTH =4096;
+
+class Module;
 
 struct NamedTensor
 {

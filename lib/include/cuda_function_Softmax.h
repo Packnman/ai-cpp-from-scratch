@@ -2,30 +2,14 @@
 
 #include "cuda_function.h"
 
-
-
 // --------------------------
-// Pooling
+// Softmax
 // --------------------------
-class Pooling : public Function
-{
+class Softmax: public Function{
 public:
-    Pooling(
-        int nChannels,
-        int nInputHeight,
-        int nInputWidth,
-        int nKernelSize =2,
-        int nStride =2
-    );
-    ~Pooling() override;
-private:
-    int _nChannels;
-    int _nInputHeight;
-    int _nInputWidth;
-    int _nKernelSize;
-    int _nStride;
-    int _nOutputHeight;
-    int _nOutputWidth;
+    Softmax();
+    ~Softmax();
+
 public:
     void backward(
         const std::vector<const cufMat*>& c_lpmOutputGrads,
@@ -35,5 +19,4 @@ public:
     std::vector<std::shared_ptr<Tensor>> forward(
         const std::vector<std::shared_ptr<Tensor>>& c_spmInputs
     ) override;
-
 };

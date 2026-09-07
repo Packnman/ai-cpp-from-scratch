@@ -16,18 +16,18 @@ void req( bool isCondition, const char* c_lpszMessage )
         throw std::runtime_error( c_lpszMessage );
     }
 }
-void fill( cuMat& mValue, const std::vector<float>& c_fValues )
+void fill( cufMat& mValue, const std::vector<float>& c_fValues )
 {
-    Mat mHost( mValue._nRows, mValue._nCols );
+    Mat mHost( mValue.rows(), mValue.cols() );
     for( size_t nIndex = 0; nIndex < c_fValues.size(); ++nIndex )
     {
         mHost._lpfHost[nIndex] = c_fValues[nIndex];
     }
     mValue.download( mHost );
 }
-Mat host( const cuMat& c_mValue )
+Mat host( const cufMat& c_mValue )
 {
-    Mat mHost( c_mValue._nRows, c_mValue._nCols );
+    Mat mHost( c_mValue.rows(), c_mValue.cols() );
     c_mValue.upload( mHost );
     return mHost;
 }
@@ -44,7 +44,7 @@ void pooling()
     {
         req( mOutputHost._lpfHost[nIndex] == fExpectedOutput[nIndex], "forward" );
     }
-    cuMat mOutputGrad( 4, 1 );
+    cufMat mOutputGrad( 4, 1 );
     fill( mOutputGrad, { 1, 2, 3, 4 } );
     mplPool.backward( { &mOutputGrad }, { spmInput }, { spmOutput } );
     Mat mInputGrad = host( spmInput->_mGrad );
@@ -58,7 +58,7 @@ void pooling()
 void channels()
 {
     auto spmInput = std::make_shared<Tensor>( 8, 2 );
-    fill( spmInput->_mData, { 1, 8, 3, 2, 4, 7, 6, 5, 9, 1, 2, 10, 3, 4, 8, 7 } );
+    fill( spmInput->_mData, { 1, 9, 8, 1, 3, 2, 2, 10, 4, 3, 7, 4, 6, 8, 5, 7 } );
     Pooling mplPool( 2, 2, 2 );
     auto spmOutput = mplPool( { spmInput } );
     Mat mOutputHost = host( spmOutput->_mData );
@@ -118,11 +118,11 @@ void cifarBatchBackward()
     Pooling mplPool( CHANNELS,HEIGHT,WIDTH );
     auto spmOutput =mplPool( {spmInput} );
     req(
-        (spmOutput->_mData._nRows==CHANNELS*16*16)&&
-        (spmOutput->_mData._nCols==BATCH),
+        (spmOutput->_mData.rows()==CHANNELS*16*16)&&
+        (spmOutput->_mData.cols()==BATCH),
         "CIFAR batch output shape"
     );
-    cuMat mOutputGrad( CHANNELS*16*16,BATCH );
+    cufMat mOutputGrad( CHANNELS*16*16,BATCH );
     cuda_fill( mOutputGrad,1.0f );
     mplPool.backward( {&mOutputGrad},{spmInput},{spmOutput} );
     const cudaError_t cudError =cudaDeviceSynchronize();

@@ -28,15 +28,15 @@ private:
     float   _fEpsilon;
     bool    _isTraining;
     bool    _wasTraining;
-    cuMat   _mNormalized;
-    cuMat   _mInvStd;
+    cufMat   _mNormalized;
+    cufMat   _mInvStd;
 
 public:
     void setTraining(bool isTraining);
     bool isTraining() const;
 
     void backward(
-        const std::vector<const cuMat*>& c_lpmOutputGrads,
+        const std::vector<const cufMat*>& c_lpmOutputGrads,
         const std::vector<std::shared_ptr<Tensor>>& c_spmInputs,
         const std::vector<std::shared_ptr<Tensor>>& c_spmOutputs
     ) override;

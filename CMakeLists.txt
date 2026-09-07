@@ -19,14 +19,23 @@ set(AI_CPP_CUDA_ARCHITECTURES "86" CACHE STRING
 add_library(ai_cpp STATIC
     lib/src/cuda_matrix.cpp
     lib/src/cuda_matrix.cu
-    lib/src/cuda_spatial.cu
-    lib/src/cuda_spatial_function.cpp
     lib/src/cuda_function.cpp
+    lib/src/cuda_function_BatchNorm.cpp
+    lib/src/cuda_function_Conv2D.cpp
+    lib/src/cuda_function_Dropout.cpp
+    lib/src/cuda_function_GELU.cpp
+    lib/src/cuda_function_Linear.cpp
+    lib/src/cuda_function_Pooling.cpp
+    lib/src/cuda_function_ReLU.cpp
+    lib/src/cuda_function_SoftmaxCrossEntropy.cpp
     lib/src/cuda_tensor.cpp
     lib/src/module.cpp
-    lib/src/layer_conv2d.cpp
     lib/src/matrix.cpp
+    lib/src/matrix_euler.cpp
+    lib/src/matrix_quaternion.cpp
     lib/src/optimizer.cpp
+    lib/src/optimizer_SGD.cpp
+    lib/src/optimizer_adam.cpp
 )
 target_include_directories(ai_cpp PUBLIC ${PROJECT_SOURCE_DIR}/lib/include)
 target_link_libraries(ai_cpp PUBLIC CUDA::cudart CUDA::cublas CUDA::curand)
@@ -63,6 +72,14 @@ target_include_directories(cifar10_train PRIVATE
 target_link_libraries(cifar10_train PRIVATE ai_cpp)
 
 if(BUILD_TESTING)
+    add_executable(cuda_index_tensor_check tests/cuda_index_tensor_check.cpp)
+    target_include_directories(cuda_index_tensor_check PRIVATE ${PROJECT_SOURCE_DIR}/lib/include)
+    target_link_libraries(cuda_index_tensor_check PRIVATE ai_cpp)
+
+    add_executable(row_major_check tests/row_major_check.cpp)
+    target_include_directories(row_major_check PRIVATE ${PROJECT_SOURCE_DIR}/lib/include)
+    target_link_libraries(row_major_check PRIVATE ai_cpp)
+
     add_executable(multi_output_check tests/multi_output_check.cpp)
     target_include_directories(multi_output_check PRIVATE
         ${PROJECT_SOURCE_DIR}/lib/include
@@ -95,8 +112,9 @@ if(BUILD_TESTING)
     )
     target_link_libraries(batchnorm_check PRIVATE ai_cpp)
 
-    add_executable(conv2d_check tests/conv2d_check.cpp)
+    add_executable(conv2d_check tests/conv2d_check.cpp src/neuralnet_cifar10.cpp)
     target_include_directories(conv2d_check PRIVATE
+        ${PROJECT_SOURCE_DIR}/include
         ${PROJECT_SOURCE_DIR}/lib/include
     )
     target_link_libraries(conv2d_check PRIVATE ai_cpp)
@@ -128,6 +146,8 @@ if(BUILD_TESTING)
     target_link_libraries(cifar10_model_check PRIVATE ai_cpp)
 
     add_test(NAME cuda_check COMMAND cuda_check)
+    add_test(NAME cuda_index_tensor_check COMMAND cuda_index_tensor_check)
+    add_test(NAME row_major_check COMMAND row_major_check)
     add_test(NAME multi_output_check COMMAND multi_output_check)
     add_test(NAME model_state_check COMMAND model_state_check)
     add_test(NAME dropout_check COMMAND dropout_check)

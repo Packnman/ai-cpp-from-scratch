@@ -50,12 +50,12 @@ Conv2D::Conv2D( Tensor* lpWeight, Tensor* lpBias, int nInputChannels, int nInput
             "Conv2D: dimensions exceed int range"
         );
     }
-    if( (lpWeight->_mData._nRows<=0)||(lpWeight->_mData._nCols!=nPatchSize) )
+    if( (lpWeight->_mData.rows()<=0)||(lpWeight->_mData.cols()!=nPatchSize) )
     {
         throw std::invalid_argument( "Conv2D: invalid weight shape" );
     }
-    _nOutputChannels    =lpWeight->_mData._nRows;
-    if( (lpBias->_mData._nRows!=_nOutputChannels)||(lpBias->_mData._nCols!=1) )
+    _nOutputChannels    =lpWeight->_mData.rows();
+    if( (lpBias->_mData.rows()!=_nOutputChannels)||(lpBias->_mData.cols()!=1) )
     {
         throw std::invalid_argument( "Conv2D: invalid bias shape" );
     }
@@ -77,20 +77,20 @@ std::vector<std::shared_ptr<Tensor>> Conv2D::forward(
     const long long nInputRows  =static_cast<long long>( _nInputHeight ) * _nInputWidth * _nInputChannels;
     const long long nPositions  =static_cast<long long>( _nOutputHeight ) * _nOutputWidth;
     const long long nOutputRows =nPositions * _nOutputChannels;
-    const long long nCombined   =nPositions * c_spmInputs[0]->_mData._nCols;
-    if( (c_spmInputs[0]->_mData._nRows!=nInputRows)||(c_spmInputs[0]->_mData._nCols<=0) )
+    const long long nCombined   =nPositions * c_spmInputs[0]->_mData.cols();
+    if( (c_spmInputs[0]->_mData.rows()!=nInputRows)||(c_spmInputs[0]->_mData.cols()<=0) )
     {
         throw std::runtime_error( "Conv2D::forward: input shape mismatch" );
     }
     if( (nOutputRows>INT_MAX)||(nCombined>INT_MAX)||
-        (nOutputRows*c_spmInputs[0]->_mData._nCols>INT_MAX)||
-        (nCombined*_lpmWeight->_mData._nCols>INT_MAX)||
+        (nOutputRows*c_spmInputs[0]->_mData.cols()>INT_MAX)||
+        (nCombined*_lpmWeight->_mData.cols()>INT_MAX)||
         (nCombined*_nOutputChannels>INT_MAX) )
     {
         throw std::overflow_error( "Conv2D::forward: size exceeds int range" );
     }
-    cuMat mColumns( _lpmWeight->_mData._nCols, static_cast<int>( nCombined ) );
-    cuMat mProduct( _nOutputChannels, static_cast<int>( nCombined ) );
+    cufMat mColumns( _lpmWeight->_mData.cols(), static_cast<int>( nCombined ) );
+    cufMat mProduct( _nOutputChannels, static_cast<int>( nCombined ) );
     //
     // Y[n,y_out,x_out,c_o] = b[c_o]
     //   + sum_(k_y,k_x,c_i) W[c_o,(k_y*K+k_x)*C_in+c_i]
@@ -114,7 +114,7 @@ std::vector<std::shared_ptr<Tensor>> Conv2D::forward(
     // P = W * C
     // Y[n,o,c_o] = P[c_o,n*(H_out*W_out)+o] + b[c_o]
     cuda_gemm( mProduct, _lpmWeight->_mData, mColumns );
-    auto spmOutput  =std::make_shared<Tensor>( static_cast<int>(nOutputRows), c_spmInputs[0]->_mData._nCols );
+    auto spmOutput  =std::make_shared<Tensor>( static_cast<int>(nOutputRows), c_spmInputs[0]->_mData.cols() );
     cuda_Conv2D_pack_output(
         spmOutput->_mData,
         mProduct,
@@ -127,7 +127,7 @@ std::vector<std::shared_ptr<Tensor>> Conv2D::forward(
 }
 
 void Conv2D::backward(
-        const std::vector<const cuMat*>& c_lpmOutputGrads,
+        const std::vector<const cufMat*>& c_lpmOutputGrads,
         const std::vector<std::shared_ptr<Tensor>>& c_spmInputs,
         const std::vector<std::shared_ptr<Tensor>>& c_spmOutputs
 )
@@ -140,26 +140,26 @@ void Conv2D::backward(
             "Conv2D::backward: exactly one non-null input is required"
         );
     }
-    const cuMat& c_mOutputGrad  =singleGrad( c_lpmOutputGrads, "Conv2D::backward" );
+    const cufMat& c_mOutputGrad  =singleGrad( c_lpmOutputGrads, "Conv2D::backward" );
     const long long nPositions  =static_cast<long long>( _nOutputHeight ) * _nOutputWidth;
-    const long long nCombined64 =nPositions * c_spmInputs[0]->_mData._nCols;
-    if( (nCombined64>INT_MAX)||(nCombined64*_lpmWeight->_mData._nCols>INT_MAX)||
+    const long long nCombined64 =nPositions * c_spmInputs[0]->_mData.cols();
+    if( (nCombined64>INT_MAX)||(nCombined64*_lpmWeight->_mData.cols()>INT_MAX)||
         (nCombined64*_nOutputChannels>INT_MAX) )
     {
         throw std::overflow_error( "Conv2D::backward: workspace exceeds int range" );
     }
     const int nCombined =static_cast<int>( nCombined64 );
 
-    if( (c_mOutputGrad._nRows!=nPositions*_nOutputChannels)||
-        (c_mOutputGrad._nCols!=c_spmInputs[0]->_mData._nCols) )
+    if( (c_mOutputGrad.rows()!=nPositions*_nOutputChannels)||
+        (c_mOutputGrad.cols()!=c_spmInputs[0]->_mData.cols()) )
     {
         throw std::runtime_error(
             "Conv2D::backward: output gradient shape mismatch"
         );
     }
-    cuMat mColumns( _lpmWeight->_mData._nCols, nCombined );
-    cuMat mProductGrad( _nOutputChannels, nCombined );
-    cuMat mColumnGrad( _lpmWeight->_mData._nCols, nCombined );
+    cufMat mColumns( _lpmWeight->_mData.cols(), nCombined );
+    cufMat mProductGrad( _nOutputChannels, nCombined );
+    cufMat mColumnGrad( _lpmWeight->_mData.cols(), nCombined );
 
     cuda_Conv2D_im2col(
         mColumns,

@@ -15,9 +15,9 @@ void require(bool condition,const std::string& message)
     if( !condition ) {throw std::runtime_error(message);}
 }
 
-Mat upload(const cuMat& value)
+Mat upload(const cufMat& value)
 {
-    Mat host( value._nRows,value._nCols );
+    Mat host( value.rows(),value.cols() );
     value.upload( host );
     return host;
 }
@@ -121,7 +121,7 @@ void testEvaluationBypassesDropout()
     Mat firstHost =upload( first->_mData );
     Mat secondHost =upload( second->_mData );
     Mat baselineHost =upload( baseline->_mData );
-    for( int i=0;i<firstHost._nRows*firstHost._nCols;++i )
+    for( int i=0;i<firstHost.rows()*firstHost.cols();++i )
     {
         require(
             firstHost._lpfHost[i]==secondHost._lpfHost[i],

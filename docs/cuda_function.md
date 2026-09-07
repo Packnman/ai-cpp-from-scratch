@@ -12,7 +12,7 @@ Tensor演算のforward/backwardインターフェースと、自動微分グラ�
 | --- | --- |
 | `TensorPtr` | `std::shared_ptr<Tensor>` |
 | `TensorList` | TensorPtrの配列。Functionの複数入力・複数出力を表す |
-| `TensorGradList` | 出力勾配cuMatへのconst pointer配列 |
+| `TensorGradList` | 出力勾配cufMatへのconst pointer配列 |
 
 ## Function
 

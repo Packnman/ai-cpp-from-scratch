@@ -61,4 +61,6 @@ protected:
     virtual void update_param(Tensor* lpTensor,OptimizerParams* lpOptimizerParams) =0;
 };
 
+#include "optimizer_SGD.h"
+#include "optimizer_adam.h"
 

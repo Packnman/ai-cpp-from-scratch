@@ -78,8 +78,8 @@ void Function::checkCurand(curandStatus_t crnStatus,const char* c_lpszOperation)
     }
 }
 
-const cuMat& Function::requireSingleOutputGrad(
-    const std::vector<const cuMat*>& c_lpmOutputGrads,
+const cufMat& Function::requireSingleOutputGrad(
+    const std::vector<const cufMat*>& c_lpmOutputGrads,
     const char* c_lpszFunctionName
 )
 {
@@ -91,8 +91,8 @@ const cuMat& Function::requireSingleOutputGrad(
     }
     return *c_lpmOutputGrads[0];
 }
-const cuMat& Function::singleGrad(
-    const std::vector<const cuMat*>& c_lpmOutputGrads,
+const cufMat& Function::singleGrad(
+    const std::vector<const cufMat*>& c_lpmOutputGrads,
     const char* c_lpszFunctionName
 )
 {

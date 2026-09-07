@@ -6,7 +6,7 @@ C++20とCUDAでニューラルネットワークの基盤を低レベルから�
 
 ## 実装済みの主な機能
 
-- CPU行列`Mat`とCUDAデバイス行列`cuMat`
+- row-major CPU行列`Mat`とN次元CUDAデバイス`cufMat`
 - cuBLASとCUDA kernelによる行列・ニューラルネットワーク演算
 - `Tensor`、`Function`、`Context`による自動微分
 - Linear、Conv2D、MaxPool2D、BatchNorm、Dropout、ReLU、GELU、Softmax Cross Entropy

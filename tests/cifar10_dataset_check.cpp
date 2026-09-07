@@ -75,9 +75,9 @@ void checkBatch(const std::filesystem::path& c_pthRoot)
     const std::vector<std::size_t> nIndices{4,0};
     SupervisedBatch batBatch =cifDataset.makeBatch( nIndices,0,2 );
     require(
-        (batBatch.spmInput->_mData._nRows==3072)&&
-        (batBatch.spmInput->_mData._nCols==2)&&
-        (batBatch.spmTarget->_mData._nRows==10)&&
+        (batBatch.spmInput->_mData.rows()==3072)&&
+        (batBatch.spmInput->_mData.cols()==2)&&
+        (batBatch.spmTarget->_mData.rows()==10)&&
         (batBatch.nSize==2),
         "batch shape mismatch"
     );

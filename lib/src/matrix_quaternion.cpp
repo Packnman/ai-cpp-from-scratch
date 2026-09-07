@@ -15,7 +15,7 @@ Quaternion::Quaternion()
 Quaternion::Quaternion(const Mat& c_mValue)
     :Vec(c_mValue)
 {
-    if( c_mValue._nRows!=4 )
+    if( c_mValue.rows()!=4 )
     {
         throw std::runtime_error(
             "Quaternion::Quaternion: vector size must be 4"

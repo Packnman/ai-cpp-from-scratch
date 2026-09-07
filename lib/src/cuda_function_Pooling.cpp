@@ -57,17 +57,17 @@ Pooling::forward(
     }
     const int nInputRows    =_nInputHeight * _nInputWidth * _nChannels;
     const int nOutputRows   =_nOutputHeight * _nOutputWidth * _nChannels;
-    if( (c_spmInputs[0]->_mData._nRows!=nInputRows)||(c_spmInputs[0]->_mData._nCols<=0) )
+    if( (c_spmInputs[0]->_mData.rows()!=nInputRows)||(c_spmInputs[0]->_mData.cols()<=0) )
     {
         throw std::runtime_error( "Pooling::forward: input shape mismatch" );
     }
-    if( static_cast<long long>(nOutputRows)*c_spmInputs[0]->_mData._nCols>INT_MAX )
+    if( static_cast<long long>(nOutputRows)*c_spmInputs[0]->_mData.cols()>INT_MAX )
     {
         throw std::overflow_error(
             "Pooling::forward: output exceeds int range"
         );
     }
-    auto spmOutput  =std::make_shared<Tensor>( nOutputRows, c_spmInputs[0]->_mData._nCols );
+    auto spmOutput  =std::make_shared<Tensor>( nOutputRows, c_spmInputs[0]->_mData.cols() );
     // Y[n,y_out,x_out,c]
     //   = max_(0<=k_y,k_x<K) X[n,y_out*S+k_y,x_out*S+k_x,c]
     cuda_Pooling_forward(
@@ -87,7 +87,7 @@ Pooling::forward(
 
 void
 Pooling::backward(
-    const std::vector<const cuMat*>& c_lpmOutputGrads,
+    const std::vector<const cufMat*>& c_lpmOutputGrads,
     const std::vector<std::shared_ptr<Tensor>>& c_spmInputs,
     const std::vector<std::shared_ptr<Tensor>>& c_spmOutputs
 )
@@ -100,16 +100,16 @@ Pooling::backward(
             "Pooling::backward: exactly one non-null input is required"
         );
     }
-    const cuMat& c_mOutputGrad  =singleGrad( c_lpmOutputGrads, "Pooling::backward" );
+    const cufMat& c_mOutputGrad  =singleGrad( c_lpmOutputGrads, "Pooling::backward" );
     const int nOutputRows       =_nOutputHeight * _nOutputWidth * _nChannels;
-    if( (c_mOutputGrad._nRows!=nOutputRows)||
-        (c_mOutputGrad._nCols!=c_spmInputs[0]->_mData._nCols) )
+    if( (c_mOutputGrad.rows()!=nOutputRows)||
+        (c_mOutputGrad.cols()!=c_spmInputs[0]->_mData.cols()) )
     {
         throw std::runtime_error(
             "Pooling::backward: output gradient shape mismatch"
         );
     }
-    if( static_cast<long long>(nOutputRows)*c_spmInputs[0]->_mData._nCols>INT_MAX )
+    if( static_cast<long long>(nOutputRows)*c_spmInputs[0]->_mData.cols()>INT_MAX )
     {
         throw std::overflow_error(
             "Pooling::backward: gradient exceeds int range"

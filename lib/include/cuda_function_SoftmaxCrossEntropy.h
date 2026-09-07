@@ -13,7 +13,7 @@ public:
 
 public:
     void backward(
-        const std::vector<const cuMat*>& c_lpmOutputGrads,
+        const std::vector<const cufMat*>& c_lpmOutputGrads,
         const std::vector<std::shared_ptr<Tensor>>& c_spmInputs,
         const std::vector<std::shared_ptr<Tensor>>& c_spmOutputs
     ) override;

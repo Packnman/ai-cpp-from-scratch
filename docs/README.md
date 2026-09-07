@@ -27,7 +27,7 @@
 ## 共通規約
 
 - ニューラルネットワークの行列は「特徴量またはクラス数 × バッチ数」で表す。
-- `Mat`と`cuMat`はcolumn-majorであり、要素位置は`column * rows + row`である。
+- `Mat`と`cufMat`はrow-majorであり、2次元要素位置は`row * cols + column`である。
 - `Tensor`のデータと勾配はGPU上に置く。
 - 学習ParameterとBufferの所有権は派生`Module`が持ち、基底`Module`は非所有pointerを登録する。
 - CUDA演算のbackwardは、原則として既存の勾配へ加算する。
@@ -58,14 +58,14 @@
 - `namespace`、`class`、`struct`、関数、制御文の開始波括弧は宣言または条件の次行に置く。
 - `if`、`else`、`for`、`while`などの制御文は、本体が1文だけでも必ず波括弧で囲む。
 - 1行には原則として1文だけを記述する。
-- pointerとreferenceの記号は型側へ寄せ、`Tensor* lpTensor`、`const cuMat& c_mValue`のように記述する。
+- pointerとreferenceの記号は型側へ寄せ、`Tensor* lpTensor`、`const cufMat& c_mValue`のように記述する。
 - 代入演算子と二項演算子の前後、およびカンマの後には半角スペースを置く。
 - 空でない丸括弧の内側には半角スペースを置く。空の引数リストは`()`と記述する。
 - 長い関数宣言、関数呼出し、条件式は意味のまとまりで改行し、継続行もスペースで整列する。
 - formatterを使用する場合も、インデント幅4、タブ不使用、Allman形式、制御文への波括弧追加を維持する。
 
 ```cpp
-void updateTensor( Tensor* lpTensor, const cuMat& c_mGradient )
+void updateTensor( Tensor* lpTensor, const cufMat& c_mGradient )
 {
     if( lpTensor == nullptr )
     {

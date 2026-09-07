@@ -259,10 +259,12 @@ void Model::save(const char* lpszFileName)
         const std::uint32_t c_nNameLength =static_cast<std::uint32_t>(
             c_nmtEntry.strName.size()
         );
-        const std::int32_t c_nRows =c_nmtEntry.lpTensor->_mData._nRows;
-        const std::int32_t c_nCols =c_nmtEntry.lpTensor->_mData._nCols;
-        Mat mHost( c_nRows,c_nCols );
-        c_nmtEntry.lpTensor->_mData.upload( mHost );
+        const auto& c_shape =c_nmtEntry.lpTensor->_mData.shape();
+        if( c_shape.size()>UINT32_MAX )
+        {
+            throw std::runtime_error("Model::save: tensor rank is too large");
+        }
+        const std::vector<float> c_host =c_nmtEntry.lpTensor->_mData.toHost();
 
         _writeValue( filFile.get(),c_nNameLength );
         _writeExact(
@@ -270,13 +272,12 @@ void Model::save(const char* lpszFileName)
             c_nmtEntry.strName.data(),
             c_nNameLength
         );
-        _writeValue( filFile.get(),c_nRows );
-        _writeValue( filFile.get(),c_nCols );
+        _writeValue( filFile.get(),static_cast<std::uint32_t>(c_shape.size()) );
+        for( std::int64_t extent : c_shape ) _writeValue( filFile.get(),extent );
         _writeExact(
             filFile.get(),
-            mHost._lpfHost,
-            static_cast<std::size_t>(c_nRows)*
-                static_cast<std::size_t>(c_nCols)*sizeof(float)
+            c_host.data(),
+            c_host.size()*sizeof(float)
         );
     }
 }
@@ -300,8 +301,13 @@ void Model::load(const char* lpszFileName)
     {
         throw std::runtime_error("Model::load: invalid model file");
     }
-    if( _readValue<std::uint32_t>(filFile.get())!=MODEL_VERSION )
+    const std::uint32_t c_nVersion =_readValue<std::uint32_t>(filFile.get());
+    if( c_nVersion!=MODEL_VERSION )
     {
+        if( c_nVersion==1 )
+        {
+            throw std::runtime_error("Model::load: column-major version 1 checkpoints are not supported");
+        }
         throw std::runtime_error("Model::load: unsupported model version");
     }
 
@@ -340,8 +346,14 @@ void Model::load(const char* lpszFileName)
 
         std::string strName( c_nNameLength,'\0' );
         _readExact( filFile.get(),strName.data(),c_nNameLength );
-        const std::int32_t c_nRows =_readValue<std::int32_t>(filFile.get());
-        const std::int32_t c_nCols =_readValue<std::int32_t>(filFile.get());
+        const std::uint32_t c_nRank =_readValue<std::uint32_t>(filFile.get());
+        if( c_nRank>64 ) throw std::runtime_error("Model::load: invalid tensor rank");
+        std::vector<std::int64_t> shape(c_nRank);
+        for( std::int64_t& extent : shape )
+        {
+            extent =_readValue<std::int64_t>(filFile.get());
+            if( extent<0 ) throw std::runtime_error("Model::load: invalid state shape");
+        }
 
         auto itrDestination =umpDestinations.find( strName );
         if( itrDestination==umpDestinations.end() )
@@ -354,19 +366,17 @@ void Model::load(const char* lpszFileName)
         }
 
         Tensor* lpTensor =itrDestination->second;
-        if( (c_nRows!=lpTensor->_mData._nRows)||
-            (c_nCols!=lpTensor->_mData._nCols) )
+        if( shape!=lpTensor->_mData.shape() )
         {
             throw std::runtime_error("Model::load: state shape mismatch: "+strName);
         }
 
-        Mat mHost( c_nRows,c_nCols );
+        std::vector<float> host(lpTensor->_mData.numel());
         _readExact(
             filFile.get(),
-            mHost._lpfHost,
-            static_cast<std::size_t>(c_nRows)*
-                static_cast<std::size_t>(c_nCols)*sizeof(float)
+            host.data(),
+            host.size()*sizeof(float)
         );
-        lpTensor->_mData.download( mHost );
+        lpTensor->_mData.copyFromHost( host.data(),host.size() );
     }
 }

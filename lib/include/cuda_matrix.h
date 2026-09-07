@@ -1,192 +1,198 @@
 #pragma once
 
-#define IDX2F(nRow,nCol,nRows)   ((nCol)*(nRows)+(nRow))      // column-major(Fortran)
-#define IDX2C(nRow,nCol,nCols)   ((nRow)*(nCols)+(nCol))      // row-major(C/C++)
+#include <cstddef>
+#include <cstdint>
+#include <initializer_list>
+#include <memory>
+#include <concepts>
+#include <stdexcept>
+#include <vector>
 
 class Mat;
+namespace cu_detail {
+void fillOnes(float* destination,std::size_t elements);
+}
 
-class cuMat{
+template<class T>
+concept cuElement =std::same_as<T,float>||std::same_as<T,std::int32_t>;
+
+// --------------------------
+// cuStorage
+// --------------------------
+template<cuElement T>
+class cuStorage
+{
 public:
-    cuMat();
-    cuMat(int nRows,int nCols);
-    cuMat(const cuMat& c_mValue);
-    cuMat(cuMat&& mValue) noexcept;
-    ~cuMat();
+    explicit cuStorage(std::size_t elements =0);
+    ~cuStorage();
+
+    cuStorage(const cuStorage&) =delete;
+    cuStorage& operator=(const cuStorage&) =delete;
+
 private:
+    T* _device;
+    std::size_t _elements;
 public:
-    float*  _lpfDevice;
-    int     _nRows;
-    int     _nCols;
-public:
-    void upload(Mat& mHost) const;
-    void download(const Mat& c_mHost);
-    void ones();
-    
-public:
-    cuMat& operator=(const cuMat& c_mValue);         // コピー演算子
-    cuMat& operator=(cuMat&& mValue) noexcept;       // ムーブ演算子
+    T* data() const noexcept { return _device; }
+    std::size_t size() const noexcept { return _elements; }
 };
 
-void cuda_axpy(cuMat& mResult,float fAlpha,const cuMat& c_mA);  // R += αA
-void cuda_geam(cuMat& mResult,float fAlpha,const cuMat& c_mA,float fBeta,const cuMat& c_mB);  // R = αA + βB
-// R = α*op(A)*op(B) + β*op(B)
-void cuda_gemm(cuMat& mResult,const cuMat& c_mA,const cuMat& c_mB,
-               bool isTransposeA=false,
-               bool isTransposeB=false,
-               float fAlpha=1.0f,
-               float fBeta=0.0f
-);
-void cuda_fill(cuMat& mResult,float fValue); // R[:] = value
-void cuda_transpose(cuMat& mResult,const cuMat& c_mA); // R = A^T
-void cuda_scale(cuMat& mResult,float fValue);    // R *= value
-void cuda_mul_elementwise(cuMat& mResult,const cuMat& c_mA,const cuMat& c_mB);  // R = A ⦿ B
+// --------------------------
+// cuMat
+// --------------------------
+template<cuElement T>
+class cuMat
+{
+public:
+    cuMat();
+    cuMat(int rows,int cols);
+    explicit cuMat(const std::vector<std::int64_t>& shape);
+    cuMat(std::initializer_list<std::int64_t> shape);
+    cuMat(const cuMat& value);
 
+    cuMat(cuMat&& value) noexcept =default;
+    ~cuMat() =default;
+    cuMat& operator=(const cuMat& value);
+    cuMat& operator=(cuMat&& value) noexcept =default;
 
+private:
+    std::shared_ptr<cuStorage<T>> _storage;
+    std::vector<std::int64_t> _shape;
+    std::vector<std::int64_t> _strides;
+    std::size_t _offset;
+    cuMat(std::shared_ptr<cuStorage<T>> storage,
+               std::vector<std::int64_t> shape,
+               std::vector<std::int64_t> strides,std::size_t offset);
 
-void cuda_ReLU_forward(cuMat& mResult,const cuMat& c_mValue);
-void cuda_ReLU_backward(
-    cuMat& mResult,         // 求める勾配 ∂L/∂x を加算する先
-    const cuMat& c_mData,   // ReLUへの入力 x
-    const cuMat& c_mGrad    // 上流から来た勾配 ∂L/∂y
-);
-void cuda_GELU_forward(cuMat& mResult,const cuMat& c_mValue);
-void cuda_GELU_backward(
-    cuMat& mResult,
-    const cuMat& c_mData,
-    const cuMat& c_mGrad
-);
-void cuda_Dropout_forward(
-    cuMat& mResult,
-    const cuMat& c_mValue,
-    cuMat& mMask,
-    float fDropProbability
-);
-void cuda_Dropout_backward(
-    cuMat& mResult,
-    const cuMat& c_mGrad,
-    const cuMat& c_mMask
-);
+public:
+    const std::vector<std::int64_t>& shape() const noexcept { return _shape; }
+    const std::vector<std::int64_t>& strides() const noexcept { return _strides; }
+    std::size_t dim() const noexcept { return _shape.size(); }
+    std::int64_t size(std::size_t dimension) const;
+    std::size_t numel() const noexcept;
+    std::size_t offset() const noexcept { return _offset; }
+    bool isContiguous() const noexcept;
+    int rows() const;
+    int cols() const;
+    T* data() noexcept;
+    const T* data() const noexcept;
+
+public:
+    cuMat reshape(const std::vector<std::int64_t>& shape) const;
+    cuMat reshape(std::initializer_list<std::int64_t> shape) const;
+    cuMat permute(const std::vector<std::size_t>& dimensions) const;
+    cuMat slice(std::size_t dimension,std::int64_t start,
+                     std::int64_t end,std::int64_t step =1) const;
+    cuMat contiguous() const;
+
+    void copyToHost(T* destination,std::size_t elements) const;
+    void copyFromHost(const T* source,std::size_t elements);
+    std::vector<T> toHost() const;
+    void upload(Mat& host) const requires std::same_as<T,float>;
+    void download(const Mat& host) requires std::same_as<T,float>;
+    void ones() requires std::same_as<T,float>
+    {
+        if( !isContiguous() )
+            throw std::invalid_argument("cuMat::ones: contiguous tensor required");
+        cu_detail::fillOnes(data(),numel());
+    }
+
+};
+
+// --------------------------
+// Type aliases
+// --------------------------
+using cufStorage =cuStorage<float>;
+using cunStorage =cuStorage<std::int32_t>;
+using cufMat =cuMat<float>;
+using cunMat =cuMat<std::int32_t>;
+
+// --------------------------
+// CUDA matrix operations
+// --------------------------
+void cuda_axpy(cufMat& result,float alpha,const cufMat& a);
+void cuda_geam(cufMat& result,float alpha,const cufMat& a,
+               float beta,const cufMat& b);
+void cuda_gemm(cufMat& result,const cufMat& a,const cufMat& b,
+               bool transposeA=false,bool transposeB=false,
+               float alpha=1.0f,float beta=0.0f);
+void cuda_fill(cufMat& mResult,float fValue);
+void cuda_transpose(cufMat& result,const cufMat& a);
+void cuda_scale(cufMat& result,float value);
+void cuda_mul_elementwise(cufMat& mResult,const cufMat& c_mA,
+                          const cufMat& c_mB);
+void cuda_ReLU_forward(cufMat& mResult,const cufMat& c_mValue);
+void cuda_ReLU_backward(cufMat& mResult,const cufMat& c_mData,
+                        const cufMat& c_mGrad);
+void cuda_GELU_forward(cufMat& mResult,const cufMat& c_mValue);
+void cuda_GELU_backward(cufMat& mResult,const cufMat& c_mData,
+                        const cufMat& c_mGrad);
+void cuda_Dropout_forward(cufMat& mResult,const cufMat& c_mValue,
+                          cufMat& mMask,float fDropProbability);
+void cuda_Dropout_backward(cufMat& mResult,const cufMat& c_mGrad,
+                           const cufMat& c_mMask);
 void cuda_BatchNorm_forward_training(
-    cuMat& mResult,
-    const cuMat& c_mValue,
-    const cuMat& c_mGamma,
-    const cuMat& c_mBeta,
-    cuMat& mRunningMean,
-    cuMat& mRunningVar,
-    cuMat& mNormalized,
-    cuMat& mInvStd,
-    float fMomentum,
-    float fEpsilon
+    cufMat& mResult,const cufMat& c_mValue,
+    const cufMat& c_mGamma,const cufMat& c_mBeta,
+    cufMat& mRunningMean,cufMat& mRunningVar,
+    cufMat& mNormalized,cufMat& mInvStd,
+    float fMomentum,float fEpsilon
 );
 void cuda_BatchNorm_forward_evaluation(
-    cuMat& mResult,
-    const cuMat& c_mValue,
-    const cuMat& c_mGamma,
-    const cuMat& c_mBeta,
-    const cuMat& c_mRunningMean,
-    const cuMat& c_mRunningVar,
-    cuMat& mNormalized,
-    cuMat& mInvStd,
-    float fEpsilon
+    cufMat& mResult,const cufMat& c_mValue,
+    const cufMat& c_mGamma,const cufMat& c_mBeta,
+    const cufMat& c_mRunningMean,const cufMat& c_mRunningVar,
+    cufMat& mNormalized,cufMat& mInvStd,float fEpsilon
 );
 void cuda_BatchNorm_backward(
-    cuMat& mInputGrad,
-    cuMat& mGammaGrad,
-    cuMat& mBetaGrad,
-    const cuMat& c_mOutputGrad,
-    const cuMat& c_mGamma,
-    const cuMat& c_mNormalized,
-    const cuMat& c_mInvStd,
+    cufMat& mInputGrad,cufMat& mGammaGrad,cufMat& mBetaGrad,
+    const cufMat& c_mOutputGrad,const cufMat& c_mGamma,
+    const cufMat& c_mNormalized,const cufMat& c_mInvStd,
     bool isTraining
 );
 void cuda_SoftmaxCrossEntropy_forward(
-    cuMat& mResult,
-    const cuMat& c_mLogits,
-    const cuMat& c_mTarget
+    cufMat& mResult,const cufMat& c_mLogits,
+    const cufMat& c_mTarget
 );
 void cuda_SoftmaxCrossEntropy_backward(
-    cuMat& mLogitsGrad,
-    const cuMat& c_mLogits,
-    const cuMat& c_mTarget,
-    const cuMat& c_mGrad
+    cufMat& mLogitsGrad,const cufMat& c_mLogits,
+    const cufMat& c_mTarget,const cufMat& c_mGrad
 );
-
-// Spatial operators use HWC-flattened image rows and batch columns.
 void cuda_Conv2D_im2col(
-    cuMat& mColumns,
-    const cuMat& c_mInput,
-    int nInputChannels,
-    int nInputHeight,
-    int nInputWidth,
-    int nKernelSize,
-    int nStride,
-    int nPadding,
-    int nOutputHeight,
-    int nOutputWidth
+    cufMat& mResult,const cufMat& c_mInput,
+    int nInputChannels,int nInputHeight,int nInputWidth,int nKernelSize,
+    int nStride,int nPadding,int nOutputHeight,int nOutputWidth
 );
 void cuda_Conv2D_pack_output(
-    cuMat& mOutput,
-    const cuMat& c_mGemm,
-    const cuMat& c_mBias,
-    int nOutputHeight,
-    int nOutputWidth
+    cufMat& mResult,const cufMat& c_mGemm,
+    const cufMat& c_mBias,int nOutputHeight,int nOutputWidth
 );
 void cuda_Conv2D_unpack_grad(
-    cuMat& mGemmGrad,
-    const cuMat& c_mOutputGrad,
-    int nOutputChannels,
-    int nOutputHeight,
-    int nOutputWidth
+    cufMat& mResult,const cufMat& c_mOutputGrad,
+    int nOutputChannels,int nOutputHeight,int nOutputWidth
 );
 void cuda_Conv2D_col2im(
-    cuMat& mInputGrad,
-    const cuMat& c_mColumnGrad,
-    int nInputChannels,
-    int nInputHeight,
-    int nInputWidth,
-    int nKernelSize,
-    int nStride,
-    int nPadding,
-    int nOutputHeight,
-    int nOutputWidth
+    cufMat& mResult,const cufMat& c_mColumnGrad,
+    int nInputChannels,int nInputHeight,int nInputWidth,int nKernelSize,
+    int nStride,int nPadding,int nOutputHeight,int nOutputWidth
 );
 void cuda_Conv2D_bias_backward(
-    cuMat& mBiasGrad,
-    const cuMat& c_mGemmGrad
+    cufMat& mResult,const cufMat& c_mGemmGrad
 );
 void cuda_Pooling_forward(
-    cuMat& mOutput,
-    const cuMat& c_mInput,
-    int nChannels,
-    int nInputHeight,
-    int nInputWidth,
-    int nKernelSize,
-    int nStride,
-    int nOutputHeight,
-    int nOutputWidth
+    cufMat& mResult,const cufMat& c_mInput,
+    int nChannels,int nInputHeight,int nInputWidth,int nKernelSize,
+    int nStride,int nOutputHeight,int nOutputWidth
 );
 void cuda_Pooling_backward(
-    cuMat& mInputGrad,
-    const cuMat& c_mInput,
-    const cuMat& c_mOutputGrad,
-    int nChannels,
-    int nInputHeight,
-    int nInputWidth,
-    int nKernelSize,
-    int nStride,
-    int nOutputHeight,
-    int nOutputWidth
+    cufMat& mResult,const cufMat& c_mInput,
+    const cufMat& c_mOutputGrad,int nChannels,int nInputHeight,
+    int nInputWidth,int nKernelSize,int nStride,
+    int nOutputHeight,int nOutputWidth
 );
-
 void cuda_Adam_update(
-    cuMat& mData,
-    const cuMat& c_mGrad,
-    cuMat& mFirstMoment,
-    cuMat& mSecondMoment,
-    float fLearningRate,
-    float fBeta1,
-    float fBeta2,
-    float fBeta1Correction,
-    float fBeta2Correction,
-    float fEpsilon
+    cufMat& mData,const cufMat& c_mGrad,
+    cufMat& mFirstMoment,cufMat& mSecondMoment,
+    float fLearningRate,float fBeta1,float fBeta2,
+    float fBeta1Correction,float fBeta2Correction,float fEpsilon
 );

@@ -3,6 +3,7 @@
 #include "matrix.h"
 #include "module.h"
 #include "optimizer.h"
+#include "neuralnet_cifar10.h"
 #include <cmath>
 #include <iostream>
 #include <memory>
@@ -25,19 +26,19 @@ void near( float fActual, float fExpected, const char* c_lpszMessage )
         throw std::runtime_error( c_lpszMessage );
     }
 }
-void fill( cuMat& mValue, const std::vector<float>& c_fValues )
+void fill( cufMat& mValue, const std::vector<float>& c_fValues )
 {
-    req( c_fValues.size() == static_cast<size_t>( mValue._nRows * mValue._nCols ), "fill" );
-    Mat mHost( mValue._nRows, mValue._nCols );
+    req( c_fValues.size() == static_cast<size_t>( mValue.rows() * mValue.cols() ), "fill" );
+    Mat mHost( mValue.rows(), mValue.cols() );
     for( size_t nIndex = 0; nIndex < c_fValues.size(); ++nIndex )
     {
         mHost._lpfHost[nIndex] = c_fValues[nIndex];
     }
     mValue.download( mHost );
 }
-Mat host( const cuMat& c_mValue )
+Mat host( const cufMat& c_mValue )
 {
-    Mat mHost( c_mValue._nRows, c_mValue._nCols );
+    Mat mHost( c_mValue.rows(), c_mValue.cols() );
     c_mValue.upload( mHost );
     return mHost;
 }
@@ -59,7 +60,7 @@ void basic()
     {
         near( mOutputHost._lpfHost[nIndex], fExpectedOutput[nIndex], "forward" );
     }
-    cuMat mOutputGrad( 4, 1 );
+    cufMat mOutputGrad( 4, 1 );
     fill( mOutputGrad, { 1, 1, 1, 1 } );
     cnvConv.backward( { &mOutputGrad }, { spmInput }, { spmOutput } );
     Mat mInputGrad = host( spmInput->_mGrad ), mWeightGrad = host( mWeight._mGrad ),
@@ -79,7 +80,7 @@ void basic()
 void channels()
 {
     Tensor mWeight( 2, 8 ), mBias( 2, 1 );
-    fill( mWeight._mData, { 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1 } );
+    fill( mWeight._mData, { 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1 } );
     fill( mBias._mData, { 1, -1 } );
     auto spmInput = std::make_shared<Tensor>( 18, 2 );
     std::vector<float> fInputValues( 36 );
@@ -87,13 +88,13 @@ void channels()
     {
         for( int nRow = 0; nRow < 18; ++nRow )
         {
-            fInputValues[nBatch * 18 + nRow] = nRow + 1 + nBatch;
+            fInputValues[nRow * 2 + nBatch] = nRow + 1 + nBatch;
         }
     }
     fill( spmInput->_mData, fInputValues );
     Conv2D cnvConv( &mWeight, &mBias, 2, 3, 3, 2, 2, 1 );
     auto spmOutput = cnvConv( { spmInput } );
-    req( spmOutput->_mData._nRows == 8 && spmOutput->_mData._nCols == 2, "shape" );
+    req( spmOutput->_mData.rows() == 8 && spmOutput->_mData.cols() == 2, "shape" );
     Mat mOutputHost = host( spmOutput->_mData );
     for( int nBatch = 0; nBatch < 2; ++nBatch )
     {
@@ -113,8 +114,8 @@ void channels()
                             if( nInputY >= 0 && nInputY < 3 && nInputX >= 0 && nInputX < 3 )
                             {
                                 fExpected +=
-                                    fInputValues[nBatch * 18 + ( nInputY * 3 + nInputX ) * 2 +
-                                                 nOutputChannel];
+                                    fInputValues[(( nInputY * 3 + nInputX ) * 2 +
+                                                 nOutputChannel)*2+nBatch];
                             }
                         }
                     }
@@ -128,7 +129,7 @@ void channels()
 void oneByOne()
 {
     Tensor mWeight( 2, 2 ), mBias( 2, 1 );
-    fill( mWeight._mData, { 1, -1, 2, 1 } );
+    fill( mWeight._mData, { 1, 2, -1, 1 } );
     fill( mBias._mData, { 0, 0 } );
     auto spmInput = std::make_shared<Tensor>( 4, 1 );
     fill( spmInput->_mData, { 1, 3, 2, 4 } );
@@ -196,11 +197,11 @@ void layer()
     req( nmtNamedParams.size() == 2 && nmtNamedParams[0].strName == "conv.weight" &&
              nmtNamedParams[1].strName == "conv.bias",
          "parameter names" );
-    req( nmtNamedParams[0].lpTensor->_mData._nRows == 3 &&
-             nmtNamedParams[0].lpTensor->_mData._nCols == 18,
+    req( nmtNamedParams[0].lpTensor->_mData.rows() == 3 &&
+             nmtNamedParams[0].lpTensor->_mData.cols() == 18,
          "weight shape" );
-    req( nmtNamedParams[1].lpTensor->_mData._nRows == 3 &&
-             nmtNamedParams[1].lpTensor->_mData._nCols == 1,
+    req( nmtNamedParams[1].lpTensor->_mData.rows() == 3 &&
+             nmtNamedParams[1].lpTensor->_mData.cols() == 1,
          "bias shape" );
     req( mdlModel._lyrConv.outputChannels() == 3 && mdlModel._lyrConv.outputHeight() == 2 &&
              mdlModel._lyrConv.outputWidth() == 3,
@@ -218,7 +219,7 @@ void layer()
     cuda_fill( spmInput->_mData, 1 );
     std::vector<std::shared_ptr<Tensor>> spmInputs{ spmInput };
     auto spmOutput = mdlModel.forward( spmInputs );
-    req( spmOutput->_mData._nRows == 18 && spmOutput->_mData._nCols == 1, "layer output shape" );
+    req( spmOutput->_mData.rows() == 18 && spmOutput->_mData.cols() == 1, "layer output shape" );
     cuda_fill( nmtNamedParams[0].lpTensor->_mGrad, 1 );
     cuda_fill( nmtNamedParams[1].lpTensor->_mGrad, 1 );
     float fBefore = mWeightHost( 0, 0 );

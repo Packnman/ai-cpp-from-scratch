@@ -2,12 +2,16 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 
 #include "cuda_function.h"
 #include "cuda_tensor.h"
 #include "matrix.h"
 
 namespace {
+    static_assert(std::same_as<decltype(Tensor::_mData),cufMat>);
+    static_assert(std::same_as<decltype(Tensor::_mGrad),cufMat>);
+
     void require(bool condition,const std::string& message)
     {
         if( !condition )
@@ -24,12 +28,12 @@ namespace {
             require( inputs.size()==1,"Duplicate requires one input" );
 
             auto first =std::make_shared<Tensor>(
-                inputs[0]->_mData._nRows,
-                inputs[0]->_mData._nCols
+                inputs[0]->_mData.rows(),
+                inputs[0]->_mData.cols()
             );
             auto second =std::make_shared<Tensor>(
-                inputs[0]->_mData._nRows,
-                inputs[0]->_mData._nCols
+                inputs[0]->_mData.rows(),
+                inputs[0]->_mData.cols()
             );
             cuda_geam( first->_mData,1.0f,inputs[0]->_mData,0.0f,inputs[0]->_mData );
             cuda_geam( second->_mData,1.0f,inputs[0]->_mData,0.0f,inputs[0]->_mData );
@@ -47,7 +51,7 @@ namespace {
             require( inputs.size()==1,"Duplicate backward input mismatch" );
             require( outputGrads.size()==2,"Duplicate backward output mismatch" );
 
-            for( const cuMat* grad : outputGrads )
+            for( const cufMat* grad : outputGrads )
             {
                 if( grad!=nullptr )
                 {
@@ -57,21 +61,21 @@ namespace {
         }
     };
 
-    class Add final : public Function
+    class TestAdd final : public Function
     {
     public:
         TensorList forward(const TensorList& inputs) override
         {
             require( inputs.size()==2,"Add requires two inputs" );
             require(
-                (inputs[0]->_mData._nRows==inputs[1]->_mData._nRows)&&
-                (inputs[0]->_mData._nCols==inputs[1]->_mData._nCols),
+                (inputs[0]->_mData.rows()==inputs[1]->_mData.rows())&&
+                (inputs[0]->_mData.cols()==inputs[1]->_mData.cols()),
                 "Add input shape mismatch"
             );
 
             auto output =std::make_shared<Tensor>(
-                inputs[0]->_mData._nRows,
-                inputs[0]->_mData._nCols
+                inputs[0]->_mData.rows(),
+                inputs[0]->_mData.cols()
             );
             cuda_geam(
                 output->_mData,
@@ -101,7 +105,7 @@ namespace {
         }
     };
 
-    float readScalar(const cuMat& value)
+    float readScalar(const cufMat& value)
     {
         Mat host( 1,1 );
         value.upload( host );
@@ -119,7 +123,7 @@ int main()
         input->_mData.download( inputHost );
 
         Duplicate duplicate;
-        Add add;
+        TestAdd add;
 
         TensorList branches =duplicate.apply({input});
         require( branches.size()==2,"Duplicate must return two outputs" );

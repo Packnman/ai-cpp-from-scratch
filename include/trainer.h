@@ -47,8 +47,8 @@ inline std::vector<std::size_t> makeIndices(std::size_t nSize)
 inline float readScalar(const std::shared_ptr<Tensor>& c_spmTensor)
 {
     if( (c_spmTensor==nullptr)||
-        (c_spmTensor->_mData._nRows!=1)||
-        (c_spmTensor->_mData._nCols!=1) )
+        (c_spmTensor->_mData.rows()!=1)||
+        (c_spmTensor->_mData.cols()!=1) )
     {
         throw std::runtime_error(
             "trainer: loss tensor must have shape 1 x 1"
@@ -90,10 +90,10 @@ inline std::size_t countClassificationCorrect(
             "countClassificationCorrect: tensor is null"
         );
     }
-    if( (c_spmOutput->_mData._nRows!=c_spmTarget->_mData._nRows)||
-        (c_spmOutput->_mData._nCols!=c_spmTarget->_mData._nCols)||
-        (c_spmOutput->_mData._nRows<=0)||
-        (c_spmOutput->_mData._nCols<=0) )
+    if( (c_spmOutput->_mData.rows()!=c_spmTarget->_mData.rows())||
+        (c_spmOutput->_mData.cols()!=c_spmTarget->_mData.cols())||
+        (c_spmOutput->_mData.rows()<=0)||
+        (c_spmOutput->_mData.cols()<=0) )
     {
         throw std::runtime_error(
             "countClassificationCorrect: tensor size mismatch"
@@ -101,22 +101,22 @@ inline std::size_t countClassificationCorrect(
     }
 
     Mat mHostOutput(
-        c_spmOutput->_mData._nRows,
-        c_spmOutput->_mData._nCols
+        c_spmOutput->_mData.rows(),
+        c_spmOutput->_mData.cols()
     );
     Mat mHostTarget(
-        c_spmTarget->_mData._nRows,
-        c_spmTarget->_mData._nCols
+        c_spmTarget->_mData.rows(),
+        c_spmTarget->_mData.cols()
     );
     c_spmOutput->_mData.upload( mHostOutput );
     c_spmTarget->_mData.upload( mHostTarget );
 
     std::size_t nCorrect =0;
-    for( int nBatch=0;nBatch<mHostOutput._nCols;++nBatch )
+    for( int nBatch=0;nBatch<mHostOutput.cols();++nBatch )
     {
         int nPredicted =0;
         int nExpected =0;
-        for( int nRow=1;nRow<mHostOutput._nRows;++nRow )
+        for( int nRow=1;nRow<mHostOutput.rows();++nRow )
         {
             if( mHostOutput(nRow,nBatch)>mHostOutput(nPredicted,nBatch) )
             {

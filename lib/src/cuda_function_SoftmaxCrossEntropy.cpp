@@ -14,7 +14,7 @@ SoftmaxCrossEntropy::~SoftmaxCrossEntropy()
 
 }
 void SoftmaxCrossEntropy::backward(
-    const std::vector<const cuMat*>& c_lpmOutputGrads,
+    const std::vector<const cufMat*>& c_lpmOutputGrads,
     const std::vector<std::shared_ptr<Tensor>>& c_spmInputs,
     const std::vector<std::shared_ptr<Tensor>>& c_spmOutputs
 )
@@ -59,8 +59,8 @@ SoftmaxCrossEntropy::forward(
             "SoftmaxCrossEntropy requires exactly two inputs"
         );
     }
-    if( (c_spmInputs[0]->_mData._nRows!=c_spmInputs[1]->_mData._nRows)||
-        (c_spmInputs[0]->_mData._nCols!=c_spmInputs[1]->_mData._nCols) )
+    if( (c_spmInputs[0]->_mData.rows()!=c_spmInputs[1]->_mData.rows())||
+        (c_spmInputs[0]->_mData.cols()!=c_spmInputs[1]->_mData.cols()) )
     {
         throw std::runtime_error(
             "SoftmaxCrossEntropy::forward: "

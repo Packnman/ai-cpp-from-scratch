@@ -52,7 +52,7 @@ weight decay、momentum、Nesterovは実装しない。
 
 ## NamedAdamState / AdamState
 
-`NamedAdamState`は状態名と1次・2次モーメントcuMatへのpointerを表す。checkpoint向けの表現を意図しているが、現Optimizerとの変換APIは未実装。
+`NamedAdamState`は状態名と1次・2次モーメントcufMatへのpointerを表す。checkpoint向けの表現を意図しているが、現Optimizerとの変換APIは未実装。
 
 ## AdamParams
 

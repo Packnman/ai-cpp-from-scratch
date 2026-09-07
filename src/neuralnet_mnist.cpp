@@ -9,13 +9,13 @@
 namespace {
     void init_Weight(Tensor& mTensor,int nFan,std::mt19937& rngRandom)
     {
-        Mat mHost( mTensor._mData._nRows,mTensor._mData._nCols );
+        Mat mHost( mTensor._mData.rows(),mTensor._mData.cols() );
         std::normal_distribution<float> dstNormal(
             0,
             sqrtf(2.0f/nFan)
         );
         for( int nIndex=0;
-             nIndex<mTensor._mData._nRows*mTensor._mData._nCols;
+             nIndex<mTensor._mData.rows()*mTensor._mData.cols();
              ++nIndex )
         {
             mHost._lpfHost[nIndex] =dstNormal( rngRandom );
@@ -81,7 +81,7 @@ MnistHiddenLayer::~MnistHiddenLayer()
 }
 void MnistHiddenLayer::init(std::mt19937& rngRandom)
 {
-    init_Weight( *_spmWeight,_spmWeight->_mData._nCols,rngRandom );
+    init_Weight( *_spmWeight,_spmWeight->_mData.cols(),rngRandom );
     cuda_fill( _spmBias.get()->_mData,0 );
     cuda_fill( _spmGamma.get()->_mData,1.0f );
     cuda_fill( _spmBeta.get()->_mData,0.0f );
@@ -131,7 +131,7 @@ MnistOutputLayer::~MnistOutputLayer()
 }
 void MnistOutputLayer::init(std::mt19937& rngRandom)
 {
-    init_Weight( *_spmWeight,_spmWeight->_mData._nCols,rngRandom );
+    init_Weight( *_spmWeight,_spmWeight->_mData.cols(),rngRandom );
     cuda_fill( _spmBias.get()->_mData,0 );
 }
 std::shared_ptr<Tensor> MnistOutputLayer::forward(
@@ -179,8 +179,8 @@ std::shared_ptr<Tensor> MnistNeuralNet::forward(
             "MnistNeuralNet::forward: exactly one non-null input is required"
         );
     }
-    if( (spmInputs[0]->_mData._nRows!=784)||
-        (spmInputs[0]->_mData._nCols<=0) )
+    if( (spmInputs[0]->_mData.rows()!=784)||
+        (spmInputs[0]->_mData.cols()<=0) )
     {
         throw std::runtime_error(
             "MnistNeuralNet::forward: input must have shape 784 x batch"
@@ -213,8 +213,8 @@ std::shared_ptr<Tensor> MnistNeuralNet::loss(
             "MnistNeuralNet::loss: input and target must be non-null"
         );
     }
-    if( (c_spmTarget->_mData._nRows!=10)||
-        (c_spmTarget->_mData._nCols!=c_spmInput->_mData._nCols) )
+    if( (c_spmTarget->_mData.rows()!=10)||
+        (c_spmTarget->_mData.cols()!=c_spmInput->_mData.cols()) )
     {
         throw std::runtime_error(
             "MnistNeuralNet::loss: target must have shape 10 x batch"

@@ -1,6 +1,5 @@
 #pragma once
 
-#define IDX2F(nRow,nCol,nRows)   ((nCol)*(nRows)+(nRow))      // column-major(Fortran)
 #define IDX2C(nRow,nCol,nCols)   ((nRow)*(nCols)+(nCol))      // row-major(C/C++)
 
 class Euler;
@@ -22,6 +21,8 @@ public:
     int     _nCols;
     float*  _lpfHost;
 public:
+    int rows() const noexcept { return _nRows; }
+    int cols() const noexcept { return _nCols; }
     void ones();
     float tri() const;
     Mat trp() const;
@@ -60,4 +61,3 @@ public:
     const float& operator()(int nRow) const;
 };
 Vec operator*(const Mat& c_mL,const Vec& c_vR);
-

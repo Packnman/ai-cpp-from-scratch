@@ -16,15 +16,15 @@ Mat::Mat(int nRows,int nCols)
     
 }
 Mat::Mat(const Mat& c_mValue)
-    :_nRows( c_mValue._nRows ),
-     _nCols( c_mValue._nCols ),
-     _lpfHost( (float*)malloc(c_mValue._nRows*c_mValue._nCols*sizeof(float)) )
+    :_nRows( c_mValue.rows() ),
+     _nCols( c_mValue.cols() ),
+     _lpfHost( (float*)malloc(c_mValue.rows()*c_mValue.cols()*sizeof(float)) )
 {
     memcpy( _lpfHost,c_mValue._lpfHost,_nRows*_nCols*sizeof(float) );
 }
 Mat::Mat(Mat&& mValue) noexcept
-    :_nRows( mValue._nRows ),
-     _nCols( mValue._nCols ),
+    :_nRows( mValue.rows() ),
+     _nCols( mValue.cols() ),
      _lpfHost( mValue._lpfHost )
 {
     mValue._nRows      =0;
@@ -68,9 +68,9 @@ Mat Mat::trp() const
 {
     Mat mResult(_nCols,_nRows);
     
-    for( int nRow=0;nRow<mResult._nRows;++nRow )
+    for( int nRow=0;nRow<mResult.rows();++nRow )
     {
-        for( int nCol=0;nCol<mResult._nCols;++nCol )
+        for( int nCol=0;nCol<mResult.cols();++nCol )
         {
             mResult(nRow,nCol) =(*this)(nCol,nRow);
         }
@@ -136,12 +136,12 @@ Quaternion Mat::toQtn() const
 Mat& Mat::operator=(const Mat& c_mValue)
 {
     if( this==&c_mValue )    {return *this;}
-    if( (_nRows!=c_mValue._nRows)||(_nCols!=c_mValue._nCols) )
+    if( (_nRows!=c_mValue.rows())||(_nCols!=c_mValue.cols()) )
     {
         free( _lpfHost );
         //
-        _nRows      =c_mValue._nRows;
-        _nCols      =c_mValue._nCols;
+        _nRows      =c_mValue.rows();
+        _nCols      =c_mValue.cols();
         _lpfHost    =(float*)malloc( _nRows*_nCols*sizeof(float) );
     }
 
@@ -155,8 +155,8 @@ Mat& Mat::operator=(Mat&& mValue) noexcept
 
     free( _lpfHost );
     //
-    _nRows      =mValue._nRows;
-    _nCols      =mValue._nCols;
+    _nRows      =mValue.rows();
+    _nCols      =mValue.cols();
     _lpfHost    =mValue._lpfHost;
 
     mValue._nRows      =0;
@@ -168,7 +168,7 @@ Mat& Mat::operator=(Mat&& mValue) noexcept
 Mat operator+(const Mat& c_mL,const Mat& c_mR)
 {
     // 行列数の確認
-    if( (c_mL._nRows!=c_mR._nRows)||(c_mL._nCols!=c_mR._nCols) )
+    if( (c_mL.rows()!=c_mR.rows())||(c_mL.cols()!=c_mR.cols()) )
     {
         throw std::runtime_error(
             std::string( "Mat operator+: matrix size missmatch\n" )
@@ -183,7 +183,7 @@ Mat operator+(const Mat& c_mL,const Mat& c_mR)
 Mat operator-(const Mat& c_mL,const Mat& c_mR)
 {
     // 行列数の確認
-    if( (c_mL._nRows!=c_mR._nRows)||(c_mL._nCols!=c_mR._nCols) )
+    if( (c_mL.rows()!=c_mR.rows())||(c_mL.cols()!=c_mR.cols()) )
     {
         throw std::runtime_error(
             std::string( "Mat operator-: matrix size missmatch\n" )
@@ -198,20 +198,20 @@ Mat operator-(const Mat& c_mL,const Mat& c_mR)
 Mat operator*(const Mat& c_mL,const Mat& c_mR)
 {
     // 行列数の確認
-    if( (c_mL._nCols!=c_mR._nRows) )
+    if( (c_mL.cols()!=c_mR.rows()) )
     {
         throw std::runtime_error(
             std::string( "Mat operator*: matrix size missmatch\n" )
         );
     }
     //
-    Mat mResult(c_mL._nRows,c_mR._nCols);
-    for( int nRow=0;nRow<c_mL._nRows;++nRow )
+    Mat mResult(c_mL.rows(),c_mR.cols());
+    for( int nRow=0;nRow<c_mL.rows();++nRow )
     {
-        for( int nCol=0;nCol<c_mR._nCols;++nCol )
+        for( int nCol=0;nCol<c_mR.cols();++nCol )
         {
             float fSum =0.0f;
-            for( int nInner=0;nInner<c_mL._nCols;++nInner )
+            for( int nInner=0;nInner<c_mL.cols();++nInner )
             {
                 fSum +=c_mL(nRow,nInner)*c_mR(nInner,nCol);
             }
@@ -224,7 +224,7 @@ Mat operator*(const Mat& c_mL,const Mat& c_mR)
 Mat& Mat::operator+=(const Mat& c_mValue)
 {
     // 行列数の確認
-    if( (_nRows!=c_mValue._nRows)||(_nCols!=c_mValue._nCols) )
+    if( (_nRows!=c_mValue.rows())||(_nCols!=c_mValue.cols()) )
     {
         throw std::runtime_error(
             std::string( "Mat operator+=: matrix size missmatch\n" )
@@ -244,7 +244,7 @@ Mat& Mat::operator+=(const Mat& c_mValue)
 Mat& Mat::operator-=(const Mat& c_mValue)
 {
     // 行列数の確認
-    if( (_nRows!=c_mValue._nRows)||(_nCols!=c_mValue._nCols) )
+    if( (_nRows!=c_mValue.rows())||(_nCols!=c_mValue.cols()) )
     {
         throw std::runtime_error(
             std::string( "Mat operator-=: matrix size missmatch\n" )
@@ -264,17 +264,17 @@ Mat& Mat::operator-=(const Mat& c_mValue)
 Mat& Mat::operator*=(const Mat& c_mValue)
 {
     // 行列数の確認
-    if( (_nCols!=c_mValue._nRows) )
+    if( (_nCols!=c_mValue.rows()) )
     {
         throw std::runtime_error(
             std::string( "Mat operator*: matrix size missmatch\n" )
         );
     }
     //
-    Mat mTemporary(_nRows,c_mValue._nCols);
+    Mat mTemporary(_nRows,c_mValue.cols());
     for( int nRow=0;nRow<_nRows;nRow++ )
     {
-        for( int nCol=0;nCol<c_mValue._nCols;++nCol )
+        for( int nCol=0;nCol<c_mValue.cols();++nCol )
         {
             float fSum =0.0f;
             for( int nInner=0;nInner<_nCols;++nInner )
@@ -303,11 +303,11 @@ Mat& Mat::operator*=(float fValue)
 }
 float& Mat::operator()(int nRow,int nCol)
 {
-    return _lpfHost[IDX2F(nRow,nCol,_nRows)];
+    return _lpfHost[IDX2C(nRow,nCol,_nCols)];
 }
 const float& Mat::operator()(int nRow,int nCol) const
 {
-    return _lpfHost[IDX2F(nRow,nCol,_nRows)];
+    return _lpfHost[IDX2C(nRow,nCol,_nCols)];
 }
 
 
@@ -322,7 +322,7 @@ Vec::Vec(int nRows)
 Vec::Vec(const Mat& c_mValue)
     :Mat(c_mValue)
 {
-    if( c_mValue._nCols!=1 )
+    if( c_mValue.cols()!=1 )
     {
         throw std::runtime_error(
             "Vec::Vec: matrix must have exactly one column"
@@ -360,7 +360,7 @@ Vec Vec::cpx(const Vec& c_vValue) const
 {
     Vec vResult(3);
 
-    if( (_nRows!=3)||(c_vValue._nRows!=3) )
+    if( (_nRows!=3)||(c_vValue.rows()!=3) )
     {
         throw std::runtime_error(
             "Vec::cpx: vector size missmatch"
@@ -377,7 +377,7 @@ float Vec::dot(const Vec& c_vValue) const
 {
     float fResult =0.0f;
 
-    if( (_nRows!=c_vValue._nRows) )
+    if( (_nRows!=c_vValue.rows()) )
     {
         throw std::runtime_error(
             "Vec::dot: vector size missmatch"

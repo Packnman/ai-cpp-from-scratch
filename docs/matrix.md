@@ -4,7 +4,7 @@
 
 ## 目的
 
-CPU上のcolumn-major float行列と、ベクトル・Euler角・Quaternionに関する補助演算を提供する。
+CPU上のrow-major float行列と、ベクトル・Euler角・Quaternionに関する補助演算を提供する。
 
 ## 共通レイアウト
 

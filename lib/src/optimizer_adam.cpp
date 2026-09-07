@@ -7,8 +7,12 @@
 // AdamParams
 // --------------------------
 AdamParams::AdamParams(int nRows,int nCols)
-    :_mM( nRows,nCols ),
-     _mV( nRows,nCols )
+    :AdamParams(std::vector<std::int64_t>{nRows,nCols})
+{
+}
+AdamParams::AdamParams(const std::vector<std::int64_t>& shape)
+    :_mM( shape ),
+     _mV( shape )
 {
     cuda_fill( _mM,0.0f );
     cuda_fill( _mV,0.0f );
@@ -33,10 +37,7 @@ Adam::~Adam()
 std::shared_ptr<OptimizerParams>
 Adam::createOptimizerParams(Tensor* lpTensor)
 {
-    return std::make_shared<AdamParams>(
-        lpTensor->_mData._nRows,
-        lpTensor->_mData._nCols
-    );
+    return std::make_shared<AdamParams>(lpTensor->_mData.shape());
 }
 void Adam::update_param(Tensor* lpTensor,OptimizerParams* lpOptimizerParams)
 {
