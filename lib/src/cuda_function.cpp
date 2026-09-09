@@ -67,6 +67,57 @@ Function::operator()(
     return spmOutputs[0];
 }
 
+// --------------------------
+// IndexFunction
+// --------------------------
+TensorList IndexFunction::apply(
+    const std::shared_ptr<const cunMat>& c_spmIndices
+)
+{
+    if( c_spmIndices==nullptr )
+    {
+        throw std::invalid_argument("IndexFunction::apply: indices must not be null");
+    }
+
+    TensorList spmOutputs =forward( c_spmIndices );
+    if( spmOutputs.empty() )
+    {
+        throw std::runtime_error(
+            "IndexFunction::apply: forward must return at least one output"
+        );
+    }
+
+    auto spContext =std::make_shared<Context>();
+    spContext->_lpIndexFunc =this;
+    spContext->_spmIndices  =c_spmIndices;
+    for( const auto& c_spmOutput : spmOutputs )
+    {
+        if( c_spmOutput==nullptr )
+        {
+            throw std::runtime_error(
+                "IndexFunction::apply: forward returned a null output"
+            );
+        }
+        spContext->_wpmOutputs.push_back( c_spmOutput );
+        c_spmOutput->_spContext =spContext;
+    }
+    return spmOutputs;
+}
+
+TensorPtr IndexFunction::operator()(
+    const std::shared_ptr<const cunMat>& c_spmIndices
+)
+{
+    TensorList spmOutputs =apply( c_spmIndices );
+    if( spmOutputs.size()!=1 )
+    {
+        throw std::runtime_error(
+            "IndexFunction::operator(): use apply() for a multi-output IndexFunction"
+        );
+    }
+    return spmOutputs[0];
+}
+
 void Function::checkCurand(curandStatus_t crnStatus,const char* c_lpszOperation)
 {
     if( crnStatus!=CURAND_STATUS_SUCCESS )
@@ -86,7 +137,8 @@ const cufMat& Function::requireSingleOutputGrad(
     if( (c_lpmOutputGrads.size()!=1)||(c_lpmOutputGrads[0]==nullptr) )
     {
         throw std::runtime_error(
-            std::string(c_lpszFunctionName)+": exactly one output gradient is required"
+            std::string(c_lpszFunctionName)+
+            ": exactly one output gradient is required"
         );
     }
     return *c_lpmOutputGrads[0];
@@ -112,6 +164,7 @@ const cufMat& Function::singleGrad(
 Context::Context()
 {
     _lpFunc =nullptr;
+    _lpIndexFunc =nullptr;
 }
 Context::~Context()
 {

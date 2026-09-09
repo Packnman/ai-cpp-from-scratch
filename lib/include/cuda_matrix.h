@@ -190,6 +190,13 @@ void cuda_Pooling_backward(
     int nInputWidth,int nKernelSize,int nStride,
     int nOutputHeight,int nOutputWidth
 );
+void cuda_Embedding_forward(
+    cufMat& mResult,const cufMat& c_mWeight,const cunMat& c_mIndices
+);
+void cuda_Embedding_backward(
+    cufMat& mWeightGrad,const cufMat& c_mOutputGrad,
+    const cunMat& c_mIndices
+);
 void cuda_Adam_update(
     cufMat& mData,const cufMat& c_mGrad,
     cufMat& mFirstMoment,cufMat& mSecondMoment,

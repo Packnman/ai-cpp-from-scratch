@@ -2,23 +2,23 @@
 
 #include "cuda_function.h"
 
-
 // --------------------------
 // Embedding
 // --------------------------
-class Embedding: public Function
+class Embedding: public IndexFunction
 {
 public:
-    Embedding();
-    ~Embedding();
+    explicit Embedding(Tensor* lpWeight);
+    ~Embedding() override =default;
 
-public:
+    Tensor* _lpmWeight;
+
     void backward(
-        const std::vector<const cufMat*>& c_lpmOutputGrads,
-        const std::vector<std::shared_ptr<Tensor>>& c_spmInputs,
-        const std::vector<std::shared_ptr<Tensor>>& c_spmOutputs
+        const TensorGradList& c_lpmOutputGrads,
+        const std::shared_ptr<const cunMat>& c_spmIndices,
+        const TensorList& c_spmOutputs
     ) override;
-    std::vector<std::shared_ptr<Tensor>> forward(
-        const std::vector<std::shared_ptr<Tensor>>& c_spmInputs
+    TensorList forward(
+        const std::shared_ptr<const cunMat>& c_spmIndices
     ) override;
 };

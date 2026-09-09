@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <cfloat>
+#include <climits>
 #include "cuda_matrix.h"
 
 __global__ void kernel_fill(float* lpfResult,float c_fValue,int nSize);
@@ -26,6 +27,8 @@ __global__ void kernel_Conv2D_col2im(float* lpfInputGrad,const float* c_lpfColum
 __global__ void kernel_Conv2D_bias(float* lpfBiasGrad,const float* c_lpfGemmGrad,int nChannels,int nSize);
 __global__ void kernel_Pooling_forward(float* lpfOutput,const float* c_lpfInput,int nChannels,int nInputHeight,int nInputWidth,int nKernelSize,int nStride,int nOutputWidth,int nPositions,int nSize);
 __global__ void kernel_Pooling_backward(float* lpfInputGrad,const float* c_lpfInput,const float* c_lpfOutputGrad,int nChannels,int nInputHeight,int nInputWidth,int nKernelSize,int nStride,int nOutputWidth,int nPositions,int nSize);
+__global__ void kernel_Embedding_forward(float* lpfOutput,const float* c_lpfWeight,const std::int32_t* c_lpnIndices,int nPositions,int nVocabSize,int nSize);
+__global__ void kernel_Embedding_backward(float* lpfWeightGrad,const float* c_lpfOutputGrad,const std::int32_t* c_lpnIndices,int nPositions,int nVocabSize,int nSize);
 
 static void requireContiguousTensor(const cufMat& value,const char* operation)
 {
@@ -510,58 +513,6 @@ void cuda_SoftmaxCrossEntropy_backward(
         );
     }
 }
-void cuda_Adam_update(
-    cufMat& mData,
-    const cufMat& c_mGrad,
-    cufMat& mFirstMoment,
-    cufMat& mSecondMoment,
-    float fLearningRate,
-    float fBeta1,
-    float fBeta2,
-    float fBeta1Correction,
-    float fBeta2Correction,
-    float fEpsilon
-)
-{
-    requireContiguousTensor(mData,"cuda_Adam_update");
-    requireContiguousTensor(c_mGrad,"cuda_Adam_update");
-    requireContiguousTensor(mFirstMoment,"cuda_Adam_update");
-    requireContiguousTensor(mSecondMoment,"cuda_Adam_update");
-    if( mData.shape()!=c_mGrad.shape()||mData.shape()!=mFirstMoment.shape()||
-        mData.shape()!=mSecondMoment.shape() )
-    {
-        throw std::runtime_error(
-            "cuda_Adam_update: matrix size mismatch"
-        );
-    }
-
-    int nSize       =static_cast<int>(mData.numel());
-    int nThreads    =256;
-    int nBlocks     =(nSize+nThreads-1)/nThreads;
-    if( nSize<=0 )  {return;}
-    //
-    kernel_Adam_update<<<nBlocks,nThreads>>>(
-        mData.data(),
-        c_mGrad.data(),
-        mFirstMoment.data(),
-        mSecondMoment.data(),
-        fLearningRate,
-        fBeta1,
-        fBeta2,
-        fBeta1Correction,
-        fBeta2Correction,
-        fEpsilon,
-        nSize
-    );
-
-    cudaError_t cudError   =cudaGetLastError();
-    if( cudError!=cudaSuccess )
-    {
-        throw std::runtime_error(
-            "cuda_Adam_update: kernel launch failed"
-        );
-    }
-}
 void cuda_Conv2D_im2col(
     cufMat& mResult,
     const cufMat& c_mInput,
@@ -808,6 +759,176 @@ void cuda_Pooling_backward(
     }
 }
 
+void cuda_Embedding_forward(
+    cufMat& mResult,
+    const cufMat& c_mWeight,
+    const cunMat& c_mIndices
+)
+{
+    if( (c_mWeight.dim()!=2)||(c_mIndices.dim()!=2) )
+    {
+        throw std::invalid_argument("cuda_Embedding_forward: invalid tensor rank");
+    }
+    if( !mResult.isContiguous()||!c_mWeight.isContiguous()||
+        !c_mIndices.isContiguous() )
+    {
+        throw std::invalid_argument("cuda_Embedding_forward: contiguous tensors required");
+    }
+    const auto expected =std::vector<std::int64_t>{
+        c_mWeight.size(0),c_mIndices.size(0),c_mIndices.size(1)
+    };
+    if( mResult.shape()!=expected )
+    {
+        throw std::invalid_argument("cuda_Embedding_forward: output shape mismatch");
+    }
+    if( (c_mWeight.size(0)>INT_MAX)||(c_mWeight.size(1)>INT_MAX)||
+        (c_mIndices.numel()>static_cast<std::size_t>(INT_MAX))||
+        (mResult.numel()>static_cast<std::size_t>(INT_MAX)) )
+    {
+        throw std::overflow_error("cuda_Embedding_forward: tensor is too large");
+    }
+
+    const int nVocabSize =static_cast<int>(c_mWeight.size(1));
+    for( std::int32_t tokenId : c_mIndices.toHost() )
+    {
+        if( (tokenId<0)||(tokenId>=nVocabSize) )
+        {
+            throw std::out_of_range("cuda_Embedding_forward: token ID out of range");
+        }
+    }
+
+    const int nSize     =static_cast<int>(mResult.numel());
+    if( nSize<=0 ) return;
+    const int nThreads  =256;
+    const int nBlocks   =(nSize+nThreads-1)/nThreads;
+    kernel_Embedding_forward<<<nBlocks,nThreads>>>(
+        mResult.data(),
+        c_mWeight.data(),
+        c_mIndices.data(),
+        static_cast<int>(c_mIndices.numel()),
+        nVocabSize,nSize
+    );
+    //
+    const cudaError_t cudError =cudaGetLastError();
+    if( cudError!=cudaSuccess )
+    {
+        throw std::runtime_error(
+            std::string("cuda_Embedding_forward: kernel launch failed: ")+
+            cudaGetErrorString(cudError)
+        );
+    }
+}
+void cuda_Embedding_backward(
+    cufMat& mWeightGrad,
+    const cufMat& c_mOutputGrad,
+    const cunMat& c_mIndices
+)
+{
+    if( (mWeightGrad.dim()!=2)||(c_mIndices.dim()!=2) )
+    {
+        throw std::invalid_argument("cuda_Embedding_backward: invalid tensor rank");
+    }
+    if( !mWeightGrad.isContiguous()||!c_mOutputGrad.isContiguous()||
+        !c_mIndices.isContiguous() )
+    {
+        throw std::invalid_argument("cuda_Embedding_backward: contiguous tensors required");
+    }
+    const auto expected =std::vector<std::int64_t>{
+        mWeightGrad.size(0),c_mIndices.size(0),c_mIndices.size(1)
+    };
+    if( c_mOutputGrad.shape()!=expected )
+    {
+        throw std::invalid_argument("cuda_Embedding_backward: gradient shape mismatch");
+    }
+    if( (mWeightGrad.size(0)>INT_MAX)||(mWeightGrad.size(1)>INT_MAX)||
+        (c_mIndices.numel()>static_cast<std::size_t>(INT_MAX))||
+        (c_mOutputGrad.numel()>static_cast<std::size_t>(INT_MAX)) )
+    {
+        throw std::overflow_error("cuda_Embedding_backward: tensor is too large");
+    }
+
+    const int nVocabSize =static_cast<int>(mWeightGrad.size(1));
+    for( std::int32_t tokenId : c_mIndices.toHost() )
+    {
+        if( (tokenId<0)||(tokenId>=nVocabSize) )
+        {
+            throw std::out_of_range("cuda_Embedding_backward: token ID out of range");
+        }
+    }
+
+    const int nSize =static_cast<int>(c_mOutputGrad.numel());
+    if( nSize<=0 ) return;
+    const int nThreads =256;
+    const int nBlocks =(nSize+nThreads-1)/nThreads;
+    kernel_Embedding_backward<<<nBlocks,nThreads>>>(
+        mWeightGrad.data(),
+        c_mOutputGrad.data(),
+        c_mIndices.data(),
+        static_cast<int>(c_mIndices.numel()),
+        nVocabSize,nSize
+    );
+    //
+    const cudaError_t cudError =cudaGetLastError();
+    if( cudError!=cudaSuccess )
+    {
+        throw std::runtime_error(
+            std::string("cuda_Embedding_backward: kernel launch failed: ")+
+            cudaGetErrorString(cudError)
+        );
+    }
+}
+void cuda_Adam_update(
+    cufMat& mData,
+    const cufMat& c_mGrad,
+    cufMat& mFirstMoment,
+    cufMat& mSecondMoment,
+    float fLearningRate,
+    float fBeta1,
+    float fBeta2,
+    float fBeta1Correction,
+    float fBeta2Correction,
+    float fEpsilon
+)
+{
+    requireContiguousTensor(mData,"cuda_Adam_update");
+    requireContiguousTensor(c_mGrad,"cuda_Adam_update");
+    requireContiguousTensor(mFirstMoment,"cuda_Adam_update");
+    requireContiguousTensor(mSecondMoment,"cuda_Adam_update");
+    if( mData.shape()!=c_mGrad.shape()||mData.shape()!=mFirstMoment.shape()||
+        mData.shape()!=mSecondMoment.shape() )
+    {
+        throw std::runtime_error(
+            "cuda_Adam_update: matrix size mismatch"
+        );
+    }
+
+    int nSize       =static_cast<int>(mData.numel());
+    int nThreads    =256;
+    int nBlocks     =(nSize+nThreads-1)/nThreads;
+    if( nSize<=0 )  {return;}
+    //
+    kernel_Adam_update<<<nBlocks,nThreads>>>(
+        mData.data(),
+        c_mGrad.data(),
+        mFirstMoment.data(),
+        mSecondMoment.data(),
+        fLearningRate,
+        fBeta1,
+        fBeta2,
+        fBeta1Correction,
+        fBeta2Correction,
+        fEpsilon,
+        nSize
+    );
+
+    cudaError_t cudError   =cudaGetLastError();
+    if( cudError!=cudaSuccess )
+    {
+        throw std::runtime_error(
+            "cuda_Adam_update: kernel launch failed"
+        );
+    }
+}
 
 __global__ void kernel_fill(float* lpfResult,float c_fValue,int nSize)
 {
@@ -1370,4 +1491,44 @@ __global__ void kernel_Pooling_backward(
     // windowが重なる場合は同じ入力へ複数の勾配が流れるためatomicAddする。
     atomicAdd( lpfInputGrad + nBestRow*nBatch+nSample,
                c_lpfOutputGrad[nIndex] );
+}
+
+__global__ void kernel_Embedding_forward(
+    float* lpfOutput,
+    const float* c_lpfWeight,
+    const std::int32_t* c_lpnIndices,
+    int nPositions,
+    int nVocabSize,
+    int nSize
+)
+{
+    const int nIndex =blockIdx.x*blockDim.x+threadIdx.x;
+    if( nIndex<nSize )
+    {
+        const int nEmbedding =nIndex/nPositions;
+        const int nPosition =nIndex%nPositions;
+        lpfOutput[nIndex] =
+            c_lpfWeight[nEmbedding*nVocabSize+c_lpnIndices[nPosition]];
+    }
+}
+
+__global__ void kernel_Embedding_backward(
+    float* lpfWeightGrad,
+    const float* c_lpfOutputGrad,
+    const std::int32_t* c_lpnIndices,
+    int nPositions,
+    int nVocabSize,
+    int nSize
+)
+{
+    const int nIndex =blockIdx.x*blockDim.x+threadIdx.x;
+    if( nIndex<nSize )
+    {
+        const int nEmbedding =nIndex/nPositions;
+        const int nPosition =nIndex%nPositions;
+        atomicAdd(
+            lpfWeightGrad+nEmbedding*nVocabSize+c_lpnIndices[nPosition],
+            c_lpfOutputGrad[nIndex]
+        );
+    }
 }

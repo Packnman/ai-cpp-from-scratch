@@ -24,6 +24,21 @@
 | `lib/include/module.h` | [module.md](module.md) |
 | `lib/include/optimizer.h` | [optimizer.md](optimizer.md) |
 
+## CUDA Function 詳細設計
+
+次のクラスは実装前の設計仕様であり、現在はTODO付きの基盤実装である。
+
+| クラス | 設計仕様 |
+| --- | --- |
+| `Add` | [cuda_function_add.md](cuda_function_add.md) |
+| `BatchMatMul` | [cuda_function_batch_mat_mul.md](cuda_function_batch_mat_mul.md) |
+| `LayerNorm` | [cuda_function_layer_norm.md](cuda_function_layer_norm.md) |
+| `Mask` | [cuda_function_mask.md](cuda_function_mask.md) |
+| `Permute` | [cuda_function_permute.md](cuda_function_permute.md) |
+| `Reshape` | [cuda_function_reshape.md](cuda_function_reshape.md) |
+| `Scale` | [cuda_function_scale.md](cuda_function_scale.md) |
+| `Softmax` | [cuda_function_softmax.md](cuda_function_softmax.md) |
+
 ## 共通規約
 
 - ニューラルネットワークの行列は「特徴量またはクラス数 × バッチ数」で表す。

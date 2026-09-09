@@ -7,6 +7,7 @@
 #include "cuda_matrix.h"
 
 class Tensor;
+class IndexFunction;
 
 using TensorPtr =std::shared_ptr<Tensor>;
 using TensorList =std::vector<TensorPtr>;
@@ -50,6 +51,30 @@ public:
 };
 
 // --------------------------
+// IndexFunction
+// --------------------------
+// Integer tensors are lookup keys, not differentiable Tensor inputs. This
+// parallel interface records them in the autograd Context while leaving the
+// existing floating-point Function API unchanged.
+class IndexFunction{
+public:
+    IndexFunction() =default;
+    virtual ~IndexFunction() =default;
+
+    virtual void backward(
+        const TensorGradList& c_lpmOutputGrads,
+        const std::shared_ptr<const cunMat>& c_spmIndices,
+        const TensorList& c_spmOutputs
+    ) =0;
+    virtual TensorList forward(
+        const std::shared_ptr<const cunMat>& c_spmIndices
+    ) =0;
+
+    TensorList apply(const std::shared_ptr<const cunMat>& c_spmIndices);
+    TensorPtr operator()(const std::shared_ptr<const cunMat>& c_spmIndices);
+};
+
+// --------------------------
 // Context
 // --------------------------
 class Context{
@@ -59,8 +84,10 @@ public:
 
 public:
     Function* _lpFunc;
+    IndexFunction* _lpIndexFunc;
 
     std::vector<std::shared_ptr<Tensor>> _spmInputs;
+    std::shared_ptr<const cunMat> _spmIndices;
     std::vector<std::weak_ptr<Tensor>> _wpmOutputs;
 };
 

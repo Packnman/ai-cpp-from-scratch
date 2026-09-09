@@ -366,6 +366,7 @@ template class cuMat<std::int32_t>;
 
 void cuda_scale(cufMat& result,float value)
 {
+    // result = value * result
     requireContiguous(result,"cuda_scale");
     auto status =cublasSscal(
         getCublasHandle(),
@@ -382,6 +383,7 @@ void cuda_scale(cufMat& result,float value)
 }
 void cuda_axpy(cufMat& result,float alpha,const cufMat& a)
 {
+    // result = alpha * a + result
     requireContiguous(result,"cuda_axpy");
     requireContiguous(a,"cuda_axpy");
     requireSameShape(result,a,"cuda_axpy");
@@ -402,6 +404,7 @@ void cuda_axpy(cufMat& result,float alpha,const cufMat& a)
 }
 void cuda_geam(cufMat& result,float alpha,const cufMat& a,float beta,const cufMat& b)
 {
+    // CUBLAS_GEAM: C = alpha * op(A) + beta * op(B)
     requireContiguous(result,"cuda_geam");
     requireContiguous(a,"cuda_geam");
     requireContiguous(b,"cuda_geam");
@@ -424,6 +427,7 @@ void cuda_geam(cufMat& result,float alpha,const cufMat& a,float beta,const cufMa
 }
 void cuda_gemm(cufMat& result,const cufMat& a,const cufMat& b,bool transposeA,bool transposeB,float alpha,float beta)
 {
+    // CUBLAS_GEMM: C = alpha * op(A) * op(B) + beta * C
     requireContiguous(result,"cuda_gemm");
     requireContiguous(a,"cuda_gemm");
     requireContiguous(b,"cuda_gemm");
@@ -459,6 +463,7 @@ void cuda_gemm(cufMat& result,const cufMat& a,const cufMat& b,bool transposeA,bo
 }
 void cuda_transpose(cufMat& result,const cufMat& a)
 {
+    // CUBLAS_GEAM: C = alpha * op(A) + beta * op(B)
     requireContiguous(result,"cuda_transpose");
     requireContiguous(a,"cuda_transpose");
     if( (result.rows()!=a.cols())||(result.cols()!=a.rows()) )

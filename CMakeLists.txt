@@ -17,16 +17,26 @@ set(AI_CPP_CUDA_ARCHITECTURES "86" CACHE STRING
     "CUDA architectures to build for (for example: 86 or 86;89)")
 
 add_library(ai_cpp STATIC
+    lib/src/tokenizer_character.cpp
     lib/src/cuda_matrix.cpp
     lib/src/cuda_matrix.cu
     lib/src/cuda_function.cpp
+    lib/src/cuda_function_Add.cpp
+    lib/src/cuda_function_BatchMatMul.cpp
     lib/src/cuda_function_BatchNorm.cpp
     lib/src/cuda_function_Conv2D.cpp
     lib/src/cuda_function_Dropout.cpp
+    lib/src/cuda_function_Embedding.cpp
     lib/src/cuda_function_GELU.cpp
+    lib/src/cuda_function_LayerNorm.cpp
     lib/src/cuda_function_Linear.cpp
+    lib/src/cuda_function_Mask.cpp
+    lib/src/cuda_function_Permute.cpp
     lib/src/cuda_function_Pooling.cpp
     lib/src/cuda_function_ReLU.cpp
+    lib/src/cuda_function_Reshape.cpp
+    lib/src/cuda_function_Scale.cpp
+    lib/src/cuda_function_Softmax.cpp
     lib/src/cuda_function_SoftmaxCrossEntropy.cpp
     lib/src/cuda_tensor.cpp
     lib/src/module.cpp
@@ -72,6 +82,14 @@ target_include_directories(cifar10_train PRIVATE
 target_link_libraries(cifar10_train PRIVATE ai_cpp)
 
 if(BUILD_TESTING)
+    add_executable(character_tokenizer_check tests/character_tokenizer_check.cpp)
+    target_include_directories(character_tokenizer_check PRIVATE ${PROJECT_SOURCE_DIR}/lib/include)
+    target_link_libraries(character_tokenizer_check PRIVATE ai_cpp)
+
+    add_executable(embedding_check tests/embedding_check.cpp)
+    target_include_directories(embedding_check PRIVATE ${PROJECT_SOURCE_DIR}/lib/include)
+    target_link_libraries(embedding_check PRIVATE ai_cpp)
+
     add_executable(cuda_index_tensor_check tests/cuda_index_tensor_check.cpp)
     target_include_directories(cuda_index_tensor_check PRIVATE ${PROJECT_SOURCE_DIR}/lib/include)
     target_link_libraries(cuda_index_tensor_check PRIVATE ai_cpp)
@@ -146,6 +164,8 @@ if(BUILD_TESTING)
     target_link_libraries(cifar10_model_check PRIVATE ai_cpp)
 
     add_test(NAME cuda_check COMMAND cuda_check)
+    add_test(NAME character_tokenizer_check COMMAND character_tokenizer_check)
+    add_test(NAME embedding_check COMMAND embedding_check)
     add_test(NAME cuda_index_tensor_check COMMAND cuda_index_tensor_check)
     add_test(NAME row_major_check COMMAND row_major_check)
     add_test(NAME multi_output_check COMMAND multi_output_check)

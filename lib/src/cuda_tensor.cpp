@@ -42,7 +42,8 @@ void Tensor::backward()
     {
         Context* lpContext  =lpContexts[nContext];
 
-        if( lpContext->_lpFunc==nullptr )   {continue;}
+        if( (lpContext->_lpFunc==nullptr)&&
+            (lpContext->_lpIndexFunc==nullptr) )   {continue;}
 
         // 出力番号を保ったまま、それぞれの出力勾配をFunctionへ渡す。
         // 破棄済みの出力はnullptrとなり、勾配なしとして扱う。
@@ -65,11 +66,22 @@ void Tensor::backward()
         }
         if( isOutputAvailable )
         {
-            lpContext->_lpFunc->backward(
-                lpmOutputGrads,
-                lpContext->_spmInputs,
-                spmOutputs
-            );
+            if( lpContext->_lpFunc!=nullptr )
+            {
+                lpContext->_lpFunc->backward(
+                    lpmOutputGrads,
+                    lpContext->_spmInputs,
+                    spmOutputs
+                );
+            }
+            else
+            {
+                lpContext->_lpIndexFunc->backward(
+                    lpmOutputGrads,
+                    lpContext->_spmIndices,
+                    spmOutputs
+                );
+            }
         }
     }
 }
@@ -79,10 +91,10 @@ void Tensor::buildBackwardGraph(
     std::unordered_set<Context*>& lpVisited
 )
 {
-    if( lpValue==nullptr )                        {return;}
+    if( lpValue==nullptr )  {return;}
 
     Context* lpContext  =lpValue->_spContext.get();
-    if( lpContext==nullptr )                    {return;}
+    if( lpContext==nullptr )    {return;}
     if( lpVisited.find(lpContext)!=lpVisited.end() ){return;} // 同じFunctionを二重登録しない
     //
     lpVisited.insert( lpContext );
