@@ -10,6 +10,8 @@
 | `include/neuralnet_mnist.h` | [mnist_neuralnet.md](mnist_neuralnet.md) |
 | `include/dataset_cifar10.h` | [cifar10.md](cifar10.md) |
 | `include/neuralnet_cifar10.h` | [neuralnet.md](neuralnet.md) |
+| `include/module_Attention.h` | [module_attention.md](module_attention.md) |
+| `include/module_FeedForward.h` | [module_feed_forward.md](module_feed_forward.md) |
 | `include/trainer.h` | [trainer.md](trainer.md) |
 
 ## ライブラリ層
