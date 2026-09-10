@@ -16,7 +16,7 @@ Softmax::~Softmax()
 {
 }
 
-Softmax::ShapeInfo Softmax::validateInput(
+Softmax::ShapeInfo Softmax::_validateInput(
     const cufMat& c_mInput,
     const char* c_lpszOperation
 ) const
@@ -85,7 +85,7 @@ void Softmax::backward(
             "Softmax::backward: exactly one input is required"
         );
     }
-    const ShapeInfo shape =validateInput(
+    const ShapeInfo shape =_validateInput(
         c_spmInputs[0]->_mData,"Softmax::backward"
     );
     const cufMat& c_mGrad =requireSingleOutputGrad(
@@ -122,7 +122,7 @@ TensorList Softmax::forward(const TensorList& c_spmInputs)
             "Softmax::forward: exactly one input is required"
         );
     }
-    const ShapeInfo shape =validateInput(
+    const ShapeInfo shape =_validateInput(
         c_spmInputs[0]->_mData,"Softmax::forward"
     );
     auto spmResult =std::make_shared<Tensor>(

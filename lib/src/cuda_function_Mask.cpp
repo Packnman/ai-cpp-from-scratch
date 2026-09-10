@@ -20,7 +20,7 @@ Mask::~Mask()
 {
 }
 
-Mask::ShapeInfo Mask::validateInput(
+Mask::ShapeInfo Mask::_validateInput(
     const TensorList& c_spmInputs,
     const char* c_lpszOperation
 ) const
@@ -97,7 +97,7 @@ void Mask::backward(
 )
 {
     (void)c_spmOutputs;
-    const ShapeInfo shape =validateInput(
+    const ShapeInfo shape =_validateInput(
         c_spmInputs,"Mask::backward"
     );
     const cufMat& c_mGrad =requireSingleOutputGrad(
@@ -118,16 +118,16 @@ void Mask::backward(
         c_spmInputs[0]->_mGrad,
         c_mGrad,
         _lpmMask->_mData,
-        shape._nQuery,
-        shape._nKey,
-        shape._nTrailing,
-        shape._isBroadcast
+        shape.nQuery,
+        shape.nKey,
+        shape.nTrailing,
+        shape.isBroadcast
     );
 }
 
 TensorList Mask::forward(const TensorList& c_spmInputs)
 {
-    const ShapeInfo shape =validateInput(
+    const ShapeInfo shape =_validateInput(
         c_spmInputs,"Mask::forward"
     );
     auto spmResult =std::make_shared<Tensor>(
@@ -137,10 +137,10 @@ TensorList Mask::forward(const TensorList& c_spmInputs)
         spmResult->_mData,
         c_spmInputs[0]->_mData,
         _lpmMask->_mData,
-        shape._nQuery,
-        shape._nKey,
-        shape._nTrailing,
-        shape._isBroadcast
+        shape.nQuery,
+        shape.nKey,
+        shape.nTrailing,
+        shape.isBroadcast
     );
     return {spmResult};
 }

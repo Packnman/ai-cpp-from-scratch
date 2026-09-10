@@ -9,7 +9,7 @@
 #include "cuda_tensor.h"
 
 
-void LayerNorm::validateParameter(
+void LayerNorm::_validateParameter(
     const Tensor* c_lpParameter,
     std::int64_t c_nFeatures,
     const char* c_lpszName
@@ -66,8 +66,8 @@ LayerNorm::LayerNorm(Tensor* lpGamma,Tensor* lpBeta,float fEpsilon)
         {
             throw std::invalid_argument("LayerNorm: invalid gamma shape");
         }
-        validateParameter( _lpmGamma,_lpmGamma->_mData.size(0),"gamma" );
-        validateParameter( _lpmBeta,_lpmGamma->_mData.size(0),"beta" );
+        _validateParameter( _lpmGamma,_lpmGamma->_mData.size(0),"gamma" );
+        _validateParameter( _lpmBeta,_lpmGamma->_mData.size(0),"beta" );
     }
 }
 
@@ -75,7 +75,7 @@ LayerNorm::~LayerNorm()
 {
 }
 
-LayerNorm::ShapeInfo LayerNorm::validateInput(
+LayerNorm::ShapeInfo LayerNorm::_validateInput(
     const TensorList& c_spmInputs,
     const char* c_lpszOperation
 ) const
@@ -118,8 +118,8 @@ LayerNorm::ShapeInfo LayerNorm::validateInput(
 
     if( _lpmGamma!=nullptr )
     {
-        validateParameter( _lpmGamma,c_mInput.size(0),"gamma" );
-        validateParameter( _lpmBeta,c_mInput.size(0),"beta" );
+        _validateParameter( _lpmGamma,c_mInput.size(0),"gamma" );
+        _validateParameter( _lpmBeta,c_mInput.size(0),"beta" );
     }
     return {
         static_cast<int>(c_mInput.size(0)),
@@ -136,7 +136,7 @@ void LayerNorm::backward(
 )
 {
     (void)c_spmOutputs;
-    const ShapeInfo shape =validateInput(
+    const ShapeInfo shape =_validateInput(
         c_spmInputs,"LayerNorm::backward"
     );
     const cufMat& c_mOutputGrad =requireSingleOutputGrad(
@@ -162,15 +162,15 @@ void LayerNorm::backward(
         c_mOutputGrad,
         c_spmInputs[0]->_mData,
         _lpmGamma==nullptr ? nullptr : &_lpmGamma->_mData,
-        shape._nFeatures,
-        shape._nPositions,
+        shape.nFeatures,
+        shape.nPositions,
         _fEpsilon
     );
 }
 
 TensorList LayerNorm::forward(const TensorList& c_spmInputs)
 {
-    const ShapeInfo shape =validateInput(
+    const ShapeInfo shape =_validateInput(
         c_spmInputs,"LayerNorm::forward"
     );
     auto spmResult =std::make_shared<Tensor>(
@@ -181,8 +181,8 @@ TensorList LayerNorm::forward(const TensorList& c_spmInputs)
         c_spmInputs[0]->_mData,
         _lpmGamma==nullptr ? nullptr : &_lpmGamma->_mData,
         _lpmBeta==nullptr ? nullptr : &_lpmBeta->_mData,
-        shape._nFeatures,
-        shape._nPositions,
+        shape.nFeatures,
+        shape.nPositions,
         _fEpsilon
     );
     return {spmResult};

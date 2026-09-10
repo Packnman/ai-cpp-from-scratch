@@ -15,15 +15,15 @@ public:
 private:
     struct ShapeInfo
     {
-        int _nQuery;
-        int _nKey;
-        int _nTrailing;
-        bool _isBroadcast;
+        int nQuery;
+        int nKey;
+        int nTrailing;
+        bool isBroadcast;
     };
 
     Tensor* _lpmMask;
 
-    ShapeInfo validateInput(
+    ShapeInfo _validateInput(
         const std::vector<std::shared_ptr<Tensor>>& c_spmInputs,
         const char* c_lpszOperation
     ) const;

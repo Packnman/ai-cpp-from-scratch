@@ -21,7 +21,7 @@ private:
 
     std::size_t _nAxis;
 
-    ShapeInfo validateInput(
+    ShapeInfo _validateInput(
         const cufMat& c_mInput,
         const char* c_lpszOperation
     ) const;

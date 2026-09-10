@@ -16,20 +16,20 @@ public:
 private:
     struct ShapeInfo
     {
-        int _nFeatures;
-        int _nPositions;
+        int nFeatures;
+        int nPositions;
     };
 
     Tensor* _lpmGamma;
     Tensor* _lpmBeta;
     float _fEpsilon;
 
-    static void validateParameter(
+    static void _validateParameter(
         const Tensor* c_lpParameter,
         std::int64_t c_nFeatures,
         const char* c_lpszName
     );
-    ShapeInfo validateInput(
+    ShapeInfo _validateInput(
         const std::vector<std::shared_ptr<Tensor>>& c_spmInputs,
         const char* c_lpszOperation
     ) const;
