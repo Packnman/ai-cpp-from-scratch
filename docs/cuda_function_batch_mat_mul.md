@@ -4,7 +4,7 @@
 
 ## 実装状態
 
-インターフェースとソース基盤のみ存在する。現在の `forward` と `backward` は `std::logic_error` を送出する。
+末尾バッチ軸を持つrow-major配置を直接扱う専用CUDA kernelとして実装済み。forward、Aの勾配、Bの勾配はすべてGPU上で計算し、hostとの間でTensorデータを転送しない。
 
 ## 目的
 

@@ -4,13 +4,13 @@
 
 ## 実装状態
 
-ソース基盤のみ存在し、現在の `forward` と `backward` は `std::logic_error` を送出する。現行コンストラクタには倍率の指定がないため、実装時にAPIを拡張する。
+実装済み。既存のCUDAベクトル演算で固定scalarのforwardとbackwardを計算する。デフォルト倍率は1である。
 
 ## 目的
 
 Tensorの全要素へ固定scalarを乗算する。Scaled Dot-Product AttentionではQueryとKeyの内積を $1/\sqrt{d_k}$ 倍し、Softmaxが飽和しにくい範囲へ調整する。
 
-## 計画API
+## API
 
 ```cpp
 explicit Scale( float fScale );

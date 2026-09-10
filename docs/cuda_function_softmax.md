@@ -4,13 +4,13 @@
 
 ## 実装状態
 
-ソース基盤のみ存在し、現在の `forward` と `backward` は `std::logic_error` を送出する。現行コンストラクタには正規化軸の指定がないため、実装時にAPIを拡張する。
+指定軸のsliceごとにreduceする専用CUDA kernelとして実装済み。任意rankを処理し、数値安定なforwardとJacobian-vector積によるbackwardをGPU上で行う。Tensorデータはhostへ転送せず、入力検証用の小さなエラーフラグだけをhostへ戻す。
 
 ## 目的
 
 指定軸の値を、合計1の非負な確率へ変換する。Multi-Head Attentionではmaskおよびscale適用後のscoreをkey軸に沿って正規化する。
 
-## 計画API
+## API
 
 ```cpp
 explicit Softmax( std::size_t nAxis );

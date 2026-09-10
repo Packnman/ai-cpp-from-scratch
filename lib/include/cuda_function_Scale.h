@@ -9,8 +9,11 @@
 class Scale: public Function
 {
 public:
-    Scale();
+    explicit Scale(float fScale =1.0f);
     ~Scale();
+
+private:
+    float _fScale;
 
 public:
     void backward(

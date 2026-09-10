@@ -1,4 +1,4 @@
-#include "character_tokenizer.h"
+#include "tokenizer_character.h"
 
 #include <cstdint>
 #include <iostream>
@@ -11,7 +11,7 @@
 static_assert(
     std::is_base_of_v<
         Tokenizer<std::string_view,std::string>,
-        CharacterTokenizer
+        TokenCharacter
     >
 );
 
@@ -75,7 +75,7 @@ void requireThrows(Callable&& callable,const char* message)
 void vocabularyAndRoundTrip()
 {
     const std::string corpus ="To be,\nor not! \xc3\xa9\xce\xa9T";
-    CharacterTokenizer tokenizer( corpus );
+    TokenCharacter tokenizer( corpus );
 
     const std::string codePointOrder ="\n !,Tbenort\xc3\xa9\xce\xa9";
     const std::vector<std::int32_t> expected{
@@ -104,7 +104,7 @@ void vocabularyAndRoundTrip()
 
 void baseInterface()
 {
-    CharacterTokenizer characterTokenizer("abc");
+    TokenCharacter characterTokenizer("abc");
     const Tokenizer<std::string_view,std::string>& tokenizer =
         characterTokenizer;
 
@@ -133,7 +133,7 @@ void baseInterface()
 
 void validation()
 {
-    CharacterTokenizer tokenizer("abc");
+    TokenCharacter tokenizer("abc");
 
     requireThrows<std::out_of_range>(
         [&] { (void)tokenizer.encode("d"); },
@@ -148,7 +148,7 @@ void validation()
         "out-of-range token ID was accepted"
     );
     requireThrows<std::invalid_argument>(
-        [] { CharacterTokenizer invalid(std::string("\xc0\xaf",2)); },
+        [] { TokenCharacter invalid(std::string("\xc0\xaf",2)); },
         "overlong UTF-8 was accepted"
     );
     requireThrows<std::invalid_argument>(
@@ -156,11 +156,11 @@ void validation()
         "truncated UTF-8 was accepted"
     );
     requireThrows<std::invalid_argument>(
-        [] { CharacterTokenizer invalid(std::string("\xed\xa0\x80",3)); },
+        [] { TokenCharacter invalid(std::string("\xed\xa0\x80",3)); },
         "UTF-8 surrogate was accepted"
     );
     requireThrows<std::invalid_argument>(
-        [] { CharacterTokenizer invalid(std::string("\xf4\x90\x80\x80",4)); },
+        [] { TokenCharacter invalid(std::string("\xf4\x90\x80\x80",4)); },
         "out-of-range Unicode code point was accepted"
     );
 }

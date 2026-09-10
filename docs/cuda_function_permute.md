@@ -4,15 +4,15 @@
 
 ## 実装状態
 
-ソース基盤のみ存在し、現在の `forward` と `backward` は `std::logic_error` を送出する。現行コンストラクタには軸順序の指定がないため、実装時にAPIを拡張する。
+任意rankの軸順序を直接変換する専用CUDA kernelとして実装済み。forwardでは指定順列、backwardでは逆順列をGPU上で適用し、引数なしの構築は恒等順列として扱う。
 
 ## 目的
 
 Tensorの要素値を変えずに軸順序を入れ替える。Transformerではhead軸の分割・結合や、BatchMatMulへ渡すQuery、Key、Valueの軸調整に使用する。
 
-## 計画API
+## API
 
-実装時には出力軸から入力軸への対応をコンストラクタで受け取る。
+出力軸から入力軸への対応をコンストラクタで受け取る。
 
 ```cpp
 explicit Permute( std::vector<std::size_t> dimensions );
@@ -35,8 +35,8 @@ output[j,i,k] = input[i,j,k]
 
 1. 入力が1個であることを検証する。
 2. `dimensions` が入力rankと同じ長さの完全な順列であることを検証する。
-3. `cufMat::permute` でviewを作る。
-4. `contiguous()` で新しい連続Tensorへ実体化する。
+3. 出力shapeと入力strideをCUDA kernelへ渡す。
+4. 各出力要素の座標から入力offsetを求め、新しい連続TensorへGPU上で書き込む。
 
 Tensorはdataとgradを同shapeで所有し、多くのCUDA演算は連続配置を要求する。このためv1のFunction出力は非連続viewではなく、連続した独立Tensorとする。
 
@@ -51,7 +51,7 @@ Y=P(X),\qquad
 \frac{\partial L}{\partial X}=P^{-1}\left(\frac{\partial L}{\partial Y}\right)
 $$
 
-逆permuteの結果が非連続viewになる場合は、加算前に `contiguous()` で実体化する。
+逆順列を同じCUDA kernelへ渡して連続Tensorへ書き込み、入力の既存勾配へGPU上で加算する。
 
 ## 検証と例外
 

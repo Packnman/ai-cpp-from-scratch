@@ -7,8 +7,24 @@
 // --------------------------
 class Softmax: public Function{
 public:
-    Softmax();
+    explicit Softmax(std::size_t nAxis =0);
     ~Softmax();
+
+private:
+    struct ShapeInfo
+    {
+        int _nOuter;
+        int _nAxisSize;
+        int _nInner;
+        int _nSlices;
+    };
+
+    std::size_t _nAxis;
+
+    ShapeInfo validateInput(
+        const cufMat& c_mInput,
+        const char* c_lpszOperation
+    ) const;
 
 public:
     void backward(

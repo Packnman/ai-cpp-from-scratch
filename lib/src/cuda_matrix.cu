@@ -1,4 +1,5 @@
 #include <cuda_runtime.h>
+#include <math_constants.h>
 
 #include <cstdlib>
 #include <iostream>
@@ -8,6 +9,16 @@
 
 __global__ void kernel_fill(float* lpfResult,float c_fValue,int nSize);
 __global__ void kernel_mul_elementwise(float* lpfResult,const float* c_lpfA,const float* c_lpfB,int nSize);
+__global__ void kernel_BatchMatMul_forward(float* lpfResult,const float* c_lpfA,const float* c_lpfB,int nK,int nN,int nBatch,int nSize);
+__global__ void kernel_BatchMatMul_backward_A(float* lpfAGrad,const float* c_lpfOutputGrad,const float* c_lpfB,int nK,int nN,int nBatch,int nSize);
+__global__ void kernel_BatchMatMul_backward_B(float* lpfBGrad,const float* c_lpfOutputGrad,const float* c_lpfA,int nM,int nK,int nN,int nBatch,int nSize);
+__global__ void kernel_LayerNorm_forward(float* lpfResult,const float* c_lpfInput,const float* c_lpfGamma,const float* c_lpfBeta,int nFeatures,int nPositions,float fEpsilon);
+__global__ void kernel_LayerNorm_backward(float* lpfInputGrad,float* lpfGammaGrad,float* lpfBetaGrad,const float* c_lpfOutputGrad,const float* c_lpfInput,const float* c_lpfGamma,int nFeatures,int nPositions,float fEpsilon);
+__global__ void kernel_Mask_forward(float* lpfResult,const float* c_lpfInput,const float* c_lpfMask,int* lpnError,int nKey,int nTrailing,bool isBroadcast,int nRows);
+__global__ void kernel_Mask_backward(float* lpfInputGrad,const float* c_lpfOutputGrad,const float* c_lpfMask,int nTrailing,bool isBroadcast,int nSize);
+__global__ void kernel_Permute(float* lpfResult,const float* c_lpfInput,const std::int64_t* c_lpnOutputShape,const std::int64_t* c_lpnInputStrides,int nRank,int nSize);
+__global__ void kernel_Softmax_forward(float* lpfResult,const float* c_lpfInput,int* lpnError,int nAxisSize,int nInner,int nSlices);
+__global__ void kernel_Softmax_backward(float* lpfInputGrad,const float* c_lpfOutputGrad,const float* c_lpfOutput,int nAxisSize,int nInner,int nSlices);
 __global__ void kernel_ReLU_forward(float* lpfResult,const float* c_lpfValue,int nSize);
 __global__ void kernel_ReLU_backward(float* lpfResult,const float* c_lpfData,const float* c_lpfGrad,int nSize);
 __global__ void kernel_GELU_forward(float* lpfResult,const float* c_lpfValue,int nSize);
@@ -32,7 +43,12 @@ __global__ void kernel_Embedding_backward(float* lpfWeightGrad,const float* c_lp
 
 static void requireContiguousTensor(const cufMat& value,const char* operation)
 {
-    if(!value.isContiguous()) throw std::invalid_argument(std::string(operation)+": contiguous tensor required");
+    if( !value.isContiguous() )
+    {
+        throw std::invalid_argument(
+            std::string(operation)+": contiguous tensor required"
+        );
+    }
 }
 
 void cu_detail::fillOnes(float* destination,std::size_t elements)
@@ -119,6 +135,627 @@ void cuda_mul_elementwise(cufMat& mResult,const cufMat& c_mA,const cufMat& c_mB)
     {
         throw std::runtime_error(
             "cuda_mul_elementwise: kernel launch failed"
+        );
+    }
+}
+void cuda_BatchMatMul_forward(
+    cufMat& mResult,
+    const cufMat& c_mA,
+    const cufMat& c_mB,
+    int nM,
+    int nK,
+    int nN,
+    int nBatch
+)
+{
+    requireContiguousTensor(mResult,"cuda_BatchMatMul_forward");
+    requireContiguousTensor(c_mA,"cuda_BatchMatMul_forward");
+    requireContiguousTensor(c_mB,"cuda_BatchMatMul_forward");
+    if( (nM<0)||(nK<0)||(nN<0)||(nBatch<0) )
+    {
+        throw std::invalid_argument(
+            "cuda_BatchMatMul_forward: negative dimension"
+        );
+    }
+    const auto checkedElements =[](int nFirst,int nSecond,int nThird)
+    {
+        std::size_t nElements =static_cast<std::size_t>(nFirst);
+        for( const int nExtent:{nSecond,nThird} )
+        {
+            if( (nExtent!=0)&&
+                (nElements>static_cast<std::size_t>(INT_MAX)/nExtent) )
+            {
+                throw std::overflow_error(
+                    "cuda_BatchMatMul_forward: tensor is too large"
+                );
+            }
+            nElements *=static_cast<std::size_t>(nExtent);
+        }
+        return nElements;
+    };
+    if( (c_mA.numel()!=checkedElements(nM,nK,nBatch))||
+        (c_mB.numel()!=checkedElements(nK,nN,nBatch))||
+        (mResult.numel()!=checkedElements(nM,nN,nBatch)) )
+    {
+        throw std::invalid_argument(
+            "cuda_BatchMatMul_forward: tensor size mismatch"
+        );
+    }
+
+    const int nSize =static_cast<int>(mResult.numel());
+    if( nSize<=0 ) return;
+    const int nThreads =256;
+    const int nBlocks =(nSize+nThreads-1)/nThreads;
+    //
+    kernel_BatchMatMul_forward<<<nBlocks,nThreads>>>(
+        mResult.data(),
+        c_mA.data(),
+        c_mB.data(),
+        nK,
+        nN,
+        nBatch,
+        nSize
+    );
+    const cudaError_t cudError =cudaGetLastError();
+    if( cudError!=cudaSuccess )
+    {
+        throw std::runtime_error(
+            std::string("cuda_BatchMatMul_forward: kernel launch failed: ")+
+            cudaGetErrorString(cudError)
+        );
+    }
+}
+void cuda_BatchMatMul_backward(
+    cufMat& mAGrad,
+    cufMat& mBGrad,
+    const cufMat& c_mOutputGrad,
+    const cufMat& c_mA,
+    const cufMat& c_mB,
+    int nM,
+    int nK,
+    int nN,
+    int nBatch
+)
+{
+    requireContiguousTensor(mAGrad,"cuda_BatchMatMul_backward");
+    requireContiguousTensor(mBGrad,"cuda_BatchMatMul_backward");
+    requireContiguousTensor(c_mOutputGrad,"cuda_BatchMatMul_backward");
+    requireContiguousTensor(c_mA,"cuda_BatchMatMul_backward");
+    requireContiguousTensor(c_mB,"cuda_BatchMatMul_backward");
+    if( (nM<0)||(nK<0)||(nN<0)||(nBatch<0) )
+    {
+        throw std::invalid_argument(
+            "cuda_BatchMatMul_backward: negative dimension"
+        );
+    }
+    const auto checkedElements =[](int nFirst,int nSecond,int nThird)
+    {
+        std::size_t nElements =static_cast<std::size_t>(nFirst);
+        for( const int nExtent:{nSecond,nThird} )
+        {
+            if( (nExtent!=0)&&
+                (nElements>static_cast<std::size_t>(INT_MAX)/nExtent) )
+            {
+                throw std::overflow_error(
+                    "cuda_BatchMatMul_backward: tensor is too large"
+                );
+            }
+            nElements *=static_cast<std::size_t>(nExtent);
+        }
+        return nElements;
+    };
+    const std::size_t nAElements =checkedElements(nM,nK,nBatch);
+    const std::size_t nBElements =checkedElements(nK,nN,nBatch);
+    const std::size_t nOutputElements =checkedElements(nM,nN,nBatch);
+    if( (mAGrad.numel()!=nAElements)||(c_mA.numel()!=nAElements)||
+        (mBGrad.numel()!=nBElements)||(c_mB.numel()!=nBElements)||
+        (c_mOutputGrad.numel()!=nOutputElements) )
+    {
+        throw std::invalid_argument(
+            "cuda_BatchMatMul_backward: tensor size mismatch"
+        );
+    }
+
+    const int nThreads =256;
+    const int nASize =static_cast<int>(mAGrad.numel());
+    if( nASize>0 )
+    {
+        kernel_BatchMatMul_backward_A<<<
+            (nASize+nThreads-1)/nThreads,nThreads
+        >>>(
+            mAGrad.data(),
+            c_mOutputGrad.data(),
+            c_mB.data(),
+            nK,
+            nN,
+            nBatch,
+            nASize
+        );
+        //
+        const cudaError_t cudError =cudaGetLastError();
+        if( cudError!=cudaSuccess )
+        {
+            throw std::runtime_error(
+                std::string("cuda_BatchMatMul_backward: A kernel launch failed: ")+
+                cudaGetErrorString(cudError)
+            );
+        }
+    }
+
+    const int nBSize =static_cast<int>(mBGrad.numel());
+    if( nBSize>0 )
+    {
+        kernel_BatchMatMul_backward_B<<<
+            (nBSize+nThreads-1)/nThreads,nThreads
+        >>>(
+            mBGrad.data(),
+            c_mOutputGrad.data(),
+            c_mA.data(),
+            nM,
+            nK,
+            nN,
+            nBatch,
+            nBSize
+        );
+        //
+        const cudaError_t cudError =cudaGetLastError();
+        if( cudError!=cudaSuccess )
+        {
+            throw std::runtime_error(
+                std::string("cuda_BatchMatMul_backward: B kernel launch failed: ")+
+                cudaGetErrorString(cudError)
+            );
+        }
+    }
+}
+void cuda_LayerNorm_forward(
+    cufMat& mResult,
+    const cufMat& c_mInput,
+    const cufMat* c_lpmGamma,
+    const cufMat* c_lpmBeta,
+    int nFeatures,
+    int nPositions,
+    float fEpsilon
+)
+{
+    requireContiguousTensor(mResult,"cuda_LayerNorm_forward");
+    requireContiguousTensor(c_mInput,"cuda_LayerNorm_forward");
+    if( (nFeatures<=0)||(nPositions<0)||
+        (static_cast<std::size_t>(nFeatures)*nPositions!=c_mInput.numel())||
+        (mResult.shape()!=c_mInput.shape())||
+        ((c_lpmGamma==nullptr)!=(c_lpmBeta==nullptr)) )
+    {
+        throw std::invalid_argument(
+            "cuda_LayerNorm_forward: tensor shape mismatch"
+        );
+    }
+    if( c_lpmGamma!=nullptr )
+    {
+        requireContiguousTensor(*c_lpmGamma,"cuda_LayerNorm_forward");
+        requireContiguousTensor(*c_lpmBeta,"cuda_LayerNorm_forward");
+        if( (c_lpmGamma->shape()!=
+             std::vector<std::int64_t>{nFeatures,1})||
+            (c_lpmBeta->shape()!=c_lpmGamma->shape()) )
+        {
+            throw std::invalid_argument(
+                "cuda_LayerNorm_forward: parameter shape mismatch"
+            );
+        }
+    }
+    if( nPositions==0 ) return;
+
+    const int nThreads =256;
+    kernel_LayerNorm_forward<<<
+        (nPositions+nThreads-1)/nThreads,nThreads
+    >>>(
+        mResult.data(),c_mInput.data(),
+        c_lpmGamma==nullptr ? nullptr : c_lpmGamma->data(),
+        c_lpmBeta==nullptr ? nullptr : c_lpmBeta->data(),
+        nFeatures,nPositions,fEpsilon
+    );
+    const cudaError_t cudError =cudaGetLastError();
+    if( cudError!=cudaSuccess )
+    {
+        throw std::runtime_error(
+            std::string("cuda_LayerNorm_forward: kernel launch failed: ")+
+            cudaGetErrorString(cudError)
+        );
+    }
+}
+void cuda_LayerNorm_backward(
+    cufMat& mInputGrad,
+    cufMat* lpmGammaGrad,
+    cufMat* lpmBetaGrad,
+    const cufMat& c_mOutputGrad,
+    const cufMat& c_mInput,
+    const cufMat* c_lpmGamma,
+    int nFeatures,
+    int nPositions,
+    float fEpsilon
+)
+{
+    requireContiguousTensor(mInputGrad,"cuda_LayerNorm_backward");
+    requireContiguousTensor(c_mOutputGrad,"cuda_LayerNorm_backward");
+    requireContiguousTensor(c_mInput,"cuda_LayerNorm_backward");
+    if( (nFeatures<=0)||(nPositions<0)||
+        (static_cast<std::size_t>(nFeatures)*nPositions!=c_mInput.numel())||
+        (mInputGrad.shape()!=c_mInput.shape())||
+        (c_mOutputGrad.shape()!=c_mInput.shape())||
+        ((c_lpmGamma==nullptr)!=(lpmGammaGrad==nullptr))||
+        ((c_lpmGamma==nullptr)!=(lpmBetaGrad==nullptr)) )
+    {
+        throw std::invalid_argument(
+            "cuda_LayerNorm_backward: tensor shape mismatch"
+        );
+    }
+    if( c_lpmGamma!=nullptr )
+    {
+        requireContiguousTensor(*c_lpmGamma,"cuda_LayerNorm_backward");
+        requireContiguousTensor(*lpmGammaGrad,"cuda_LayerNorm_backward");
+        requireContiguousTensor(*lpmBetaGrad,"cuda_LayerNorm_backward");
+        const std::vector<std::int64_t> parameterShape{nFeatures,1};
+        if( (c_lpmGamma->shape()!=parameterShape)||
+            (lpmGammaGrad->shape()!=parameterShape)||
+            (lpmBetaGrad->shape()!=parameterShape) )
+        {
+            throw std::invalid_argument(
+                "cuda_LayerNorm_backward: parameter shape mismatch"
+            );
+        }
+    }
+    if( nPositions==0 ) return;
+
+    const int nThreads =256;
+    kernel_LayerNorm_backward<<<
+        (nPositions+nThreads-1)/nThreads,nThreads
+    >>>(
+        mInputGrad.data(),
+        lpmGammaGrad==nullptr ? nullptr : lpmGammaGrad->data(),
+        lpmBetaGrad==nullptr ? nullptr : lpmBetaGrad->data(),
+        c_mOutputGrad.data(),c_mInput.data(),
+        c_lpmGamma==nullptr ? nullptr : c_lpmGamma->data(),
+        nFeatures,nPositions,fEpsilon
+    );
+    const cudaError_t cudError =cudaGetLastError();
+    if( cudError!=cudaSuccess )
+    {
+        throw std::runtime_error(
+            std::string("cuda_LayerNorm_backward: kernel launch failed: ")+
+            cudaGetErrorString(cudError)
+        );
+    }
+}
+void cuda_Mask_forward(
+    cufMat& mResult,
+    const cufMat& c_mInput,
+    const cufMat& c_mMask,
+    int nQuery,
+    int nKey,
+    int nTrailing,
+    bool isBroadcast
+)
+{
+    requireContiguousTensor(mResult,"cuda_Mask_forward");
+    requireContiguousTensor(c_mInput,"cuda_Mask_forward");
+    requireContiguousTensor(c_mMask,"cuda_Mask_forward");
+    const std::size_t nElements =
+        static_cast<std::size_t>(nQuery)*nKey*nTrailing;
+    const std::size_t nMaskElements =isBroadcast ?
+        static_cast<std::size_t>(nQuery)*nKey : nElements;
+    if( (nQuery<=0)||(nKey<=0)||(nTrailing<0)||
+        (c_mInput.numel()!=nElements)||
+        (mResult.shape()!=c_mInput.shape())||
+        (c_mMask.numel()!=nMaskElements) )
+    {
+        throw std::invalid_argument("cuda_Mask_forward: tensor shape mismatch");
+    }
+    const int nRows =nQuery*nTrailing;
+    if( nRows<=0 ) return;
+
+    int* lpnError =nullptr;
+    cudaError_t cudError =cudaMalloc(
+        reinterpret_cast<void**>(&lpnError),sizeof(int)
+    );
+    if( cudError==cudaSuccess )
+        cudError =cudaMemset(lpnError,0,sizeof(int));
+    if( cudError!=cudaSuccess )
+    {
+        if( lpnError!=nullptr ) cudaFree(lpnError);
+        throw std::runtime_error(
+            std::string("cuda_Mask_forward: error flag allocation failed: ")+
+            cudaGetErrorString(cudError)
+        );
+    }
+
+    const int nThreads =256;
+    kernel_Mask_forward<<<(nRows+nThreads-1)/nThreads,nThreads>>>(
+        mResult.data(),c_mInput.data(),c_mMask.data(),lpnError,
+        nKey,nTrailing,isBroadcast,nRows
+    );
+    cudError =cudaGetLastError();
+    int nError =0;
+    if( cudError==cudaSuccess )
+    {
+        cudError =cudaMemcpy(
+            &nError,lpnError,sizeof(int),cudaMemcpyDeviceToHost
+        );
+    }
+    const cudaError_t cudFreeError =cudaFree(lpnError);
+    if( cudError!=cudaSuccess )
+    {
+        throw std::runtime_error(
+            std::string("cuda_Mask_forward: CUDA operation failed: ")+
+            cudaGetErrorString(cudError)
+        );
+    }
+    if( cudFreeError!=cudaSuccess )
+    {
+        throw std::runtime_error(
+            std::string("cuda_Mask_forward: cudaFree failed: ")+
+            cudaGetErrorString(cudFreeError)
+        );
+    }
+    if( (nError&1)!=0 )
+    {
+        throw std::invalid_argument(
+            "cuda_Mask_forward: mask must be finite"
+        );
+    }
+    if( (nError&2)!=0 )
+    {
+        throw std::invalid_argument(
+            "cuda_Mask_forward: every key is masked"
+        );
+    }
+}
+void cuda_Mask_backward(
+    cufMat& mInputGrad,
+    const cufMat& c_mOutputGrad,
+    const cufMat& c_mMask,
+    int nQuery,
+    int nKey,
+    int nTrailing,
+    bool isBroadcast
+)
+{
+    requireContiguousTensor(mInputGrad,"cuda_Mask_backward");
+    requireContiguousTensor(c_mOutputGrad,"cuda_Mask_backward");
+    requireContiguousTensor(c_mMask,"cuda_Mask_backward");
+    const std::size_t nElements =
+        static_cast<std::size_t>(nQuery)*nKey*nTrailing;
+    const std::size_t nMaskElements =isBroadcast ?
+        static_cast<std::size_t>(nQuery)*nKey : nElements;
+    if( (nQuery<=0)||(nKey<=0)||(nTrailing<0)||
+        (mInputGrad.numel()!=nElements)||
+        (mInputGrad.shape()!=c_mOutputGrad.shape())||
+        (c_mMask.numel()!=nMaskElements) )
+    {
+        throw std::invalid_argument(
+            "cuda_Mask_backward: tensor shape mismatch"
+        );
+    }
+
+    const int nSize =static_cast<int>(mInputGrad.numel());
+    if( nSize<=0 ) return;
+    const int nThreads =256;
+    kernel_Mask_backward<<<(nSize+nThreads-1)/nThreads,nThreads>>>(
+        mInputGrad.data(),c_mOutputGrad.data(),c_mMask.data(),
+        nTrailing,isBroadcast,nSize
+    );
+    const cudaError_t cudError =cudaGetLastError();
+    if( cudError!=cudaSuccess )
+    {
+        throw std::runtime_error(
+            std::string("cuda_Mask_backward: kernel launch failed: ")+
+            cudaGetErrorString(cudError)
+        );
+    }
+}
+void cuda_Permute(
+    cufMat& mResult,
+    const cufMat& c_mInput,
+    const std::vector<std::size_t>& c_nDimensions
+)
+{
+    requireContiguousTensor(mResult,"cuda_Permute");
+    requireContiguousTensor(c_mInput,"cuda_Permute");
+    if( c_nDimensions.size()!=c_mInput.dim() )
+    {
+        throw std::invalid_argument("cuda_Permute: rank mismatch");
+    }
+
+    std::vector<bool> isUsed(c_nDimensions.size(),false);
+    std::vector<std::int64_t> shapeOutput(c_nDimensions.size());
+    std::vector<std::int64_t> nMetadata(c_nDimensions.size()*2);
+    for( std::size_t nOutput=0;nOutput<c_nDimensions.size();++nOutput )
+    {
+        const std::size_t nInput =c_nDimensions[nOutput];
+        if( (nInput>=c_nDimensions.size())||isUsed[nInput] )
+        {
+            throw std::invalid_argument("cuda_Permute: invalid permutation");
+        }
+        isUsed[nInput] =true;
+        shapeOutput[nOutput] =c_mInput.size(nInput);
+        nMetadata[nOutput] =shapeOutput[nOutput];
+        nMetadata[c_nDimensions.size()+nOutput] =
+            c_mInput.strides()[nInput];
+    }
+    if( mResult.shape()!=shapeOutput )
+    {
+        throw std::invalid_argument("cuda_Permute: output shape mismatch");
+    }
+    if( c_mInput.numel()>static_cast<std::size_t>(INT_MAX) )
+    {
+        throw std::overflow_error("cuda_Permute: tensor is too large");
+    }
+
+    const int nSize =static_cast<int>(mResult.numel());
+    if( nSize<=0 ) return;
+    std::int64_t* lpnMetadata =nullptr;
+    cudaError_t cudError =cudaMalloc(
+        reinterpret_cast<void**>(&lpnMetadata),
+        nMetadata.size()*sizeof(std::int64_t)
+    );
+    if( cudError==cudaSuccess )
+    {
+        cudError =cudaMemcpy(
+            lpnMetadata,nMetadata.data(),
+            nMetadata.size()*sizeof(std::int64_t),
+            cudaMemcpyHostToDevice
+        );
+    }
+    if( cudError!=cudaSuccess )
+    {
+        if( lpnMetadata!=nullptr ) cudaFree(lpnMetadata);
+        throw std::runtime_error(
+            std::string("cuda_Permute: metadata transfer failed: ")+
+            cudaGetErrorString(cudError)
+        );
+    }
+
+    const int nThreads =256;
+    kernel_Permute<<<(nSize+nThreads-1)/nThreads,nThreads>>>(
+        mResult.data(),c_mInput.data(),lpnMetadata,
+        lpnMetadata+c_nDimensions.size(),
+        static_cast<int>(c_nDimensions.size()),nSize
+    );
+    cudError =cudaGetLastError();
+    if( cudError==cudaSuccess ) cudError =cudaDeviceSynchronize();
+    const cudaError_t cudFreeError =cudaFree(lpnMetadata);
+    if( cudError!=cudaSuccess )
+    {
+        throw std::runtime_error(
+            std::string("cuda_Permute: kernel failed: ")+
+            cudaGetErrorString(cudError)
+        );
+    }
+    if( cudFreeError!=cudaSuccess )
+    {
+        throw std::runtime_error(
+            std::string("cuda_Permute: cudaFree failed: ")+
+            cudaGetErrorString(cudFreeError)
+        );
+    }
+}
+void cuda_Softmax_forward(
+    cufMat& mResult,
+    const cufMat& c_mInput,
+    int nOuter,
+    int nAxisSize,
+    int nInner,
+    int nSlices
+)
+{
+    requireContiguousTensor(mResult,"cuda_Softmax_forward");
+    requireContiguousTensor(c_mInput,"cuda_Softmax_forward");
+    if( (nOuter<0)||(nAxisSize<=0)||(nInner<0)||(nSlices<0)||
+        (static_cast<std::size_t>(nOuter)*nAxisSize*nInner!=
+         c_mInput.numel())||
+        (nSlices!=nOuter*nInner)||(mResult.shape()!=c_mInput.shape()) )
+    {
+        throw std::invalid_argument(
+            "cuda_Softmax_forward: tensor shape mismatch"
+        );
+    }
+    if( nSlices<=0 ) return;
+
+    int* lpnError =nullptr;
+    cudaError_t cudError =cudaMalloc(
+        reinterpret_cast<void**>(&lpnError),sizeof(int)
+    );
+    if( cudError==cudaSuccess )
+        cudError =cudaMemset(lpnError,0,sizeof(int));
+    if( cudError!=cudaSuccess )
+    {
+        if( lpnError!=nullptr ) cudaFree(lpnError);
+        throw std::runtime_error(
+            std::string("cuda_Softmax_forward: error flag allocation failed: ")+
+            cudaGetErrorString(cudError)
+        );
+    }
+
+    const int nThreads =256;
+    kernel_Softmax_forward<<<
+        (nSlices+nThreads-1)/nThreads,nThreads
+    >>>(
+        mResult.data(),c_mInput.data(),lpnError,
+        nAxisSize,nInner,nSlices
+    );
+    cudError =cudaGetLastError();
+    int nError =0;
+    if( cudError==cudaSuccess )
+    {
+        cudError =cudaMemcpy(
+            &nError,lpnError,sizeof(int),cudaMemcpyDeviceToHost
+        );
+    }
+    const cudaError_t cudFreeError =cudaFree(lpnError);
+    if( cudError!=cudaSuccess )
+    {
+        throw std::runtime_error(
+            std::string("cuda_Softmax_forward: CUDA operation failed: ")+
+            cudaGetErrorString(cudError)
+        );
+    }
+    if( cudFreeError!=cudaSuccess )
+    {
+        throw std::runtime_error(
+            std::string("cuda_Softmax_forward: cudaFree failed: ")+
+            cudaGetErrorString(cudFreeError)
+        );
+    }
+    if( (nError&1)!=0 )
+    {
+        throw std::invalid_argument(
+            "cuda_Softmax_forward: NaN or positive infinity"
+        );
+    }
+    if( (nError&2)!=0 )
+    {
+        throw std::invalid_argument(
+            "cuda_Softmax_forward: all values are negative infinity"
+        );
+    }
+}
+void cuda_Softmax_backward(
+    cufMat& mInputGrad,
+    const cufMat& c_mOutputGrad,
+    const cufMat& c_mOutput,
+    int nOuter,
+    int nAxisSize,
+    int nInner,
+    int nSlices
+)
+{
+    requireContiguousTensor(mInputGrad,"cuda_Softmax_backward");
+    requireContiguousTensor(c_mOutputGrad,"cuda_Softmax_backward");
+    requireContiguousTensor(c_mOutput,"cuda_Softmax_backward");
+    if( (nOuter<0)||(nAxisSize<=0)||(nInner<0)||(nSlices<0)||
+        (static_cast<std::size_t>(nOuter)*nAxisSize*nInner!=
+         mInputGrad.numel())||
+        (nSlices!=nOuter*nInner)||
+        (c_mOutputGrad.shape()!=mInputGrad.shape())||
+        (c_mOutput.shape()!=mInputGrad.shape()) )
+    {
+        throw std::invalid_argument(
+            "cuda_Softmax_backward: tensor shape mismatch"
+        );
+    }
+    if( nSlices<=0 ) return;
+
+    const int nThreads =256;
+    kernel_Softmax_backward<<<
+        (nSlices+nThreads-1)/nThreads,nThreads
+    >>>(
+        mInputGrad.data(),c_mOutputGrad.data(),c_mOutput.data(),
+        nAxisSize,nInner,nSlices
+    );
+    const cudaError_t cudError =cudaGetLastError();
+    if( cudError!=cudaSuccess )
+    {
+        throw std::runtime_error(
+            std::string("cuda_Softmax_backward: kernel launch failed: ")+
+            cudaGetErrorString(cudError)
         );
     }
 }
@@ -947,6 +1584,367 @@ __global__ void kernel_mul_elementwise(float* lpfResult,const float* c_lpfA,cons
     if( nIndex<nSize )
     {
         lpfResult[nIndex]    =c_lpfA[nIndex] * c_lpfB[nIndex];
+    }
+}
+__global__ void kernel_BatchMatMul_forward(
+    float* lpfResult,
+    const float* c_lpfA,
+    const float* c_lpfB,
+    int nK,
+    int nN,
+    int nBatch,
+    int nSize
+)
+{
+    const int nIndex =blockIdx.x*blockDim.x+threadIdx.x;
+    if( nIndex>=nSize ) return;
+
+    // matrix is arrayed in [M,K,Batch] → [1,10, 2,20, 3,30, 4,40]
+    const int nBatchIndex   =nIndex%nBatch;
+    const int nMatrixIndex  =nIndex/nBatch;
+    const int nColumn       =nMatrixIndex%nN;
+    const int nRow          =nMatrixIndex/nN;
+    float fResult =0.0f;
+    for( int nInner=0;nInner<nK;++nInner )
+    {
+        fResult +=c_lpfA[(nRow*nK+nInner)*nBatch+nBatchIndex]*
+                  c_lpfB[(nInner*nN+nColumn)*nBatch+nBatchIndex];
+    }
+    lpfResult[nIndex] =fResult;
+}
+
+__global__ void kernel_BatchMatMul_backward_A(
+    float* lpfAGrad,
+    const float* c_lpfOutputGrad,
+    const float* c_lpfB,
+    int nK,
+    int nN,
+    int nBatch,
+    int nSize
+)
+{
+    const int nIndex =blockIdx.x*blockDim.x+threadIdx.x;
+    if( nIndex>=nSize ) return;
+
+    // matrix is arrayed in [M,K,Batch] → [1,10, 2,20, 3,30, 4,40]
+    const int nBatchIndex   =nIndex%nBatch;
+    const int nMatrixIndex  =nIndex/nBatch;
+    const int nInner        =nMatrixIndex%nK;
+    const int nRow          =nMatrixIndex/nK;
+    float fGrad =0.0f;
+    for( int nColumn=0;nColumn<nN;++nColumn )
+    {
+        fGrad +=c_lpfOutputGrad[(nRow*nN+nColumn)*nBatch+nBatchIndex]*
+                 c_lpfB[(nInner*nN+nColumn)*nBatch+nBatchIndex];
+    }
+    lpfAGrad[nIndex] +=fGrad;
+}
+
+__global__ void kernel_BatchMatMul_backward_B(
+    float* lpfBGrad,
+    const float* c_lpfOutputGrad,
+    const float* c_lpfA,
+    int nM,     // A token
+    int nK,     // head
+    int nN,     // B token
+    int nBatch, // head x batch
+    int nSize   // A token x B token x head x batch
+)
+{
+    const int nIndex =blockIdx.x*blockDim.x+threadIdx.x;
+    if( nIndex>=nSize ) return;
+
+    // matrix is arrayed in [M,K,Batch] → [1,10, 2,20, 3,30, 4,40]
+    const int nBatchIndex   =nIndex%nBatch;
+    const int nMatrixIndex  =nIndex/nBatch;
+    const int nColumn       =nMatrixIndex%nN;   // 列
+    const int nInner        =nMatrixIndex/nN;   // 行
+    float fGrad =0.0f;
+    for( int nRow=0;nRow<nM;++nRow )
+    {
+        // dB += A^T x dY
+        fGrad +=c_lpfA[(nRow*nK+nInner)*nBatch+nBatchIndex]*
+                 c_lpfOutputGrad[(nRow*nN+nColumn)*nBatch+nBatchIndex];
+    }
+    lpfBGrad[nIndex] +=fGrad;
+}
+
+__global__ void kernel_LayerNorm_forward(
+    float* lpfResult,
+    const float* c_lpfInput,
+    const float* c_lpfGamma,
+    const float* c_lpfBeta,
+    int nFeatures,
+    int nPositions,
+    float fEpsilon
+)
+{
+    const int nPosition =blockIdx.x*blockDim.x+threadIdx.x;
+    if( nPosition>=nPositions ) return;
+
+    double dblMean =0.0;
+    double dblM2 =0.0;
+    for( int nFeature=0;nFeature<nFeatures;++nFeature )
+    {
+        const double dblValue =
+            c_lpfInput[nFeature*nPositions+nPosition];
+        const double dblDelta =dblValue-dblMean;
+        dblMean +=dblDelta/static_cast<double>(nFeature+1);
+        dblM2 +=dblDelta*(dblValue-dblMean);
+    }
+    const double dblInvStd =1.0/sqrt(
+        dblM2/static_cast<double>(nFeatures)+
+        static_cast<double>(fEpsilon)
+    );
+    for( int nFeature=0;nFeature<nFeatures;++nFeature )
+    {
+        const int nIndex =nFeature*nPositions+nPosition;
+        const double dblNormalized =
+            (static_cast<double>(c_lpfInput[nIndex])-dblMean)*dblInvStd;
+        const double dblGamma =
+            c_lpfGamma==nullptr ? 1.0 : c_lpfGamma[nFeature];
+        const double dblBeta =
+            c_lpfBeta==nullptr ? 0.0 : c_lpfBeta[nFeature];
+        lpfResult[nIndex] =static_cast<float>(
+            dblGamma*dblNormalized+dblBeta
+        );
+    }
+}
+__global__ void kernel_LayerNorm_backward(
+    float* lpfInputGrad,
+    float* lpfGammaGrad,
+    float* lpfBetaGrad,
+    const float* c_lpfOutputGrad,
+    const float* c_lpfInput,
+    const float* c_lpfGamma,
+    int nFeatures,
+    int nPositions,
+    float fEpsilon
+)
+{
+    const int nPosition =blockIdx.x*blockDim.x+threadIdx.x;
+    if( nPosition>=nPositions ) return;
+
+    double dblMean =0.0;
+    double dblM2 =0.0;
+    for( int nFeature=0;nFeature<nFeatures;++nFeature )
+    {
+        const double dblValue =
+            c_lpfInput[nFeature*nPositions+nPosition];
+        const double dblDelta =dblValue-dblMean;
+        dblMean +=dblDelta/static_cast<double>(nFeature+1);
+        dblM2 +=dblDelta*(dblValue-dblMean);
+    }
+    const double dblInvStd =1.0/sqrt(
+        dblM2/static_cast<double>(nFeatures)+
+        static_cast<double>(fEpsilon)
+    );
+
+    double dblGradSum =0.0;
+    double dblGradNormalizedSum =0.0;
+    for( int nFeature=0;nFeature<nFeatures;++nFeature )
+    {
+        const int nIndex =nFeature*nPositions+nPosition;
+        const double dblNormalized =
+            (static_cast<double>(c_lpfInput[nIndex])-dblMean)*dblInvStd;
+        const double dblOutputGrad =c_lpfOutputGrad[nIndex];
+        const double dblGamma =
+            c_lpfGamma==nullptr ? 1.0 : c_lpfGamma[nFeature];
+        const double dblNormalizedGrad =dblOutputGrad*dblGamma;
+        dblGradSum +=dblNormalizedGrad;
+        dblGradNormalizedSum +=dblNormalizedGrad*dblNormalized;
+        if( lpfGammaGrad!=nullptr )
+        {
+            atomicAdd(
+                lpfGammaGrad+nFeature,
+                static_cast<float>(dblOutputGrad*dblNormalized)
+            );
+            atomicAdd(
+                lpfBetaGrad+nFeature,
+                static_cast<float>(dblOutputGrad)
+            );
+        }
+    }
+
+    for( int nFeature=0;nFeature<nFeatures;++nFeature )
+    {
+        const int nIndex =nFeature*nPositions+nPosition;
+        const double dblNormalized =
+            (static_cast<double>(c_lpfInput[nIndex])-dblMean)*dblInvStd;
+        const double dblGamma =
+            c_lpfGamma==nullptr ? 1.0 : c_lpfGamma[nFeature];
+        const double dblNormalizedGrad =
+            static_cast<double>(c_lpfOutputGrad[nIndex])*dblGamma;
+        const double dblInputGrad =
+            dblInvStd/static_cast<double>(nFeatures)*
+            (static_cast<double>(nFeatures)*dblNormalizedGrad-
+             dblGradSum-dblNormalized*dblGradNormalizedSum);
+        lpfInputGrad[nIndex] +=static_cast<float>(dblInputGrad);
+    }
+}
+__global__ void kernel_Mask_forward(
+    float* lpfResult,
+    const float* c_lpfInput,
+    const float* c_lpfMask,
+    int* lpnError,
+    int nKey,
+    int nTrailing,
+    bool isBroadcast,
+    int nRows
+)
+{
+    const int nRow =blockIdx.x*blockDim.x+threadIdx.x;
+    if( nRow>=nRows ) return;
+
+    const int nQuery =nRow/nTrailing;
+    const int nTrailingIndex =nRow%nTrailing;
+    bool isAnyAvailable =false;
+    for( int nKeyIndex=0;nKeyIndex<nKey;++nKeyIndex )
+    {
+        const int nInputIndex =
+            (nQuery*nKey+nKeyIndex)*nTrailing+nTrailingIndex;
+        const int nMaskIndex =isBroadcast ?
+            nQuery*nKey+nKeyIndex : nInputIndex;
+        const float fMask =c_lpfMask[nMaskIndex];
+        if( !isfinite(fMask) )
+        {
+            atomicOr(lpnError,1);
+            return;
+        }
+        isAnyAvailable |=fMask!=0.0f;
+    }
+    if( !isAnyAvailable )
+    {
+        atomicOr(lpnError,2);
+        return;
+    }
+
+    for( int nKeyIndex=0;nKeyIndex<nKey;++nKeyIndex )
+    {
+        const int nInputIndex =
+            (nQuery*nKey+nKeyIndex)*nTrailing+nTrailingIndex;
+        const int nMaskIndex =isBroadcast ?
+            nQuery*nKey+nKeyIndex : nInputIndex;
+        lpfResult[nInputIndex] =c_lpfMask[nMaskIndex]!=0.0f ?
+            c_lpfInput[nInputIndex] : -CUDART_INF_F;
+    }
+}
+__global__ void kernel_Mask_backward(
+    float* lpfInputGrad,
+    const float* c_lpfOutputGrad,
+    const float* c_lpfMask,
+    int nTrailing,
+    bool isBroadcast,
+    int nSize
+)
+{
+    const int nIndex =blockIdx.x*blockDim.x+threadIdx.x;
+    if( nIndex>=nSize ) return;
+    const int nMaskIndex =isBroadcast ? nIndex/nTrailing : nIndex;
+    if( c_lpfMask[nMaskIndex]!=0.0f )
+    {
+        lpfInputGrad[nIndex] +=c_lpfOutputGrad[nIndex];
+    }
+}
+__global__ void kernel_Permute(
+    float* lpfResult,
+    const float* c_lpfInput,
+    const std::int64_t* c_lpnOutputShape,
+    const std::int64_t* c_lpnInputStrides,
+    int nRank,
+    int nSize
+)
+{
+    const int nIndex =blockIdx.x*blockDim.x+threadIdx.x;
+    if( nIndex>=nSize ) return;
+
+    std::int64_t nRemainder =nIndex;
+    std::int64_t nInputIndex =0;
+    for( int nDimension=nRank-1;nDimension>=0;--nDimension )
+    {
+        const std::int64_t nCoordinate =
+            nRemainder%c_lpnOutputShape[nDimension];
+        nRemainder /=c_lpnOutputShape[nDimension];
+        nInputIndex +=
+            nCoordinate*c_lpnInputStrides[nDimension];
+    }
+    lpfResult[nIndex] =c_lpfInput[nInputIndex];
+}
+__global__ void kernel_Softmax_forward(
+    float* lpfResult,
+    const float* c_lpfInput,
+    int* lpnError,
+    int nAxisSize,
+    int nInner,
+    int nSlices
+)
+{
+    const int nSlice =blockIdx.x*blockDim.x+threadIdx.x;
+    if( nSlice>=nSlices ) return;
+
+    const int nOuterIndex =nSlice/nInner;
+    const int nInnerIndex =nSlice%nInner;
+    const int nBase =
+        nOuterIndex*nAxisSize*nInner+nInnerIndex;
+    float fMaximum =-CUDART_INF_F;
+    for( int nAxisIndex=0;nAxisIndex<nAxisSize;++nAxisIndex )
+    {
+        const float fValue =
+            c_lpfInput[nBase+nAxisIndex*nInner];
+        if( isnan(fValue)||(isinf(fValue)&&(fValue>0.0f)) )
+        {
+            atomicOr(lpnError,1);
+            return;
+        }
+        fMaximum =fmaxf(fMaximum,fValue);
+    }
+    if( isinf(fMaximum) )
+    {
+        atomicOr(lpnError,2);
+        return;
+    }
+
+    float fSum =0.0f;
+    for( int nAxisIndex=0;nAxisIndex<nAxisSize;++nAxisIndex )
+    {
+        const int nIndex =nBase+nAxisIndex*nInner;
+        const float fValue =expf(c_lpfInput[nIndex]-fMaximum);
+        lpfResult[nIndex] =fValue;
+        fSum +=fValue;
+    }
+    for( int nAxisIndex=0;nAxisIndex<nAxisSize;++nAxisIndex )
+    {
+        const int nIndex =nBase+nAxisIndex*nInner;
+        lpfResult[nIndex] /=fSum;
+    }
+}
+__global__ void kernel_Softmax_backward(
+    float* lpfInputGrad,
+    const float* c_lpfOutputGrad,
+    const float* c_lpfOutput,
+    int nAxisSize,
+    int nInner,
+    int nSlices
+)
+{
+    const int nSlice =blockIdx.x*blockDim.x+threadIdx.x;
+    if( nSlice>=nSlices ) return;
+
+    const int nOuterIndex =nSlice/nInner;
+    const int nInnerIndex =nSlice%nInner;
+    const int nBase =
+        nOuterIndex*nAxisSize*nInner+nInnerIndex;
+    float fDot =0.0f;
+    for( int nAxisIndex=0;nAxisIndex<nAxisSize;++nAxisIndex )
+    {
+        const int nIndex =nBase+nAxisIndex*nInner;
+        fDot +=c_lpfOutputGrad[nIndex]*c_lpfOutput[nIndex];
+    }
+    for( int nAxisIndex=0;nAxisIndex<nAxisSize;++nAxisIndex )
+    {
+        const int nIndex =nBase+nAxisIndex*nInner;
+        lpfInputGrad[nIndex] +=
+            c_lpfOutput[nIndex]*(c_lpfOutputGrad[nIndex]-fDot);
     }
 }
 __global__ void kernel_ReLU_forward(float* lpfResult,const float* c_lpfValue,int nSize)

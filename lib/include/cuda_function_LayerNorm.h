@@ -10,7 +10,29 @@ class LayerNorm: public Function
 {
 public:
     LayerNorm();
+    LayerNorm(Tensor* lpGamma,Tensor* lpBeta,float fEpsilon =1.0e-5f);
     ~LayerNorm();
+
+private:
+    struct ShapeInfo
+    {
+        int _nFeatures;
+        int _nPositions;
+    };
+
+    Tensor* _lpmGamma;
+    Tensor* _lpmBeta;
+    float _fEpsilon;
+
+    static void validateParameter(
+        const Tensor* c_lpParameter,
+        std::int64_t c_nFeatures,
+        const char* c_lpszName
+    );
+    ShapeInfo validateInput(
+        const std::vector<std::shared_ptr<Tensor>>& c_spmInputs,
+        const char* c_lpszOperation
+    ) const;
 
 public:
     void backward(

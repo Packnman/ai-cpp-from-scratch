@@ -1,12 +1,18 @@
 #include "cuda_function_Scale.h"
 
+#include <climits>
+#include <cmath>
 #include <stdexcept>
 
-Scale::Scale()
-    :Function()
+#include "cuda_tensor.h"
+
+Scale::Scale(float fScale)
+    :_fScale( fScale )
 {
-    // TODO: Add a scalar configuration argument and retain it for forward and
-    // backward (attention normally uses this for 1/sqrt(headDimension)).
+    if( !std::isfinite(_fScale) )
+    {
+        throw std::invalid_argument("Scale: scale must be finite");
+    }
 }
 
 Scale::~Scale()
@@ -14,25 +20,60 @@ Scale::~Scale()
 }
 
 void Scale::backward(
-    const std::vector<const cufMat*>& c_lpmOutputGrads,
-    const std::vector<std::shared_ptr<Tensor>>& c_spmInputs,
-    const std::vector<std::shared_ptr<Tensor>>& c_spmOutputs
+    const TensorGradList& c_lpmOutputGrads,
+    const TensorList& c_spmInputs,
+    const TensorList& c_spmOutputs
 )
 {
-    // TODO: Multiply the output gradient by the configured scalar and
-    // accumulate it into the single input gradient.
-    (void)c_lpmOutputGrads;
-    (void)c_spmInputs;
     (void)c_spmOutputs;
-    throw std::logic_error("Scale::backward is not implemented");
+    if( (c_spmInputs.size()!=1)||(c_spmInputs[0]==nullptr) )
+    {
+        throw std::runtime_error("Scale::backward: exactly one input is required");
+    }
+    const cufMat& c_mGrad =requireSingleOutputGrad(
+        c_lpmOutputGrads,"Scale::backward"
+    );
+    if( c_mGrad.shape()!=c_spmInputs[0]->_mData.shape() )
+    {
+        throw std::invalid_argument("Scale::backward: gradient shape mismatch");
+    }
+    if( !c_mGrad.isContiguous()||
+        !c_spmInputs[0]->_mGrad.isContiguous() )
+    {
+        throw std::invalid_argument(
+            "Scale::backward: contiguous tensors required"
+        );
+    }
+    if( c_mGrad.numel()>static_cast<std::size_t>(INT_MAX) )
+    {
+        throw std::overflow_error("Scale::backward: tensor is too large");
+    }
+    cuda_axpy( c_spmInputs[0]->_mGrad,_fScale,c_mGrad );
 }
 
-std::vector<std::shared_ptr<Tensor>> Scale::forward(
-    const std::vector<std::shared_ptr<Tensor>>& c_spmInputs
-)
+TensorList Scale::forward(const TensorList& c_spmInputs)
 {
-    // TODO: Validate one input, allocate a same-shaped output, and multiply
-    // every element by the configured scalar on CUDA.
-    (void)c_spmInputs;
-    throw std::logic_error("Scale::forward is not implemented");
+    if( (c_spmInputs.size()!=1)||(c_spmInputs[0]==nullptr) )
+    {
+        throw std::runtime_error("Scale::forward: exactly one input is required");
+    }
+    if( !c_spmInputs[0]->_mData.isContiguous() )
+    {
+        throw std::invalid_argument(
+            "Scale::forward: contiguous input required"
+        );
+    }
+    if( c_spmInputs[0]->_mData.numel()>
+        static_cast<std::size_t>(INT_MAX) )
+    {
+        throw std::overflow_error("Scale::forward: tensor is too large");
+    }
+    auto spmResult =std::make_shared<Tensor>(
+        c_spmInputs[0]->_mData.shape()
+    );
+    cuda_geam(
+        spmResult->_mData,_fScale,c_spmInputs[0]->_mData,
+        0.0f,c_spmInputs[0]->_mData
+    );
+    return {spmResult};
 }

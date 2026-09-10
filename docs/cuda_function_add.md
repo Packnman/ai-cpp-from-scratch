@@ -4,7 +4,7 @@
 
 ## 実装状態
 
-インターフェースとソース基盤のみ存在する。現在の `forward` と `backward` は `std::logic_error` を送出する。
+実装済み。`forward` と `backward` は既存のCUDAベクトル演算を使用する。
 
 ## 目的
 

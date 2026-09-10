@@ -65,17 +65,17 @@ private:
                std::vector<std::int64_t> strides,std::size_t offset);
 
 public:
-    const std::vector<std::int64_t>& shape() const noexcept { return _shape; }
-    const std::vector<std::int64_t>& strides() const noexcept { return _strides; }
-    std::size_t dim() const noexcept { return _shape.size(); }
-    std::int64_t size(std::size_t dimension) const;
-    std::size_t numel() const noexcept;
-    std::size_t offset() const noexcept { return _offset; }
-    bool isContiguous() const noexcept;
-    int rows() const;
-    int cols() const;
-    T* data() noexcept;
-    const T* data() const noexcept;
+    const std::vector<std::int64_t>& shape() const noexcept { return _shape; }      // 配列
+    const std::vector<std::int64_t>& strides() const noexcept { return _strides; }  // ストライド
+    std::size_t dim() const noexcept { return _shape.size(); }                      // 次元数
+    std::int64_t size(std::size_t dimension) const;                                 // 指定次元のサイズ
+    std::size_t numel() const noexcept;                                             // 総要素数
+    std::size_t offset() const noexcept { return _offset; }                         // オフセット
+    bool isContiguous() const noexcept;                                             // 連続メモリかどうか
+    int rows() const;                                                               // 行数
+    int cols() const;                                                               // 列数
+    T* data() noexcept;                                                             // デバイスメモリへのポインタ
+    const T* data() const noexcept;                                                 // デバイスメモリへのポインタ（const）
 
 public:
     cuMat reshape(const std::vector<std::int64_t>& shape) const;
@@ -121,6 +121,48 @@ void cuda_transpose(cufMat& result,const cufMat& a);
 void cuda_scale(cufMat& result,float value);
 void cuda_mul_elementwise(cufMat& mResult,const cufMat& c_mA,
                           const cufMat& c_mB);
+void cuda_BatchMatMul_forward(
+    cufMat& mResult,const cufMat& c_mA,const cufMat& c_mB,
+    int nM,int nK,int nN,int nBatch
+);
+void cuda_BatchMatMul_backward(
+    cufMat& mAGrad,cufMat& mBGrad,const cufMat& c_mOutputGrad,
+    const cufMat& c_mA,const cufMat& c_mB,
+    int nM,int nK,int nN,int nBatch
+);
+void cuda_LayerNorm_forward(
+    cufMat& mResult,const cufMat& c_mInput,
+    const cufMat* c_lpmGamma,const cufMat* c_lpmBeta,
+    int nFeatures,int nPositions,float fEpsilon
+);
+void cuda_LayerNorm_backward(
+    cufMat& mInputGrad,cufMat* lpmGammaGrad,cufMat* lpmBetaGrad,
+    const cufMat& c_mOutputGrad,const cufMat& c_mInput,
+    const cufMat* c_lpmGamma,
+    int nFeatures,int nPositions,float fEpsilon
+);
+void cuda_Mask_forward(
+    cufMat& mResult,const cufMat& c_mInput,const cufMat& c_mMask,
+    int nQuery,int nKey,int nTrailing,bool isBroadcast
+);
+void cuda_Mask_backward(
+    cufMat& mInputGrad,const cufMat& c_mOutputGrad,
+    const cufMat& c_mMask,int nQuery,int nKey,int nTrailing,
+    bool isBroadcast
+);
+void cuda_Permute(
+    cufMat& mResult,const cufMat& c_mInput,
+    const std::vector<std::size_t>& c_nDimensions
+);
+void cuda_Softmax_forward(
+    cufMat& mResult,const cufMat& c_mInput,
+    int nOuter,int nAxisSize,int nInner,int nSlices
+);
+void cuda_Softmax_backward(
+    cufMat& mInputGrad,const cufMat& c_mOutputGrad,
+    const cufMat& c_mOutput,
+    int nOuter,int nAxisSize,int nInner,int nSlices
+);
 void cuda_ReLU_forward(cufMat& mResult,const cufMat& c_mValue);
 void cuda_ReLU_backward(cufMat& mResult,const cufMat& c_mData,
                         const cufMat& c_mGrad);

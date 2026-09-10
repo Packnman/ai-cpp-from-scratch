@@ -4,13 +4,13 @@
 
 ## 実装状態
 
-ソース基盤のみ存在し、現在の `forward` と `backward` は `std::logic_error` を送出する。現行コンストラクタには変更後shapeの指定がないため、実装時にAPIを拡張する。
+実装済み。要素数を維持したshape変更と1軸の自動推論を行い、backwardでは元のshapeへ戻して勾配を加算する。引数なしの構築は恒等reshapeとして扱う。
 
 ## 目的
 
 row-majorの線形要素順序を変えずにTensorのshapeだけを変更する。Transformerではembedding軸をhead数とhead次元へ分割する処理、および分割したheadを再結合する処理に使用する。
 
-## 計画API
+## API
 
 ```cpp
 explicit Reshape( std::vector<std::int64_t> shape );

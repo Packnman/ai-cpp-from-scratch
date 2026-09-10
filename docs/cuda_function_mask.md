@@ -4,7 +4,7 @@
 
 ## 実装状態
 
-コンストラクタとFunctionメソッドのソース基盤のみ存在する。現在はmaskを保持せず、`forward` と `backward` が `std::logic_error` を送出する。
+完全一致shapeと2次元broadcast maskを処理する専用CUDA kernelとして実装済み。Tensorデータはhostへ転送せず、検証結果を示す小さなエラーフラグだけをhostへ戻す。maskは非所有pointerで保持する。
 
 ## 目的
 

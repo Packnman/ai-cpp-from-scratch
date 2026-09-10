@@ -10,7 +10,19 @@ class Permute: public Function
 {
 public:
     Permute();
+    explicit Permute(std::vector<std::size_t> nDimensions);
     ~Permute();
+
+private:
+    std::vector<std::size_t> _nDimensions;
+
+    static std::vector<std::size_t> _dimensionsFor(
+        const std::vector<std::size_t>& c_nConfigured,
+        std::size_t c_nRank
+    );
+    static std::vector<std::size_t> _inverseOf(
+        const std::vector<std::size_t>& c_nDimensions
+    );
 
 public:
     void backward(

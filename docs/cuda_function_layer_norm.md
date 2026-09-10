@@ -4,15 +4,15 @@
 
 ## 実装状態
 
-ソース基盤のみ存在し、現在の `forward` と `backward` は `std::logic_error` を送出する。現行コンストラクタには必要な設定がないため、実装時にAPIを拡張する。
+特徴量軸を位置ごとにreduceする専用CUDA kernelとして実装済み。forwardとbackwardはTensorデータをhostへ転送せず、Parameterなしのデフォルト構築とgamma・beta・epsilonを指定する構築の両方を処理する。
 
 ## 目的
 
 各系列位置・各バッチを独立に、特徴量軸で正規化する。Transformerのattentionブロックおよびfeed-forwardブロックの正規化に使用する。
 
-## 計画API
+## API
 
-実装時には少なくとも次をコンストラクタへ追加する。
+学習可能なscaleとbiasを使用する場合は次のコンストラクタを使用する。
 
 ```cpp
 LayerNorm( Tensor* lpGamma, Tensor* lpBeta, float fEpsilon = 1.0e-5f );
