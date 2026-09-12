@@ -85,6 +85,7 @@ public:
 public:
     Function* _lpFunc;
     IndexFunction* _lpIndexFunc;
+    std::shared_ptr<Function> _spFunction; // Graph-local operation ownership
 
     std::vector<std::shared_ptr<Tensor>> _spmInputs;
     std::shared_ptr<const cunMat> _spmIndices;

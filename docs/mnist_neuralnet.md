@@ -1,6 +1,6 @@
 # neuralnet.h 設計仕様
 
-対象: `include/neuralnet_mnist.h`
+対象: `tests/fixtures/include/neuralnet_mnist.h`
 
 ## 全体構成
 

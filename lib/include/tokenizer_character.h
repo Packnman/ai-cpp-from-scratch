@@ -22,6 +22,7 @@ private:
     static std::vector<char32_t> _decodeUtf8(std::string_view text);
 public:
     TokenIds encode(std::string_view text) const override;
+    TokenIds encodeUnknown( std::string_view c_strText, std::int32_t nUnknownId ) const;
     std::string decode(const TokenIds& tokenIds) const override;
     std::size_t vocabSize() const noexcept override;
 };

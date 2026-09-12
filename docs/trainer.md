@@ -1,6 +1,6 @@
 # trainer.h 設計仕様
 
-対象: `include/trainer.h`
+対象: `tests/fixtures/include/trainer.h`
 
 ## 目的
 

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.18)
 
 project(ai_cpp LANGUAGES CXX CUDA)
 
-find_package(CUDAToolkit REQUIRED)
+find_package(CUDAToolkit 11.2 REQUIRED)
 include(CTest)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -18,6 +18,7 @@ set(AI_CPP_CUDA_ARCHITECTURES "86" CACHE STRING
 
 add_library(ai_cpp STATIC
     lib/src/tokenizer_character.cpp
+    lib/src/cuda_memory.cpp
     lib/src/cuda_matrix.cpp
     lib/src/cuda_matrix.cu
     lib/src/cuda_function.cpp
@@ -59,29 +60,10 @@ set_target_properties(cuda_check PROPERTIES
     CUDA_ARCHITECTURES "${AI_CPP_CUDA_ARCHITECTURES}"
 )
 
-add_executable(mnist_train
-    src/main_mnist.cpp
-    src/dataset_mnist.cpp
-    src/neuralnet_mnist.cpp
-)
-target_include_directories(mnist_train PRIVATE
-    ${PROJECT_SOURCE_DIR}/include
-    ${PROJECT_SOURCE_DIR}/lib/include
-)
-target_link_libraries(mnist_train PRIVATE ai_cpp)
-
-add_executable(cifar10_train
-    src/main_cifar10.cpp
-    src/dataset_cifar10.cpp
-    src/neuralnet_cifar10.cpp
-)
-target_include_directories(cifar10_train PRIVATE
-    ${PROJECT_SOURCE_DIR}/include
-    ${PROJECT_SOURCE_DIR}/lib/include
-)
-target_link_libraries(cifar10_train PRIVATE ai_cpp)
-
 if(BUILD_TESTING)
+    add_executable(cuda_memory_check tests/cuda_memory_check.cpp)
+    target_link_libraries(cuda_memory_check PRIVATE ai_cpp)
+    add_test(NAME cuda_memory_check COMMAND cuda_memory_check)
     add_executable(character_tokenizer_check tests/character_tokenizer_check.cpp)
     target_include_directories(character_tokenizer_check PRIVATE ${PROJECT_SOURCE_DIR}/lib/include)
     target_link_libraries(character_tokenizer_check PRIVATE ai_cpp)
@@ -110,20 +92,20 @@ if(BUILD_TESTING)
 
     add_executable(model_state_check
         tests/model_state_check.cpp
-        src/neuralnet_mnist.cpp
+        tests/fixtures/src/neuralnet_mnist.cpp
     )
     target_include_directories(model_state_check PRIVATE
-        ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/tests/fixtures/include
         ${PROJECT_SOURCE_DIR}/lib/include
     )
     target_link_libraries(model_state_check PRIVATE ai_cpp)
 
     add_executable(dropout_check
         tests/dropout_check.cpp
-        src/neuralnet_mnist.cpp
+        tests/fixtures/src/neuralnet_mnist.cpp
     )
     target_include_directories(dropout_check PRIVATE
-        ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/tests/fixtures/include
         ${PROJECT_SOURCE_DIR}/lib/include
     )
     target_link_libraries(dropout_check PRIVATE ai_cpp)
@@ -134,9 +116,9 @@ if(BUILD_TESTING)
     )
     target_link_libraries(batchnorm_check PRIVATE ai_cpp)
 
-    add_executable(conv2d_check tests/conv2d_check.cpp src/neuralnet_cifar10.cpp)
+    add_executable(conv2d_check tests/conv2d_check.cpp tests/fixtures/src/neuralnet_cifar10.cpp)
     target_include_directories(conv2d_check PRIVATE
-        ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/tests/fixtures/include
         ${PROJECT_SOURCE_DIR}/lib/include
     )
     target_link_libraries(conv2d_check PRIVATE ai_cpp)
@@ -149,20 +131,20 @@ if(BUILD_TESTING)
 
     add_executable(cifar10_dataset_check
         tests/cifar10_dataset_check.cpp
-        src/dataset_cifar10.cpp
+        tests/fixtures/src/dataset_cifar10.cpp
     )
     target_include_directories(cifar10_dataset_check PRIVATE
-        ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/tests/fixtures/include
         ${PROJECT_SOURCE_DIR}/lib/include
     )
     target_link_libraries(cifar10_dataset_check PRIVATE ai_cpp)
 
     add_executable(cifar10_model_check
         tests/cifar10_model_check.cpp
-        src/neuralnet_cifar10.cpp
+        tests/fixtures/src/neuralnet_cifar10.cpp
     )
     target_include_directories(cifar10_model_check PRIVATE
-        ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/tests/fixtures/include
         ${PROJECT_SOURCE_DIR}/lib/include
     )
     target_link_libraries(cifar10_model_check PRIVATE ai_cpp)
@@ -181,4 +163,49 @@ if(BUILD_TESTING)
     add_test(NAME maxpool2d_check COMMAND maxpool2d_check)
     add_test(NAME cifar10_dataset_check COMMAND cifar10_dataset_check)
     add_test(NAME cifar10_model_check COMMAND cifar10_model_check)
+endif()
+
+# Shared conversation data/model and two application entry points.
+# Vendored nlohmann/json 3.12.0 (MIT); no download is required at build time.
+target_sources(ai_cpp PRIVATE lib/src/cuda_function_IndexCrossEntropy.cu)
+add_library(conversation_data STATIC
+    model/src/tokenizer_conversation.cpp
+    model/src/dataset_conversation.cpp
+    lib/src/tokenizer_character.cpp
+)
+target_include_directories(conversation_data PUBLIC model/include lib/include PRIVATE third_party)
+add_library(conversation_runtime STATIC
+    model/src/module_Attention.cpp
+    model/src/module_FeedForward.cpp
+    model/src/model_transformer.cpp
+    model/src/conversation_runtime.cpp
+)
+target_include_directories(conversation_runtime PUBLIC model/include PRIVATE third_party)
+target_link_libraries(conversation_runtime PUBLIC ai_cpp conversation_data)
+
+add_library(conversation_training STATIC train/src/train.cpp)
+target_include_directories(conversation_training PUBLIC train/include PRIVATE third_party)
+target_link_libraries(conversation_training PUBLIC conversation_runtime)
+add_executable(main_train train/main_train.cpp)
+target_link_libraries(main_train PRIVATE conversation_training)
+
+add_library(conversation_validation STATIC
+    validation/src/validation.cpp)
+target_include_directories(conversation_validation PUBLIC validation/include PRIVATE third_party)
+target_link_libraries(conversation_validation PUBLIC conversation_runtime)
+add_executable(main_validation validation/main_validation.cpp)
+target_link_libraries(main_validation PRIVATE conversation_validation)
+
+if(BUILD_TESTING)
+    add_executable(conversation_check tests/conversation_check.cpp)
+    target_include_directories(conversation_check PRIVATE third_party)
+    target_link_libraries(conversation_check PRIVATE conversation_training conversation_validation)
+    add_test(NAME conversation_check COMMAND conversation_check)
+    add_executable(cuda_memory_numerics tests/cuda_memory_numerics.cpp)
+    target_link_libraries(cuda_memory_numerics PRIVATE conversation_runtime)
+    add_test(NAME cuda_memory_compare COMMAND ${CMAKE_COMMAND}
+        -DPROGRAM=$<TARGET_FILE:cuda_memory_numerics>
+        -P ${PROJECT_SOURCE_DIR}/tests/cuda_memory_compare.cmake)
+    add_executable(cuda_memory_benchmark tests/cuda_memory_benchmark.cpp)
+    target_link_libraries(cuda_memory_benchmark PRIVATE conversation_training)
 endif()

@@ -1,3 +1,4 @@
+#include "cuda_memory.h"
 #include <cuda_runtime.h>
 #include <math_constants.h>
 
@@ -452,15 +453,11 @@ void cuda_Mask_forward(
     const int nRows =nQuery*nTrailing;
     if( nRows<=0 ) return;
 
-    int* lpnError =nullptr;
-    cudaError_t cudError =cudaMalloc(
-        reinterpret_cast<void**>(&lpnError),sizeof(int)
-    );
-    if( cudError==cudaSuccess )
-        cudError =cudaMemset(lpnError,0,sizeof(int));
+    cu_memory::Buffer errorBuffer(sizeof(int));
+    int* lpnError =static_cast<int*>(errorBuffer.data());
+    cudaError_t cudError =cudaMemset(lpnError,0,sizeof(int));
     if( cudError!=cudaSuccess )
     {
-        if( lpnError!=nullptr ) cudaFree(lpnError);
         throw std::runtime_error(
             std::string("cuda_Mask_forward: error flag allocation failed: ")+
             cudaGetErrorString(cudError)
@@ -480,7 +477,6 @@ void cuda_Mask_forward(
             &nError,lpnError,sizeof(int),cudaMemcpyDeviceToHost
         );
     }
-    const cudaError_t cudFreeError =cudaFree(lpnError);
     if( cudError!=cudaSuccess )
     {
         throw std::runtime_error(
@@ -488,13 +484,7 @@ void cuda_Mask_forward(
             cudaGetErrorString(cudError)
         );
     }
-    if( cudFreeError!=cudaSuccess )
-    {
-        throw std::runtime_error(
-            std::string("cuda_Mask_forward: cudaFree failed: ")+
-            cudaGetErrorString(cudFreeError)
-        );
-    }
+    errorBuffer.release();
     if( (nError&1)!=0 )
     {
         throw std::invalid_argument(
@@ -591,11 +581,9 @@ void cuda_Permute(
 
     const int nSize =static_cast<int>(mResult.numel());
     if( nSize<=0 ) return;
-    std::int64_t* lpnMetadata =nullptr;
-    cudaError_t cudError =cudaMalloc(
-        reinterpret_cast<void**>(&lpnMetadata),
-        nMetadata.size()*sizeof(std::int64_t)
-    );
+    cu_memory::Buffer metadataBuffer(nMetadata.size()*sizeof(std::int64_t));
+    auto* lpnMetadata =static_cast<std::int64_t*>(metadataBuffer.data());
+    cudaError_t cudError =cudaSuccess;
     if( cudError==cudaSuccess )
     {
         cudError =cudaMemcpy(
@@ -606,7 +594,6 @@ void cuda_Permute(
     }
     if( cudError!=cudaSuccess )
     {
-        if( lpnMetadata!=nullptr ) cudaFree(lpnMetadata);
         throw std::runtime_error(
             std::string("cuda_Permute: metadata transfer failed: ")+
             cudaGetErrorString(cudError)
@@ -621,7 +608,6 @@ void cuda_Permute(
     );
     cudError =cudaGetLastError();
     if( cudError==cudaSuccess ) cudError =cudaDeviceSynchronize();
-    const cudaError_t cudFreeError =cudaFree(lpnMetadata);
     if( cudError!=cudaSuccess )
     {
         throw std::runtime_error(
@@ -629,13 +615,7 @@ void cuda_Permute(
             cudaGetErrorString(cudError)
         );
     }
-    if( cudFreeError!=cudaSuccess )
-    {
-        throw std::runtime_error(
-            std::string("cuda_Permute: cudaFree failed: ")+
-            cudaGetErrorString(cudFreeError)
-        );
-    }
+    metadataBuffer.release();
 }
 void cuda_Softmax_forward(
     cufMat& mResult,
@@ -659,15 +639,11 @@ void cuda_Softmax_forward(
     }
     if( nSlices<=0 ) return;
 
-    int* lpnError =nullptr;
-    cudaError_t cudError =cudaMalloc(
-        reinterpret_cast<void**>(&lpnError),sizeof(int)
-    );
-    if( cudError==cudaSuccess )
-        cudError =cudaMemset(lpnError,0,sizeof(int));
+    cu_memory::Buffer errorBuffer(sizeof(int));
+    int* lpnError =static_cast<int*>(errorBuffer.data());
+    cudaError_t cudError =cudaMemset(lpnError,0,sizeof(int));
     if( cudError!=cudaSuccess )
     {
-        if( lpnError!=nullptr ) cudaFree(lpnError);
         throw std::runtime_error(
             std::string("cuda_Softmax_forward: error flag allocation failed: ")+
             cudaGetErrorString(cudError)
@@ -689,7 +665,6 @@ void cuda_Softmax_forward(
             &nError,lpnError,sizeof(int),cudaMemcpyDeviceToHost
         );
     }
-    const cudaError_t cudFreeError =cudaFree(lpnError);
     if( cudError!=cudaSuccess )
     {
         throw std::runtime_error(
@@ -697,13 +672,7 @@ void cuda_Softmax_forward(
             cudaGetErrorString(cudError)
         );
     }
-    if( cudFreeError!=cudaSuccess )
-    {
-        throw std::runtime_error(
-            std::string("cuda_Softmax_forward: cudaFree failed: ")+
-            cudaGetErrorString(cudFreeError)
-        );
-    }
+    errorBuffer.release();
     if( (nError&1)!=0 )
     {
         throw std::invalid_argument(
@@ -1722,9 +1691,16 @@ __global__ void kernel_LayerNorm_backward(
     float fEpsilon
 )
 {
+    // r = 1/sqrt{v + e}
+    // xhat_i =(x_i - mean)*r
+    // y_i = γ_i*xhat_i + β_i
+    //
     const int nPosition =blockIdx.x*blockDim.x+threadIdx.x;
     if( nPosition>=nPositions ) return;
 
+    // Welford's online algorithm for mean and variance
+    // mean = 1/F *sum_i{x_i}
+    // variance = v = 1/F *sim_i{(d_i - mean)^2}
     double dblMean =0.0;
     double dblM2 =0.0;
     for( int nFeature=0;nFeature<nFeatures;++nFeature )
@@ -1740,6 +1716,8 @@ __global__ void kernel_LayerNorm_backward(
         static_cast<double>(fEpsilon)
     );
 
+    // dL/dγ = sum_p{g_(i,p)*xhat_(i,p)}
+    // dL/dβ = sum_p{g_(i,p)}
     double dblGradSum =0.0;
     double dblGradNormalizedSum =0.0;
     for( int nFeature=0;nFeature<nFeatures;++nFeature )
@@ -1766,6 +1744,7 @@ __global__ void kernel_LayerNorm_backward(
         }
     }
 
+    // dL/dx_i = r(h_i - mean(h) - xhat_i*mean(h*xhat))
     for( int nFeature=0;nFeature<nFeatures;++nFeature )
     {
         const int nIndex =nFeature*nPositions+nPosition;

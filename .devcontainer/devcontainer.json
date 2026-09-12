@@ -20,28 +20,30 @@
         "NVIDIA_DRIVER_CAPABILITIES": "compute,utility"
     },
     "customizations": {
-        "vscode": { 
-            "extensions": [ 
-                "ms-vscode.cpptools", 
-                "ms-vscode.cmake-tools", 
-                "nvidia.nsight-vscode-edition" 
-            ], 
-            "settings": { 
-                "terminal.integrated.defaultProfile.linux": "bash", 
-                "cmake.generator": "Ninja", 
-                "cmake.buildDirectory": "${workspaceFolder}/build/debug", 
-                "C_Cpp.default.cppStandard": "c++20", 
-                "C_Cpp.default.cStandard": "c17", 
-                "C_Cpp.default.includePath": [ 
-                    "${workspaceFolder}/include", 
-                    "${workspaceFolder}/include/**", 
-                    "/usr/local/cuda/targets/x86_64-linux/include" 
-                ] 
+        "vscode": {
+            "extensions": [
+                "ms-vscode.cpptools",
+                "ms-vscode.cmake-tools",
+                "nvidia.nsight-vscode-edition"
+            ],
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash",
+                "cmake.generator": "Ninja",
+                "cmake.buildDirectory": "${workspaceFolder}/build/debug",
+                "C_Cpp.default.cppStandard": "c++20",
+                "C_Cpp.default.cStandard": "c17",
+                "C_Cpp.default.includePath": [
+                    "${workspaceFolder}/lib/include/**",
+                    "${workspaceFolder}/model/include/**",
+                    "${workspaceFolder}/train/include/**",
+                    "${workspaceFolder}/validation/include/**",
+                    "/usr/local/cuda/targets/x86_64-linux/include"
+                ]
             }
         }
     },
     "postCreateCommand": {
-        "createDirs": "mkdir -p ${containerWorkspaceFolder}/.vscode ${containerWorkspaceFolder}/.codex-logs ${containerWorkspaceFolder}/include ${containerWorkspaceFolder}/src ${containerWorkspaceFolder}/build/debug",
+        "createDirs": "mkdir -p ${containerWorkspaceFolder}/.vscode ${containerWorkspaceFolder}/.codex-logs ${containerWorkspaceFolder}/model/include ${containerWorkspaceFolder}/model/src ${containerWorkspaceFolder}/train/include ${containerWorkspaceFolder}/train/src ${containerWorkspaceFolder}/validation/include ${containerWorkspaceFolder}/validation/src ${containerWorkspaceFolder}/build/debug",
 
         "checkCuda": "nvcc --version",
         "checkCodex": "codex --version",

@@ -6,13 +6,13 @@
 
 | ヘッダー | 設計仕様 |
 | --- | --- |
-| `include/dataset_mnist.h` | [mnist.md](mnist.md) |
-| `include/neuralnet_mnist.h` | [mnist_neuralnet.md](mnist_neuralnet.md) |
-| `include/dataset_cifar10.h` | [cifar10.md](cifar10.md) |
-| `include/neuralnet_cifar10.h` | [neuralnet.md](neuralnet.md) |
-| `include/module_Attention.h` | [module_attention.md](module_attention.md) |
-| `include/module_FeedForward.h` | [module_feed_forward.md](module_feed_forward.md) |
-| `include/trainer.h` | [trainer.md](trainer.md) |
+| `tests/fixtures/include/dataset_mnist.h` | [mnist.md](mnist.md) |
+| `tests/fixtures/include/neuralnet_mnist.h` | [mnist_neuralnet.md](mnist_neuralnet.md) |
+| `tests/fixtures/include/dataset_cifar10.h` | [cifar10.md](cifar10.md) |
+| `tests/fixtures/include/neuralnet_cifar10.h` | [neuralnet.md](neuralnet.md) |
+| `model/include/module_Attention.h` | [module_attention.md](module_attention.md) |
+| `model/include/module_FeedForward.h` | [module_feed_forward.md](module_feed_forward.md) |
+| `tests/fixtures/include/trainer.h` | [trainer.md](trainer.md) |
 
 ## ライブラリ層
 
@@ -20,6 +20,7 @@
 | --- | --- |
 | `lib/include/cuda_bublas.h` | [cuda_bublas.md](cuda_bublas.md) |
 | `lib/include/cuda_function.h` | [cuda_function.md](cuda_function.md) |
+| `lib/include/cuda_memory.h` | [cuda_memory.md](cuda_memory.md) |
 | `lib/include/cuda_matrix.h` | [cuda_matrix.md](cuda_matrix.md) |
 | `lib/include/cuda_tensor.h` | [cuda_tensor.md](cuda_tensor.md) |
 | `lib/include/matrix.h` | [matrix.md](matrix.md) |
@@ -95,3 +96,23 @@ void updateTensor( Tensor* lpTensor, const cufMat& c_mGradient )
     }
 }
 ```
+
+## 会話 Transformer（実装済み）
+
+| 公開ヘッダ | 設計仕様 |
+| --- | --- |
+| `model/include/model_transformer.h` | [model_transformer.md](model_transformer.md) |
+| `model/include/module_TransformerBlock.h` | [module_transformer_block.md](module_transformer_block.md) |
+| `model/include/module_Attention.h` | [module_attention.md](module_attention.md) |
+| `model/include/module_FeedForward.h` | [module_feed_forward.md](module_feed_forward.md) |
+| `model/include/dataset_conversation.h` | [dataset_conversation.md](dataset_conversation.md) |
+| `model/include/tokenizer_conversation.h` | [tokenizer_conversation.md](tokenizer_conversation.md) |
+| `model/include/conversation_runtime.h` | [conversation_runtime.md](conversation_runtime.md) |
+| `lib/include/tokenizer_character.h` | [tokenizer_character.md](tokenizer_character.md) |
+| `lib/include/cuda_function_IndexCrossEntropy.h` | [cuda_function_index_cross_entropy.md](cuda_function_index_cross_entropy.md) |
+| `lib/include/cuda_function_Linear.h` | [cuda_function_linear.md](cuda_function_linear.md) |
+| `lib/include/cuda_function.h`（Context 所有権追加） | [cuda_function.md](cuda_function.md) |
+
+実データと GPU の検証結果は [conversation_validation.md](conversation_validation.md) を参照する。
+
+学習 API は `train/include/conversation_training.h`、評価・生成 API は `validation/include/conversation_validation.h`。いずれも [会話実行仕様](conversation_runtime.md) を参照。画像モデルの仕様は `tests/fixtures/` の回帰テスト用コードを対象とする。

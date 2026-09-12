@@ -185,3 +185,9 @@ backwardはlogits勾配へ`upstream * (softmax - target) / batch`を加算する
 ## ライフタイム上の制約
 
 Linear、Dropout、BatchNormのようにraw pointerや一時bufferを持つFunctionは、通常Moduleのメンバーとして長期間保持する。ローカルFunctionを使う場合は、その出力に対するbackwardが終わる前にFunctionを破棄してはならない。
+
+## グラフごとの演算所有権（Transformer 追加）
+
+対象 `lib/include/cuda_function.h` の `Context` に `std::shared_ptr<Function> _spFunction` を追加する。既存 `_lpFunc` による dispatch とスタック／メンバー Function の非所有 API は維持する。Transformer 内部の `g_apply` は apply 後の Context へ shared_ptr を設定し、動的な reshape、permute、mask、dropout、整数交差エントロピーをグラフ破棄まで保持する。可変状態を別 forward と共有しない。Context の出力参照は weak_ptr のままで、循環所有しない。
+
+保持順は入力 shared_ptr、演算 shared_ptr、出力 weak_ptr。モデル Parameter の pointer は引き続き非所有なので、モデルは backward 完了まで生存し、更新しない。学習／評価で所有権規則は同じ。所有権追加に数式・勾配・保存形式の変更はない。既存 apply の入力／出力エラー契約を維持する。`conversation_check` の別長 forward 後 backward と `multi_output_check` を完了条件とする。

@@ -6,6 +6,7 @@
 // --------------------------
 // Linear
 // --------------------------
+// Applies W X + b on the first axis; trailing axes are preserved (rank >= 2).
 class Linear: public Function
 {
 public:

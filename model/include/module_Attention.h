@@ -8,15 +8,14 @@
 #include "cuda_function.h"
 #include "module.h"
 
-
 class Attention : public Module
 {
 public:
     Attention(
         int nEmbeddingSize,
         int nHeads,
-        float fDropoutProbability =0.0f,
-        std::uint64_t nDropoutSeed =0
+        float fDropoutProbability = 0.0f,
+        std::uint64_t nDropoutSeed = 0
     );
     ~Attention() override;
 
@@ -25,6 +24,7 @@ private:
     int _nHeads;
     int _nHeadSize;
     float _fDropoutProbability;
+    std::uint64_t _nDropoutSeed;
 
     std::shared_ptr<Tensor> _spmQueryWeight;
     std::shared_ptr<Tensor> _spmQueryBias;
@@ -45,15 +45,9 @@ private:
     BatchMatMul _bmmAttentionValue;
     Dropout _drpAttention;
 
-    static void _initializeWeight(
-        Tensor& mWeight,
-        int nFanIn,
-        std::mt19937& rngRandom
-    );
+    static void _initializeWeight( Tensor& mWeight, int nFanIn, std::mt19937& rngRandom );
 
 public:
-    void init(std::mt19937& rngRandom);
-    std::shared_ptr<Tensor> forward(
-        std::vector<std::shared_ptr<Tensor>>& spmInputs
-    ) override;
+    void init( std::mt19937& rngRandom );
+    std::shared_ptr<Tensor> forward( std::vector<std::shared_ptr<Tensor>>& spmInputs ) override;
 };

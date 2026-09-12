@@ -1,127 +1,68 @@
-#include "cuda_tensor.h"
 #include "cuda_function_Linear.h"
+#include "cuda_tensor.h"
 
+#include <climits>
+#include <stdexcept>
 
-// --------------------------
-// Linear
-// --------------------------
-Linear::Linear(Tensor* lpWeight,Tensor* lpBias)
-    :_lpmWeight( lpWeight ),
-     _lpmBias( lpBias )
+namespace
 {
-    
+int g_positions( const TensorList& c_spmInputs, const Tensor* c_lpWeight, const Tensor* c_lpBias )
+{
+    if( c_spmInputs.size() != 1 || !c_spmInputs[0] || !c_lpWeight || !c_lpBias )
+    {
+        throw std::invalid_argument( "Linear: input and parameters are required" );
+    }
+    const auto& c_mInput = c_spmInputs[0]->_mData;
+    if( c_mInput.dim() < 2 || c_mInput.size( 0 ) <= 0 || c_lpWeight->_mData.dim() != 2 ||
+        c_lpWeight->_mData.size( 1 ) != c_mInput.size( 0 ) ||
+        c_lpBias->_mData.shape() != std::vector<std::int64_t>{ c_lpWeight->_mData.size( 0 ), 1 } ||
+        !c_mInput.isContiguous() || c_mInput.numel() == 0 || c_mInput.numel() > INT_MAX )
+    {
+        throw std::invalid_argument( "Linear: invalid feature shape or storage" );
+    }
+    return static_cast<int>( c_mInput.numel() / c_mInput.size( 0 ) );
 }
-Linear::~Linear()
-{
+} // namespace
 
+Linear::Linear( Tensor* lpWeight, Tensor* lpBias ) : _lpmWeight( lpWeight ), _lpmBias( lpBias ) {}
+
+Linear::~Linear() = default;
+
+TensorList Linear::forward( const TensorList& c_spmInputs )
+{
+    const int nPositions = g_positions( c_spmInputs, _lpmWeight, _lpmBias );
+    auto nShape = c_spmInputs[0]->_mData.shape();
+    const auto mInput = c_spmInputs[0]->_mData.reshape( { nShape[0], nPositions } );
+    nShape[0] = _lpmWeight->_mData.size( 0 );
+    auto spmResult = std::make_shared<Tensor>( nShape );
+    auto mOutput = spmResult->_mData.reshape( { nShape[0], nPositions } );
+    cufMat mOnes( 1, nPositions );
+    cuda_fill( mOnes, 1.0f );
+
+    // Y[f, t, b] = W[f, d] X[d, t, b] + bias[f].
+    cuda_gemm( mOutput, _lpmWeight->_mData, mInput );
+    cuda_gemm( mOutput, _lpmBias->_mData, mOnes, false, false, 1.0f, 1.0f );
+    return { spmResult };
 }
-void Linear::backward(
-    const std::vector<const cufMat*>& c_lpmOutputGrads,
-    const std::vector<std::shared_ptr<Tensor>>& c_spmInputs,
-    const std::vector<std::shared_ptr<Tensor>>& c_spmOutputs
-)
+
+void Linear::backward( const TensorGradList& c_lpmOutputGrads, const TensorList& c_spmInputs,
+                       const TensorList& c_spmOutputs )
 {
-    (void)c_spmOutputs;
-    // 損失関数 L が各変数に対してどれくらい変化するかを求めている
-    // Y = WX + b
-    // grad = dL/dY
-    // c_spmInputs[0]->_mGrad = dL/dX
-    // _lpmWeight->_mGrad = dL/dW
-    // _lpmBias->_mGrad = dL/db
-    //
-    // サイズチェック
-    if( c_spmInputs.size()!=1 )
+    const int nPositions = g_positions( c_spmInputs, _lpmWeight, _lpmBias );
+    const auto& c_mGrad = requireSingleOutputGrad( c_lpmOutputGrads, "Linear" );
+    if( c_spmOutputs.size() != 1 || !c_spmOutputs[0] ||
+        c_mGrad.shape() != c_spmOutputs[0]->_mData.shape() )
     {
-        throw std::runtime_error(
-            "Linear::backward: Linear requires exactly one input"
-        );
+        throw std::invalid_argument( "Linear: gradient shape mismatch" );
     }
-    const cufMat& c_mGrad =requireSingleOutputGrad(
-        c_lpmOutputGrads,
-        "Linear::backward"
-    );
-    // 全要素1行列の作成
-    if( _mTmp.shape()!=std::vector<std::int64_t>{1,c_spmInputs[0]->_mData.cols()} )
-    {
-        _mTmp   =cufMat( 1,c_spmInputs[0]->_mData.cols() );
-        cuda_fill( _mTmp,1.0f );
-    }
+    auto mInput = c_spmInputs[0]->_mData.reshape( { _lpmWeight->_mData.size( 1 ), nPositions } );
+    auto mInputGrad = c_spmInputs[0]->_mGrad.reshape( mInput.shape() );
+    auto mGrad = c_mGrad.reshape( { _lpmWeight->_mData.size( 0 ), nPositions } );
+    cufMat mOnes( 1, nPositions );
+    cuda_fill( mOnes, 1.0f );
 
-    // X.grad += W^T * grad
-    cuda_gemm(
-        c_spmInputs[0]->_mGrad,
-        _lpmWeight->_mData,
-        c_mGrad,
-        true,
-        false,
-        1.0f,
-        1.0f
-    );
-
-    // W.grad += grad * X^T
-    cuda_gemm(
-        _lpmWeight->_mGrad,
-        c_mGrad,
-        c_spmInputs[0]->_mData,
-        false,
-        true,
-        1.0f,
-        1.0f
-    );
-
-    // b.grad += grad * ones^T
-    cuda_gemm(
-        _lpmBias->_mGrad,
-        c_mGrad,
-        _mTmp,
-        false,
-        true,
-        1.0f,
-        1.0f
-    );
-}
-std::vector<std::shared_ptr<Tensor>>
-Linear::forward(
-    const std::vector<std::shared_ptr<Tensor>>& c_spmInputs
-)
-{
-    // Y = WX + b
-    if( c_spmInputs.size()!=1 )
-    {
-        throw std::runtime_error(
-            "Linear::forward: Linear requires exactly one input"
-        );
-    }
-    // 全要素1行列の作成
-    if( _mTmp.shape()!=std::vector<std::int64_t>{1,c_spmInputs[0]->_mData.cols()} )
-    {
-        _mTmp   =cufMat( 1,c_spmInputs[0]->_mData.cols() );
-        cuda_fill( _mTmp,1.0f );
-    }
-    //
-    auto spmResult =std::make_shared<Tensor>(
-        _lpmWeight->_mData.rows(),
-        c_spmInputs[0]->_mData.cols()
-    );
-    
-    // u = W * X
-    cuda_gemm(
-        spmResult->_mData,
-        _lpmWeight->_mData,
-        c_spmInputs[0]->_mData
-    );
-    // biasを各batchに加える
-    // _mTmp = [1 1 1 ... 1]
-    // u += b * _mTmp
-    cuda_gemm(
-        spmResult->_mData,
-        _lpmBias->_mData,
-        _mTmp,
-        false,
-        false,
-        1.0f,
-        1.0f
-    );
-
-    return {spmResult};
+    // dX += W^T dY; dW += dY X^T; db += sum_positions(dY).
+    cuda_gemm( mInputGrad, _lpmWeight->_mData, mGrad, true, false, 1.0f, 1.0f );
+    cuda_gemm( _lpmWeight->_mGrad, mGrad, mInput, false, true, 1.0f, 1.0f );
+    cuda_gemm( _lpmBias->_mGrad, mGrad, mOnes, false, true, 1.0f, 1.0f );
 }

@@ -1,6 +1,6 @@
 # mnist.h 設計仕様
 
-対象: `include/dataset_mnist.h`
+対象: `tests/fixtures/include/dataset_mnist.h`
 
 ## 目的
 

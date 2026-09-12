@@ -1,6 +1,6 @@
 # cifar10.h 設計仕様
 
-対象: `include/dataset_cifar10.h`
+対象: `tests/fixtures/include/dataset_cifar10.h`
 
 ## 読み込む形式
 

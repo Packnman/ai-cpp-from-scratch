@@ -1,147 +1,39 @@
 # Attention 設計仕様
 
-対象: `include/module_Attention.h`
+対象ヘッダ: `model/include/module_Attention.h`。実装: `model/src/module_Attention.cpp`。
 
-## 実装状態
+## 責務と公開 API
 
-公開インターフェース、設定値、学習Parameter、および主要な内部Functionの構成を定義済み。ソース実装は今後追加する。実装には、`Linear`の任意rank対応、動的なhead分割・結合、およびmaskをforwardからbackwardまで安全に保持する仕組みが必要である。
+実装済みの因果 Multi-Head Self-Attention。`Attention( int nEmbeddingSize, int nHeads, float fDropoutProbability = 0.0f, std::uint64_t nDropoutSeed = 0 )`、`init( std::mt19937& rngRandom )`、`forward( TensorList& spmInputs )`を提供する。入力は1個の `[E,T,B]`、出力も `[E,T,B]`。以前の未実装設計にあった3入力の Cross Attention は今回の契約に含めない。
 
-## 目的
+`E > 0`、`H > 0`、`E % H == 0`、有限な `0 <= dropout < 1` が必要。系列長とバッチは正数。構築後に `init` を呼ぶ。Transformer は内部で初期化する。重みは平均0、標準偏差 `1/sqrt(E)` の正規分布、bias は0。
 
-Scaled Dot-Product Multi-Head Attentionを提供する。同じクラスをSelf AttentionとCross Attentionの両方に使用し、用途の違いはforwardへ渡すQuery、Key、Valueで表現する。
+## 形状と処理順序
 
-```text
-Self Attention:  Q = K = V = X
-Cross Attention: Q = decoder state
-                 K = V = encoder output
-```
+1. Linear で Q、K、V を `[E,T,B]` に射影。
+2. `[H,D,T,B]` に reshape (`D=E/H`) し、Q=`[T,D,H,B]`、K=`[D,T,H,B]`、V=`[T,D,H,B]` に permute。
+3. `S[q,k,h,b] = Σd Q[q,d,h,b] K[d,k,h,b] / sqrt(D)`。
+4. `k > q` を負の無限大で mask。key 軸（axis=1）で Softmax。
+5. 学習時は注意確率に inverted dropout (`mask/(1-p)`)。
+6. `C[q,d,h,b] = Σk A[q,k,h,b] V[k,d,h,b]`。
+7. `[H,D,T,B]` へ戻して `[E,T,B]` に結合し、出力 Linear。
 
-クラス名は簡潔に`Attention`とするが、内部計算は常に`nHeads`個のheadを扱う。`nHeads == 1`も許可する。
+データセットは右 PAD のみを作るため、有効 query が PAD key を参照することはない。任意の左 PAD には対応しない。推論では PAD を入力しない。
 
-## 所有権
+## 所有権・寿命と勾配
 
-Attentionは次の学習Parameterを所有し、`registerParameter()`で登録する。
+`query_weight`、`key_weight`、`value_weight`、`output_weight` は `[E,E]`、対応する `*_bias` は `[E,1]`。Attention が shared_ptr で所有し、Module は非所有登録する。重み・bias の変更や破棄は、その forward の backward 完了後に行う。
 
-| 登録名 | shape | 用途 |
-| --- | --- | --- |
-| `query_weight` | `[E,E]` | Query projection |
-| `query_bias` | `[E,1]` | Query bias |
-| `key_weight` | `[E,E]` | Key projection |
-| `key_bias` | `[E,1]` | Key bias |
-| `value_weight` | `[E,E]` | Value projection |
-| `value_bias` | `[E,1]` | Value bias |
-| `output_weight` | `[E,E]` | head結合後のprojection |
-| `output_bias` | `[E,1]` | 出力bias |
+固定設定の演算はメンバーとして保持する。可変 reshape、permute、因果 mask、学習 dropout は forward ごとに作り、`Context::_spFunction` が所有する。mask を扱う演算は mask Tensor 自体も所有する。次の forward による上書きはない。グラフ破棄で解放し、循環所有は作らない。
 
-`E`はembedding sizeである。Parameterの実体はAttentionが`shared_ptr<Tensor>`で所有し、基底Moduleは非所有pointerのみを登録する。
+逆伝播は既存 Function を合成する。`dQ = dS K^T / sqrt(D)`、`dK = Q^T dS / sqrt(D)`、`dV = A^T dC`、Softmax は `dS = A * (dA - Σkey A*dA)`。mask の禁止位置の勾配は0。入力・全 Parameter に加算する。mask と整数 shape に勾配はない。
 
-Query、Key、Value、maskはforward入力であり、Moduleの永続的な状態として保存しない。内部Functionはautogradのbackwardが完了するまで生存する必要があるため、ローカル変数ではなくAttentionのメンバーとして保持する。
+## 学習・評価、保存、例外
 
-## コンストラクタ
+`setTraining(false)` で dropout を省略。学習 forward ごとに seed を進める。乱数状態は保存しない。Parameter は Model v2 の名前・形状付き FP32 保存に含まれる。会話 bundle v1 には構造設定も記録する。
 
-```cpp
-Attention(
-    int nEmbeddingSize,
-    int nHeads,
-    float fDropoutProbability =0.0f,
-    std::uint64_t nDropoutSeed =0
-);
-```
+設定、入力数、null、rank、特徴数の不正は `invalid_argument`。基盤の演算で形状積上限や CUDA 失敗も拒否する。`init` と Model の寿命を呼出し側が管理する。
 
-- `nEmbeddingSize > 0`
-- `nHeads > 0`
-- `nEmbeddingSize % nHeads == 0`
-- `0 <= fDropoutProbability < 1`
-- head sizeは`nEmbeddingSize / nHeads`
-- dropout seedはAttention内部の乱数系列へ使用する
+## テストによる完了条件
 
-不正な設定値は`std::invalid_argument`で拒否する。
-
-## 初期化
-
-```cpp
-void init(std::mt19937& rngRandom);
-```
-
-Weightはfan-inを考慮した分布で初期化し、biasは0で初期化する。forwardより前に1回呼び出す。将来Model共通の初期化規約を導入した場合は、その規約へ統合してよい。
-
-## forward入力
-
-基底Moduleとの互換性のためTensor listを使用する。
-
-| 入力数 | 内容 |
-| --- | --- |
-| 3 | `{query,key,value}` |
-| 4 | `{query,key,value,mask}` |
-
-shape規約は次とする。
-
-```text
-query: [E, Lq, B]
-key:   [E, Lk, B]
-value: [E, Lk, B]
-mask:  [Lq, Lk] または [Lq, Lk, H, B]
-output:[E, Lq, B]
-```
-
-- `Lq`: Query length
-- `Lk`: Key/Value length
-- `H`: head count
-- `B`: batch size
-
-KeyとValueの系列長およびbatch sizeは一致しなければならない。Queryのbatch sizeも一致する必要がある。mask省略時は全位置を参照可能とする。decoder-only GPTでは未来位置を禁止するcausal maskを渡す。
-
-## forward計算
-
-```text
-Q = LinearQuery(query)
-K = LinearKey(key)
-V = LinearValue(value)
-
-Q: [Lq,D,H,B]
-K: [D,Lk,H,B]
-V: [Lk,D,H,B]
-
-scores  = BatchMatMul(Q,K)
-scores  = Scale(scores,1/sqrt(D))
-scores  = Mask(scores,mask)       // mask指定時
-weights = Softmax(scores,axis=1)
-weights = Dropout(weights)        // training時
-context = BatchMatMul(weights,V)
-
-context = mergeHeads(context)
-output  = LinearOutput(context)
-```
-
-`D = E/H`である。head分割・結合はTensorデータをhostへ転送せず、ReshapeとPermute相当のGPU演算で行う。
-
-## backward
-
-Attention全体のbackwardは手書きしない。内部で呼び出したLinear、BatchMatMul、Scale、Mask、Softmax、Dropout、Reshape、Permuteが作成するautograd graphへ委譲する。すべてのParameter勾配は既存値へ加算される。
-
-maskは制御入力であり勾配を計算しない。maskを受け取るFunctionは、そのforwardで使ったmaskをbackwardまで保持しなければならない。別のforwardによるmaskの上書きを参照してはならない。
-
-## training/evaluation
-
-- training時のみattention weightへdropoutを適用する
-- evaluation時はdropoutを適用しない
-- `Module::setTraining()`で設定された状態をforward時に参照する
-
-## 例外
-
-- 入力数が3または4でなければ`std::runtime_error`
-- null入力は`std::invalid_argument`
-- embedding、系列長、batch shapeの不一致は`std::invalid_argument`
-- mask shape不一致または全key無効行は`std::invalid_argument`
-- shape積またはCUDA index上限超過は`std::overflow_error`
-- CUDA演算失敗は`std::runtime_error`
-
-## 完了条件
-
-- Self AttentionとCross Attentionを同じクラスで処理できる
-- causal maskによって未来位置のweightが0になる
-- 各headを独立に計算し、結合後shapeが`[E,Lq,B]`になる
-- Q/K/V/Oの全Parameterへ勾配が流れる
-- input、Parameterの勾配が数値微分と一致する
-- training/evaluationでdropoutの有無が切り替わる
-- Parameterがstate dictへ登録され、保存・読込できる
+`conversation_check` で2ヘッド・2バッチの入力と全 Parameter の中心差分勾配（許容誤差0.002）、未来入力変更に対する過去出力の不変性、短い別 forward を挟んだ backward を確認する。`transformer_functions_check` で基盤演算の勾配、mask、Softmax を確認する。保存は Transformer 全体の logits 一致で確認する。

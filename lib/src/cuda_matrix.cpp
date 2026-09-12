@@ -51,23 +51,14 @@ void requireSameShape(const cufMat& a,const cufMat& b,const char* operation)
 
 template<cuElement T>
 cuStorage<T>::cuStorage(std::size_t elements)
-    :_device(nullptr),_elements(elements)
-{
-    if( elements>std::numeric_limits<std::size_t>::max()/sizeof(T) )
-        throw std::overflow_error("cuStorage: allocation is too large");
-    if( elements )
-    {
-        checkCuda(
-            cudaMalloc(reinterpret_cast<void**>(&_device),elements*sizeof(T)),
-            "cuStorage cudaMalloc"
-        );
-    }
-}
+    :_buffer([&] {
+        if(elements>std::numeric_limits<std::size_t>::max()/sizeof(T))
+            throw std::overflow_error("cuStorage: allocation is too large");
+        return elements*sizeof(T);
+    }()), _device(static_cast<T*>(_buffer.data())), _elements(elements)
+{}
 template<cuElement T>
-cuStorage<T>::~cuStorage()
-{
-    if(_device) cudaFree(_device);
-}
+cuStorage<T>::~cuStorage() =default;
 
 template<cuElement T>
 cuMat<T>::cuMat()

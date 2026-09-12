@@ -1,5 +1,6 @@
 #pragma once
 
+#include "cuda_memory.h"
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -30,6 +31,7 @@ public:
     cuStorage& operator=(const cuStorage&) =delete;
 
 private:
+    cu_memory::Buffer _buffer;
     T* _device;
     std::size_t _elements;
 public:

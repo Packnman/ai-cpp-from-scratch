@@ -162,3 +162,14 @@ std::size_t TokenCharacter::vocabSize() const noexcept
     return _szVocabulary.size();
 }
 
+
+TokenIds TokenCharacter::encodeUnknown( std::string_view c_strText, std::int32_t nUnknownId ) const
+{
+    TokenIds nResult;
+    for( char32_t nCodePoint : _decodeUtf8( c_strText ) )
+    {
+        const auto itrToken = _mapTokenIdByCharacter.find( nCodePoint );
+        nResult.push_back( itrToken == _mapTokenIdByCharacter.end() ? nUnknownId : itrToken->second );
+    }
+    return nResult;
+}
