@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# 設定: ここを書き換えるか、同名の環境変数で上書きしてください。
+# 相対パスはリポジトリルートを基準にします。
+BUILD_DIR="${BUILD_DIR:-build/release}"
+BUILD_TYPE="${BUILD_TYPE:-Release}"
+BUILD_JOBS="${BUILD_JOBS:-2}"
+RUN_BUILD="${RUN_BUILD:-1}"       # 1: 実行前にビルド、0: ビルド済みを使用
+DRY_RUN="${DRY_RUN:-0}"           # 1: コマンド表示のみ（ビルド・学習しない）
+CONVERSATION_TRAIN="${CONVERSATION_TRAIN:-data/conversation/train.jsonl}"
+TEXT_TRAIN="${TEXT_TRAIN:-data/jawiki-20260901/train.jsonl}"
+OUTPUT_MODEL="${OUTPUT_MODEL:-experiments/quality/common-tokenizer.model}"
+VOCAB_SIZE="${VOCAB_SIZE:-8192}"
+OVERWRITE="${OVERWRITE:-1}"       # 1: 既存のOUTPUT_MODELを置き換える
+TEXT_SAMPLE_DOCUMENTS="${TEXT_SAMPLE_DOCUMENTS:-50000}" # 0: 全件使用
+TEXT_SAMPLE_EVERY="${TEXT_SAMPLE_EVERY:-26}"             # N件ごとに1件抽出
+
+cd "${repo_root}"
+
+if [[ ! "${TEXT_SAMPLE_DOCUMENTS}" =~ ^[0-9]+$ ]]; then
+    echo "TEXT_SAMPLE_DOCUMENTS must be a nonnegative integer." >&2
+    exit 1
+fi
+if [[ ! "${TEXT_SAMPLE_EVERY}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "TEXT_SAMPLE_EVERY must be a positive integer." >&2
+    exit 1
+fi
+
+if [[ "${TEXT_SAMPLE_DOCUMENTS}" -gt 0 ]]; then
+    echo "Text sampling: every ${TEXT_SAMPLE_EVERY} document(s), up to ${TEXT_SAMPLE_DOCUMENTS} documents"
+else
+    echo "Text sampling: disabled (using the complete text corpus)"
+fi
+
+if [[ "${DRY_RUN}" == 1 ]]; then
+    printf 'Command: %q tokenizer %q %q %q --vocab-size %q\n' \
+        "${BUILD_DIR}/main_train" "${CONVERSATION_TRAIN}" \
+        "${TEXT_TRAIN}" "${OUTPUT_MODEL}" "${VOCAB_SIZE}"
+    exit 0
+fi
+
+if [[ -e "${OUTPUT_MODEL}" && "${OVERWRITE}" != 1 ]]; then
+    echo "Tokenizer output already exists: ${OUTPUT_MODEL}" >&2
+    echo "Set OVERWRITE=1 to replace it." >&2
+    exit 1
+fi
+
+if [[ "${RUN_BUILD}" == 1 ]]; then
+    cmake -S "${repo_root}" -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE="${BUILD_TYPE}"
+    cmake --build "${BUILD_DIR}" --target main_train -j "${BUILD_JOBS}"
+fi
+
+effective_text_train="${TEXT_TRAIN}"
+sample_directory=""
+cleanup() {
+    if [[ -n "${sample_directory}" ]]; then
+        rm -f -- "${sample_directory}/train.jsonl"
+        rmdir -- "${sample_directory}"
+    fi
+}
+trap cleanup EXIT
+
+if [[ "${TEXT_SAMPLE_DOCUMENTS}" -gt 0 ]]; then
+    sample_directory="$(mktemp -d "${TMPDIR:-/tmp}/ai-cpp-tokenizer.XXXXXX")"
+    effective_text_train="${sample_directory}/train.jsonl"
+    awk -v every="${TEXT_SAMPLE_EVERY}" -v maximum="${TEXT_SAMPLE_DOCUMENTS}" '
+        (NR - 1) % every == 0 {
+            print
+            if (++selected >= maximum) exit
+        }
+    ' "${TEXT_TRAIN}" > "${effective_text_train}"
+    selected_documents="$(wc -l < "${effective_text_train}")"
+    if [[ "${selected_documents}" -eq 0 ]]; then
+        echo "Text sampling produced no documents from ${TEXT_TRAIN}." >&2
+        exit 1
+    fi
+    echo "Sampled ${selected_documents} text documents into a temporary file."
+fi
+
+args=("${BUILD_DIR}/main_train" tokenizer
+    "${CONVERSATION_TRAIN}" "${effective_text_train}" "${OUTPUT_MODEL}"
+    --vocab-size "${VOCAB_SIZE}")
+printf 'Command: '
+printf '%q ' "${args[@]}"
+printf '\n'
+
+mkdir -p "$(dirname "${OUTPUT_MODEL}")"
+"${args[@]}"

@@ -13,7 +13,7 @@ BUILD_JOBS="${BUILD_JOBS:-2}"
 RUN_BUILD="${RUN_BUILD:-1}"       # 1: 実行前にビルド、0: ビルド済みを使用
 DRY_RUN="${DRY_RUN:-0}"           # 1: コマンド表示のみ（ビルド・評価しない）
 MODE="${MODE:-chat}"         # evaluate: loss/perplexity 評価、chat: 対話生成
-MODEL_DIR="${MODEL_DIR:-models/conversation}"
+MODEL_DIR="${MODEL_DIR:-models/conversation_bpe_finetuned}"
 
 # evaluate 専用
 DATA_DIR="${DATA_DIR:-data/conversation}"
@@ -23,8 +23,8 @@ MAX_BATCHES="${MAX_BATCHES:-0}"  # 0: 全件、正数: バッチ数上限
 LOSS_TARGET="${LOSS_TARGET:-all}" # all または response
 
 # chat 専用
-TEMPERATURE="${TEMPERATURE:-0.8}"
-TOP_K="${TOP_K:-40}"
+TEMPERATURE="${TEMPERATURE:-0.5}"
+TOP_K="${TOP_K:-10}"
 MAX_TOKENS="${MAX_TOKENS:-256}"
 INPUT_CONTEXT="${INPUT_CONTEXT:-0}" # 0: 保存モデルの文脈長
 SEED="${SEED:-42}"

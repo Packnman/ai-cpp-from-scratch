@@ -17,6 +17,31 @@ struct ModeRestore
     }
 };
 
+
+// Some terminals pass Backspace/Delete through as input bytes instead of
+// applying line editing. Remove the preceding complete UTF-8 code point.
+std::string ApplyBackspaces( const std::string& c_strInput )
+{
+    std::string strResult;
+    for( const unsigned char nByte : c_strInput )
+    {
+        if( nByte == '\b' || nByte == 0x7f )
+        {
+            if( strResult.empty() ) continue;
+            std::size_t nStart = strResult.size() - 1;
+            while( nStart > 0 &&
+                   ( static_cast<unsigned char>( strResult[nStart] ) & 0xc0 ) == 0x80 )
+            {
+                --nStart;
+            }
+            strResult.erase( nStart );
+            continue;
+        }
+        strResult.push_back( static_cast<char>( nByte ) );
+    }
+    return strResult;
+}
+
 } // namespace
 
 // 直近の会話履歴から次の ID を1個ずつ選び、終端または長さ上限まで生成する。
@@ -110,6 +135,7 @@ void Chat( const TokenConversation& c_tokTokenizer, int nContext,
     stmOutput << "A> " << std::flush;
     while( std::getline( stmInput, strInput ) )
     {
+        strInput = ApplyBackspaces( strInput );
         nHistory.push_back( TokenConversation::SPEAKER_A );
         const auto nText = c_tokTokenizer.encode( strInput );
         nHistory.insert( nHistory.end(), nText.begin(), nText.end() );

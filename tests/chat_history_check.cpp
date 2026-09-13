@@ -13,7 +13,7 @@ void require( bool condition, const char* message )
 
 int main()
 {
-    TokenConversation tokenizer( "abc" );
+    TokenConversation tokenizer( "abcあいう" );
     std::vector<TokenIds> histories;
     std::istringstream endInput( "a\nb\n" );
     std::ostringstream endOutput;
@@ -68,5 +68,38 @@ int main()
                  std::equal( expectedPrefix.begin(), expectedPrefix.end(), histories[1].begin() ) &&
                  histories[1][5] == b,
              "Context trimming must preserve the most recent configured tokens" );
+    histories.clear();
+    std::istringstream deleteInput( "ab\x7f" "c\n" );
+    std::ostringstream deleteOutput;
+    Chat( tokenizer, 32, deleteInput, deleteOutput,
+          [&]( const TokenIds& history )
+          {
+              histories.push_back( history );
+              return TokenIds{ TokenConversation::UTTERANCE_END };
+          } );
+    TokenIds expectedDelete = { TokenConversation::BEGIN, TokenConversation::SPEAKER_A };
+    const auto encodedDelete = tokenizer.encode( "ac" );
+    expectedDelete.insert( expectedDelete.end(), encodedDelete.begin(), encodedDelete.end() );
+    expectedDelete.push_back( TokenConversation::UTTERANCE_END );
+    expectedDelete.push_back( TokenConversation::SPEAKER_B );
+    require( histories.size() == 1 && histories[0] == expectedDelete,
+             "Delete must remove the preceding input character" );
+
+    histories.clear();
+    std::istringstream backspaceInput( "あい\bう\n" );
+    std::ostringstream backspaceOutput;
+    Chat( tokenizer, 32, backspaceInput, backspaceOutput,
+          [&]( const TokenIds& history )
+          {
+              histories.push_back( history );
+              return TokenIds{ TokenConversation::UTTERANCE_END };
+          } );
+    TokenIds expectedBackspace = { TokenConversation::BEGIN, TokenConversation::SPEAKER_A };
+    const auto encodedBackspace = tokenizer.encode( "あう" );
+    expectedBackspace.insert( expectedBackspace.end(), encodedBackspace.begin(), encodedBackspace.end() );
+    expectedBackspace.push_back( TokenConversation::UTTERANCE_END );
+    expectedBackspace.push_back( TokenConversation::SPEAKER_B );
+    require( histories.size() == 1 && histories[0] == expectedBackspace,
+             "Backspace must remove one complete UTF-8 character" );
     return 0;
 }
