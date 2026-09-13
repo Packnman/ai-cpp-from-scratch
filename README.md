@@ -175,6 +175,10 @@ build/release/main_train data/conversation models/conversation
 | `--seed` | 42 | 新規学習のモデル初期化・dropout・shuffle 用 seed |
 | `--max-batches` | 0 | 各 split／epoch のバッチ数上限。0は全件 |
 | `--loss-target` | `all` | `all`: 全次token、`response`: B回答と発話終端のみ |
+| `--data-format` | `conversation` | `conversation` または本文JSONLの `text` |
+| `--tokenizer-model` | なし | 新規モデルで使う外部BPE model |
+| `--token-budget` | 0 | trainの損失対象token上限。0はepoch基準 |
+| `--accumulate` | 1 | Adam更新前に平均するmicro-batch数 |
 
 モデルは FP32 の decoder-only Transformer です。学習可能な位置埋め込み、Pre-LayerNorm、因果 Attention、GELU、dropout を使用し、入出力の重みは共有しません。
 
@@ -226,6 +230,9 @@ build/release/main_train data/conversation models/conversation-bpe-512 \
 ```
 
 SentencePiece BPE は train の発話本文だけから構築します。validation／test と利用者の資料は使用しません。未知文字は UTF-8 バイトへ分解し、空白・改行・タブ・Markdown・LaTeX の文字列を保持します。語彙数4096は特殊 ID と256個のバイト token を含む目標値で、小規模データでは実際の語彙数が小さくなることがあります。
+
+日本語本文の事前学習、共通tokenizer、30M tokenのA/B/C/D比較は
+[比較基盤と実行手順](docs/quality_comparison.md)を参照してください。
 
 バッチ32からの自動縮小と3回の測定は `bash scripts/run_context_benchmark.sh BUNDLE data/conversation/train.jsonl` で実行できます。測定手順・設定・結果は [学習基盤の検証記録](docs/training_foundation.md) を参照してください。
 

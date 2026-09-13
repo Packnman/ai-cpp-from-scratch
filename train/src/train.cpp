@@ -149,7 +149,7 @@ void _Prop(
 {
     ConfigTraining cfgTraining = c_cfgTraining;
     if (cfgTraining.nEpochs <= 0 || cfgTraining.nBatchSize <= 0 ||
-        cfgTraining.nMaxBatches < 0 ||
+        cfgTraining.nMaxBatches < 0 || cfgTraining.nAccumulationSteps <= 0 ||
         !std::isfinite(cfgTraining.fLearningRate) ||
         cfgTraining.fLearningRate <= 0.0f ||
         !std::isfinite(cfgTraining.fClipNorm) || cfgTraining.fClipNorm <= 0.0f ||
@@ -158,13 +158,6 @@ void _Prop(
       throw std::invalid_argument("Invalid training configuration");
     }
     auto enmLossTarget = g_parseConversationLossTarget(cfgTraining.strLossTarget);
-    // 学習・検証・最終テストのデータを読み込み、分割の妥当性を確認する。
-    const auto cnvTrain =
-        g_readConversations(c_strDataDirectory + "/train.jsonl");
-    const auto cnvValidation =
-        g_readConversations(c_strDataDirectory + "/validation.jsonl");
-    const auto cnvTest = g_readConversations(c_strDataDirectory + "/test.jsonl");
-    _CheckSplits(cnvTrain, cnvValidation, cnvTest);
     const bool isFinetuning = !c_strSource.empty() && !isResume;
     const std::filesystem::path pthCheckpoint =
         std::filesystem::path(c_strModelDirectory) / "checkpoint";
@@ -190,6 +183,12 @@ void _Prop(
       cfgTraining.nMaxBatches = training.at("max_batches").get<int>();
       cfgTraining.strLossTarget =
           training.value("loss_target", std::string("all"));
+      cfgTraining.strDataFormat =
+          training.value("data_format", std::string("conversation"));
+      cfgTraining.nTokenBudget =
+          training.value("token_budget", std::uint64_t{0});
+      cfgTraining.nAccumulationSteps =
+          training.value("accumulation_steps", 1);
       if (strResumeLossTarget && *strResumeLossTarget != cfgTraining.strLossTarget)
         throw std::runtime_error(
             "Cannot change loss target when resuming: checkpoint=" +
@@ -198,6 +197,38 @@ void _Prop(
       cfgTraining.fLearningRate = jsnResume.at("learning_rate").get<float>();
       if (fResumeLearningRate)
         cfgTraining.fLearningRate = *fResumeLearningRate;
+    }
+    if( cfgTraining.nAccumulationSteps <= 0 )
+        throw std::runtime_error( "Invalid checkpoint accumulation steps" );
+
+    const bool isText = cfgTraining.strDataFormat == "text";
+    if( !isText && cfgTraining.strDataFormat != "conversation" )
+        throw std::invalid_argument( "Data format must be conversation or text" );
+    if( isText && enmLossTarget != ConversationLossTarget::All )
+        throw std::invalid_argument( "Text data requires --loss-target all" );
+
+    std::vector<Conversation> cnvTrain, cnvValidation, cnvTest;
+    std::vector<TextDocument> txtTrain, txtValidation, txtTest;
+    if( isText )
+    {
+        txtTrain = g_readTextDocuments(c_strDataDirectory + "/train.jsonl");
+        txtValidation = g_readTextDocuments(c_strDataDirectory + "/validation.jsonl");
+        txtTest = g_readTextDocuments(c_strDataDirectory + "/test.jsonl");
+        std::set<std::int64_t> ids;
+        for( const auto* split : { &txtTrain, &txtValidation, &txtTest } )
+        {
+            if( split->empty() ) throw std::invalid_argument( "All text splits must be nonempty" );
+            for( const auto& document : *split )
+                if( !ids.insert(document.nId).second )
+                    throw std::invalid_argument( "Text document leakage across splits" );
+        }
+    }
+    else
+    {
+        cnvTrain = g_readConversations(c_strDataDirectory + "/train.jsonl");
+        cnvValidation = g_readConversations(c_strDataDirectory + "/validation.jsonl");
+        cnvTest = g_readConversations(c_strDataDirectory + "/test.jsonl");
+        _CheckSplits(cnvTrain, cnvValidation, cnvTest);
     }
 
     {
@@ -227,13 +258,30 @@ void _Prop(
           throw std::invalid_argument("Tokenizer must be character or bpe");
       }
       auto tokTokenizer = [&]() {
-          if (cfgTraining.strTokenizer == "character")
-              return TokenConversation(g_trainingText(cnvTrain));
+          if (!cfgTraining.strTokenizerModel.empty()) {
+              std::ifstream file(cfgTraining.strTokenizerModel, std::ios::binary);
+              if (!file)
+                  throw std::runtime_error("Cannot read external tokenizer model");
+              const std::string bytes((std::istreambuf_iterator<char>(file)), {});
+              return TokenConversation::fromSubwordModel(bytes);
+          }
+          if (cfgTraining.strTokenizer == "character") {
+              std::string text;
+              if (isText)
+                  for (const auto &document : txtTrain) text += document.strText;
+              else
+                  text = g_trainingText(cnvTrain);
+              return TokenConversation(text);
+          }
           std::vector<std::string> sentences;
-          for (const auto &dialogue : cnvTrain)
-              for (const auto &utterance : dialogue.uttUtterances)
-                  sentences.push_back(utterance.strText);
-          //
+          if (isText) {
+              for (const auto &document : txtTrain)
+                  sentences.push_back(document.strText);
+          } else {
+              for (const auto &dialogue : cnvTrain)
+                  for (const auto &utterance : dialogue.uttUtterances)
+                      sentences.push_back(utterance.strText);
+          }
           return TokenConversation::trainSubword(
               sentences,
               cfgTraining.nTokenizerVocabulary
@@ -246,10 +294,15 @@ void _Prop(
     auto &trnModel = *bunModel.spModel;
     const auto &tokTokenizer = bunModel.tokTokenizer;
     cfgModel = trnModel.config();
-    ConversationDataset datTrain(cnvTrain, tokTokenizer, cfgModel.nContext, enmLossTarget);
-    ConversationDataset datValidation(cnvValidation, tokTokenizer, cfgModel.nContext,
-                                      enmLossTarget);
-    ConversationDataset datTest(cnvTest, tokTokenizer, cfgModel.nContext, enmLossTarget);
+    auto datTrain = isText
+        ? ConversationDataset(txtTrain, tokTokenizer, cfgModel.nContext)
+        : ConversationDataset(cnvTrain, tokTokenizer, cfgModel.nContext, enmLossTarget);
+    auto datValidation = isText
+        ? ConversationDataset(txtValidation, tokTokenizer, cfgModel.nContext)
+        : ConversationDataset(cnvValidation, tokTokenizer, cfgModel.nContext, enmLossTarget);
+    auto datTest = isText
+        ? ConversationDataset(txtTest, tokTokenizer, cfgModel.nContext)
+        : ConversationDataset(cnvTest, tokTokenizer, cfgModel.nContext, enmLossTarget);
     if( datTrain.size() == 0 || datValidation.size() == 0 || datTest.size() == 0 )
         throw std::invalid_argument(
             "Loss target produced an empty train, validation, or test dataset" );
@@ -263,6 +316,7 @@ void _Prop(
     int nCompletedEpoch = 0;
     int nBestEpoch = 0;
     double dblBest = std::numeric_limits<double>::infinity();
+    std::uint64_t nOptimizedTokens = 0;
     if( isResume )
     {
         if( (jsnResume.at("model")!=_ModelConfig(cfgModel))||
@@ -301,6 +355,8 @@ void _Prop(
         nCompletedEpoch = jsnResume.at("completed_epoch").get<int>();
         nBestEpoch = jsnResume.at("best_epoch").get<int>();
         dblBest = jsnResume.at("best_validation_loss").get<double>();
+        nOptimizedTokens =
+            jsnResume.value("optimized_tokens", std::uint64_t{0});
         if( nCompletedEpoch < 0 ||
             nBestEpoch < 0 ||
             nBestEpoch > nCompletedEpoch ||
@@ -327,6 +383,12 @@ void _Prop(
         {"vocabulary", tokTokenizer.vocabSize()},
         {"event", "training_start"},
         {"loss_target", g_conversationLossTargetName(enmLossTarget)},
+        {"data_format", cfgTraining.strDataFormat},
+        {"external_tokenizer_model", cfgTraining.strTokenizerModel},
+        {"token_budget", cfgTraining.nTokenBudget},
+        {"accumulation_steps", cfgTraining.nAccumulationSteps},
+        {"effective_batch_tokens", static_cast<std::uint64_t>(cfgTraining.nBatchSize) *
+                                       cfgModel.nContext * cfgTraining.nAccumulationSteps},
         {"excluded_responses", datTrain.excludedResponses()},
         {"source_model", c_strSource},
         {"optimizer", "Adam newly initialized"},
@@ -374,6 +436,18 @@ void _Prop(
         }
         double dblLossSum = 0.0;
         std::size_t nValid = 0;
+        int nPendingUpdates = 0;
+        auto fnUpdate = [&]()
+        {
+            if( nPendingUpdates == 0 ) return;
+            for( auto* parameter : trnModel.getParams() )
+                cuda_scale(parameter->_mGrad, 1.0f / nPendingUpdates);
+            ClipGradients(trnModel, cfgTraining.fClipNorm);
+            optAdam.update();
+            trnModel.zero_grads();
+            nPendingUpdates = 0;
+        };
+        if( isTraining ) trnModel.zero_grads();
         std::size_t nPeakUsed = 0;
         std::size_t nBaselineFree = 0;
         std::size_t nTotal = 0;
@@ -385,6 +459,9 @@ void _Prop(
         for (std::size_t nStart = 0; nStart < nOrder.size();
             nStart += cfgTraining.nBatchSize)
         {
+            if( isTraining && cfgTraining.nTokenBudget > 0 &&
+                nOptimizedTokens >= cfgTraining.nTokenBudget )
+                break;
             if (cfgTraining.nMaxBatches > 0 && nBatches >= cfgTraining.nMaxBatches) {
                 break;
             }
@@ -394,8 +471,7 @@ void _Prop(
             cunMat mTargets(batBatch.nSequence, batBatch.nBatch);
             spmInputs->copyFromHost(batBatch.nInputs.data(), batBatch.nInputs.size());
             mTargets.copyFromHost(batBatch.nTargets.data(), batBatch.nTargets.size());
-            // 前回の勾配を消して順伝播する。PAD を除いた平均損失で状態を確認する。
-            trnModel.zero_grads();
+            // PAD を除いた平均損失で状態を確認する。
             auto spmLoss = trnModel.loss(spmInputs, mTargets);
             const float fLoss = spmLoss->_mData.toHost()[0];
             if( !std::isfinite(fLoss) )
@@ -406,8 +482,8 @@ void _Prop(
             {
                 // 逆伝播 → 勾配の大きさ制限 → Adam の順で重みを更新する。
                 spmLoss->backward();
-                ClipGradients(trnModel, cfgTraining.fClipNorm);
-                optAdam.update();
+                ++nPendingUpdates;
+                if( nPendingUpdates == cfgTraining.nAccumulationSteps ) fnUpdate();
             }
             std::size_t nFree = 0;
             _CheckCuda(cudaMemGetInfo(&nFree, &nTotal));
@@ -415,8 +491,10 @@ void _Prop(
             // バッチごとの平均を有効トークン数で重み付けし、端数バッチも正しく集計する。
             dblLossSum += static_cast<double>(fLoss) * batBatch.nValid;
             nValid += batBatch.nValid;
+            if( isTraining ) nOptimizedTokens += batBatch.nValid;
             ++nBatches;
         }
+        if( isTraining ) fnUpdate();
         _CheckCuda(cudaDeviceSynchronize());
         // 直前の同期で GPU の完了を待ち、実際の処理時間と処理量を算出する。
         const double dblSeconds = std::chrono::duration<double>(
@@ -436,6 +514,10 @@ void _Prop(
                           {"sampled_device_used_bytes", nPeakUsed},
                           {"pool_used_bytes", memoryStats.usedBytes},
                           {"pool_reserved_bytes", memoryStats.reservedBytes},
+                          {"accumulation_steps", cfgTraining.nAccumulationSteps},
+                          {"effective_batch_tokens", static_cast<std::uint64_t>(cfgTraining.nBatchSize) * cfgModel.nContext * cfgTraining.nAccumulationSteps},
+                          {"optimized_tokens", nOptimizedTokens},
+                          {"token_budget", cfgTraining.nTokenBudget},
                           {"baseline_device_used_bytes", nTotal - nBaselineFree},
                           {"max_batches", cfgTraining.nMaxBatches}};
         stmLog << jsnMetric.dump() << std::endl;
@@ -465,6 +547,7 @@ void _Prop(
           {"best_epoch", nBestEpoch},
           {"learning_rate", optAdam.learningRate()},
           {"adam_step", optAdam.step()},
+          {"optimized_tokens", nOptimizedTokens},
           {"weights", weightName},
           {"adam", adamName},
           {"weights_fingerprint", _Fingerprint(pthCheckpoint / weightName)},
@@ -473,6 +556,9 @@ void _Prop(
           {"dropout_counters", trnModel.dropoutCounters()},
           {"training", {
               {"batch_size", cfgTraining.nBatchSize},
+              {"data_format", cfgTraining.strDataFormat},
+              {"token_budget", cfgTraining.nTokenBudget},
+              {"accumulation_steps", cfgTraining.nAccumulationSteps},
               {"loss_target", g_conversationLossTargetName(enmLossTarget)},
               {"clip_norm", cfgTraining.fClipNorm},
               {"seed", cfgTraining.nSeed},
@@ -515,10 +601,14 @@ void _Prop(
       strPreviousCheckpoint = metadataName;
       jsnResume = std::move(metadata);
     };
+    int nLastEpoch = nCompletedEpoch;
     for(int nEpoch = nCompletedEpoch + 1;
-        nEpoch <= nCompletedEpoch + cfgTraining.nEpochs;
+        nEpoch <= nCompletedEpoch + cfgTraining.nEpochs &&
+        (cfgTraining.nTokenBudget == 0 ||
+         nOptimizedTokens < cfgTraining.nTokenBudget);
         ++nEpoch)
     {
+        nLastEpoch = nEpoch;
         // Make temporary-allocation history (including an earlier test pass)
         // irrelevant at epoch boundaries.
         cu_memory::trimUnused();
@@ -535,7 +625,7 @@ void _Prop(
     }
     // 最後の epoch ではなく、検証で最良だった重みを読み直して test を評価する。
     trnModel.load((c_strModelDirectory + "/weights.bin").c_str());
-    fnRun(datTest, false, "test_best", nCompletedEpoch + cfgTraining.nEpochs);
+    fnRun(datTest, false, "test_best", nLastEpoch);
 }
 
 } // namespace

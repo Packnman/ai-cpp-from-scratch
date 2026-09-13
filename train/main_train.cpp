@@ -1,9 +1,35 @@
 #include "cli_options.h"
 #include "train.h"
+#include <fstream>
 #include <iostream>
 
 int main(int nArgc, char **lpArgv) {
     try {
+        if (nArgc >= 2 && std::string(lpArgv[1]) == "tokenizer") {
+            if (nArgc < 5)
+                throw std::invalid_argument(
+                    "Usage: main_train tokenizer CONVERSATION_TRAIN TEXT_TRAIN OUTPUT "
+                    "[--vocab-size N]");
+            CliOptions options(nArgc, lpArgv, 5);
+            const int vocabulary = options.integer("--vocab-size", 4096);
+            options.finish();
+            std::vector<std::string> sentences;
+            for (const auto &dialogue : g_readConversations(lpArgv[2]))
+                for (const auto &utterance : dialogue.uttUtterances)
+                    sentences.push_back(utterance.strText);
+            for (const auto &document : g_readTextDocuments(lpArgv[3]))
+                sentences.push_back(document.strText);
+            const auto tokenizer =
+                TokenConversation::trainSubword(sentences, vocabulary);
+            std::ofstream output(lpArgv[4], std::ios::binary);
+            const auto &bytes = tokenizer.subwordModel();
+            output.write(bytes.data(), bytes.size());
+            if (!output)
+                throw std::runtime_error("Cannot write tokenizer model");
+            std::cout << "Saved common training-only tokenizer vocabulary="
+                      << tokenizer.vocabSize() << '\n';
+            return 0;
+        }
         // prepare は元データを train / validation / test に変換する専用の入口。
         if (nArgc >= 2 && std::string(lpArgv[1]) == "prepare") {
             if (nArgc < 4 || nArgc > 5)
@@ -24,6 +50,8 @@ int main(int nArgc, char **lpArgv) {
                 "--hidden N "
                 "--context N --tokenizer character|bpe --vocab-size N "
                 "--loss-target all|response "
+                "--data-format conversation|text --tokenizer-model FILE "
+                "--token-budget N --accumulate N "
                 "--max-batches "
                 "N] | main_train prepare SOURCE_REPO OUTPUT_DIR [REVISION]");
         // DATA と MODEL に続くオプションを、モデル設定と学習条件に振り分ける。
@@ -37,7 +65,8 @@ int main(int nArgc, char **lpArgv) {
             for (const auto *option :
                  {"--batch", "--clip", "--seed", "--max-batches", "--blocks",
                   "--embedding", "--heads", "--hidden", "--context",
-                  "--dropout", "--tokenizer", "--vocab-size"})
+                  "--dropout", "--tokenizer", "--vocab-size", "--data-format",
+                  "--tokenizer-model", "--token-budget", "--accumulate"})
                 if (optOptions.contains(option))
                     throw std::invalid_argument(
                         std::string("Cannot override option when resuming: ") +
@@ -51,7 +80,7 @@ int main(int nArgc, char **lpArgv) {
         if (isFinetuning) {
             for (const auto *lpOption :
                  {"--blocks", "--embedding", "--heads", "--hidden", "--context",
-                  "--dropout", "--tokenizer", "--vocab-size"}) {
+                  "--dropout", "--tokenizer", "--vocab-size", "--tokenizer-model"}) {
                 if (optOptions.contains(lpOption))
                     throw std::invalid_argument(
                         std::string("Cannot override saved model option: ") +
@@ -79,6 +108,16 @@ int main(int nArgc, char **lpArgv) {
                 optOptions.integer("--vocab-size", 4096);
             cfgTraining.strLossTarget =
                 optOptions.string("--loss-target", "all");
+            cfgTraining.strDataFormat =
+                optOptions.string("--data-format", "conversation");
+            cfgTraining.strTokenizerModel =
+                optOptions.string("--tokenizer-model");
+            const int tokenBudget = optOptions.integer("--token-budget", 0);
+            if (tokenBudget < 0)
+                throw std::invalid_argument("Token budget must be nonnegative");
+            cfgTraining.nTokenBudget = static_cast<std::uint64_t>(tokenBudget);
+            cfgTraining.nAccumulationSteps =
+                optOptions.integer("--accumulate", 1);
             cfgTraining.nSeed = nSeed;
             cfgTraining.nEpochs =
                 optOptions.integer("--epochs", cfgTraining.nEpochs);

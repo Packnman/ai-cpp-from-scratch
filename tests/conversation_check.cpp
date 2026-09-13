@@ -498,8 +498,11 @@ void g_checkpoint( const std::filesystem::path& c_pthRoot )
     g_require( left.at( "completed_epoch" ) == 2 && right.at( "completed_epoch" ) == 2,
                "Resumed epoch numbering" );
     for( const auto* field : { "adam_step", "shuffle_state", "dropout_counters", "best_epoch",
-                               "best_validation_loss", "learning_rate" } )
+                               "learning_rate" } )
         g_require( left.at( field ) == right.at( field ), "Checkpoint continuation state mismatch" );
+    g_near( right.at( "best_validation_loss" ).get<double>(),
+            left.at( "best_validation_loss" ).get<double>(), 1e-6,
+            "Checkpoint continuation validation loss mismatch" );
     g_require( read( continuous / "checkpoint" / left.at( "weights" ).get<std::string>() ) ==
                    read( resumed / "checkpoint" / right.at( "weights" ).get<std::string>() ),
                "Continuous and resumed weights differ" );

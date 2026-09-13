@@ -60,6 +60,26 @@ std::vector<Conversation> g_readConversations( const std::string& c_strFile )
     return cnvConversations;
 }
 
+std::vector<TextDocument> g_readTextDocuments( const std::string& c_strFile )
+{
+    std::ifstream ifsFile( c_strFile );
+    if( !ifsFile ) throw std::runtime_error( "Cannot read " + c_strFile );
+    std::vector<TextDocument> txtDocuments;
+    std::set<std::int64_t> nIds;
+    std::string strLine;
+    while( std::getline( ifsFile, strLine ) )
+    {
+        const auto jsnDocument = Json::parse( strLine );
+        TextDocument txtDocument{ jsnDocument.at( "id" ).get<std::int64_t>(),
+                                  jsnDocument.at( "text" ).get<std::string>() };
+        if( !nIds.insert( txtDocument.nId ).second )
+            throw std::invalid_argument( "Duplicate text document ID" );
+        TokenCharacter tokValidate( txtDocument.strText );
+        if( !txtDocument.strText.empty() ) txtDocuments.push_back( std::move( txtDocument ) );
+    }
+    return txtDocuments;
+}
+
 void g_prepareConversations( const std::string& c_strSourceDirectory,
                              const std::string& c_strOutputDirectory,
                              const std::string& c_strRevision )
@@ -310,6 +330,26 @@ ConversationDataset::ConversationDataset( const std::vector<Conversation>& c_cnv
             TokenIds nTurn = nQuestion;
             nTurn.insert( nTurn.end(), nResponse.begin(), nResponse.end() );
             nCompleteTurns.push_back( std::move( nTurn ) );
+        }
+    }
+}
+
+ConversationDataset::ConversationDataset( const std::vector<TextDocument>& c_txtDocuments,
+                                          const TokenConversation& c_tokTokenizer, int nContext )
+    : _nContext( nContext )
+{
+    if( nContext <= 0 ) throw std::invalid_argument( "Context must be positive" );
+    for( const auto& c_txtDocument : c_txtDocuments )
+    {
+        TokenIds nIds = { TokenConversation::BEGIN };
+        const auto nText = c_tokTokenizer.encode( c_txtDocument.strText );
+        nIds.insert( nIds.end(), nText.begin(), nText.end() );
+        nIds.push_back( TokenConversation::END );
+        for( std::size_t nStart = 0; nStart + 1 < nIds.size(); nStart += nContext )
+        {
+            const auto nEnd = std::min( nIds.size(), nStart + nContext + 1 );
+            _nWindows.emplace_back( nIds.begin() + nStart, nIds.begin() + nEnd );
+            _nTargetWindows.emplace_back();
         }
     }
 }

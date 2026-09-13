@@ -34,5 +34,6 @@ Validation(
     const std::string& c_strDataDirectory,
     const std::string& c_strModelDirectory,
     const std::string& c_strSplit, int nBatchSize,
-    int nMaxBatches, std::ostream& stmLog
+    int nMaxBatches, std::ostream& stmLog,
+    ConversationLossTarget enmTarget = ConversationLossTarget::All
 );

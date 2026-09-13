@@ -15,6 +15,10 @@ struct ConfigTraining {
       "character"; // New models only; finetuning uses saved tokenizer.
   int nTokenizerVocabulary = 4096;
   std::string strLossTarget = "all";
+  std::string strDataFormat = "conversation";
+  std::string strTokenizerModel;
+  std::uint64_t nTokenBudget = 0;
+  int nAccumulationSteps = 1;
 };
 
 double ClipGradients(Model &mdlModel, float fMaximum);

@@ -142,7 +142,8 @@ double Validation(
     const std::string& c_strSplit,
     int nBatchSize,
     int nMaxBatches,
-    std::ostream& stmLog
+    std::ostream& stmLog,
+    ConversationLossTarget enmTarget
 )
 {
     if( nBatchSize <= 0 || nMaxBatches < 0 ||
@@ -157,7 +158,9 @@ double Validation(
     {
         throw std::invalid_argument( "Evaluation split must be nonempty" );
     }
-    ConversationDataset datData( cnvData, bunModel.tokTokenizer, bunModel.spModel->config().nContext );
+    ConversationDataset datData( cnvData, bunModel.tokTokenizer,
+                                 bunModel.spModel->config().nContext, enmTarget );
+    if( datData.size() == 0 ) throw std::invalid_argument( "Evaluation dataset is empty" );
     std::vector<std::size_t> nOrder( datData.size() );
     std::iota( nOrder.begin(), nOrder.end(), 0 );
     double dblLossSum = 0.0;
@@ -192,6 +195,7 @@ double Validation(
     const double dblLoss = dblLossSum / nValid;
     const nlohmann::json jsnMetric = {
         { "split", c_strSplit },
+        { "loss_target", g_conversationLossTargetName( enmTarget ) },
         { "loss", dblLoss },
         { "perplexity", std::exp( dblLoss ) },
         { "valid_tokens", nValid },

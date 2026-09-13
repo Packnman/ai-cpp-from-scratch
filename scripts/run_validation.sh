@@ -20,6 +20,7 @@ DATA_DIR="${DATA_DIR:-data/conversation}"
 SPLIT="${SPLIT:-validation}"     # validation または test
 BATCH_SIZE="${BATCH_SIZE:-128}"
 MAX_BATCHES="${MAX_BATCHES:-0}"  # 0: 全件、正数: バッチ数上限
+LOSS_TARGET="${LOSS_TARGET:-all}" # all または response
 
 # chat 専用
 TEMPERATURE="${TEMPERATURE:-0.8}"
@@ -32,7 +33,8 @@ cd "${repo_root}"
 case "${MODE}" in
     evaluate)
         args=("${BUILD_DIR}/main_validation" "${DATA_DIR}" "${MODEL_DIR}"
-            --split "${SPLIT}" --batch "${BATCH_SIZE}" --max-batches "${MAX_BATCHES}")
+            --split "${SPLIT}" --batch "${BATCH_SIZE}" --max-batches "${MAX_BATCHES}"
+            --loss-target "${LOSS_TARGET}")
         ;;
     chat)
         args=("${BUILD_DIR}/main_validation" chat "${MODEL_DIR}"

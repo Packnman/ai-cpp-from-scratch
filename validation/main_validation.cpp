@@ -8,7 +8,7 @@ int main( int nArgc, char** lpArgv )
     {
         if( nArgc < 3 )
             throw std::invalid_argument(
-                "Usage: main_validation DATA MODEL [--split validation|test --batch N --max-batches N] "
+                "Usage: main_validation DATA MODEL [--split validation|test --batch N --max-batches N --loss-target all|response] "
                 "| main_validation chat MODEL [--temperature F --top-k N --max-tokens N --input-context N --seed N]" );
         CliOptions optOptions( nArgc, lpArgv, 3 );
         // chat は対話生成、それ以外はデータセットに対する損失評価へ進む。
@@ -42,8 +42,10 @@ int main( int nArgc, char** lpArgv )
             const auto strSplit = optOptions.string( "--split", "validation" );
             const int nBatch = optOptions.integer( "--batch", 64 );
             const int nMaxBatches = optOptions.integer( "--max-batches", 0 );
+            const auto enmTarget = g_parseConversationLossTarget(
+                optOptions.string( "--loss-target", "all" ) );
             optOptions.finish();
-            Validation( lpArgv[1], lpArgv[2], strSplit, nBatch, nMaxBatches, std::cout );
+            Validation( lpArgv[1], lpArgv[2], strSplit, nBatch, nMaxBatches, std::cout, enmTarget );
         }
         return 0;
     }

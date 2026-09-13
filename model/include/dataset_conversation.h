@@ -17,6 +17,12 @@ struct Conversation
     std::vector<ConversationUtterance> uttUtterances;
 };
 
+struct TextDocument
+{
+    std::int64_t nId;
+    std::string strText;
+};
+
 struct ConversationBatch
 {
     int nSequence;
@@ -40,6 +46,7 @@ void g_prepareConversations( const std::string& c_strSourceDirectory,
                              const std::string& c_strOutputDirectory,
                              const std::string& c_strRevision = "unspecified" );
 std::string g_trainingText( const std::vector<Conversation>& c_cnvConversations );
+std::vector<TextDocument> g_readTextDocuments( const std::string& c_strFile );
 
 class ConversationDataset
 {
@@ -47,6 +54,8 @@ public:
     ConversationDataset( const std::vector<Conversation>& c_cnvConversations,
                          const TokenConversation& c_tokTokenizer, int nContext = 128,
                          ConversationLossTarget enmTarget = ConversationLossTarget::All );
+    ConversationDataset( const std::vector<TextDocument>& c_txtDocuments,
+                         const TokenConversation& c_tokTokenizer, int nContext = 128 );
     std::size_t size() const;
     std::size_t excludedResponses() const;
     ConversationBatch batch( const std::vector<std::size_t>& c_nOrder, std::size_t nStart,
