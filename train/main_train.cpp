@@ -23,6 +23,7 @@ int main(int nArgc, char **lpArgv) {
                 "--heads N "
                 "--hidden N "
                 "--context N --tokenizer character|bpe --vocab-size N "
+                "--loss-target all|response "
                 "--max-batches "
                 "N] | main_train prepare SOURCE_REPO OUTPUT_DIR [REVISION]");
         // DATA と MODEL に続くオプションを、モデル設定と学習条件に振り分ける。
@@ -70,11 +71,14 @@ int main(int nArgc, char **lpArgv) {
         }
         ConfigTraining cfgTraining;
         const bool hasLearningRate = optOptions.contains("--lr");
+        const bool hasLossTarget = optOptions.contains("--loss-target");
         {
             cfgTraining.strTokenizer =
                 optOptions.string("--tokenizer", "character");
             cfgTraining.nTokenizerVocabulary =
                 optOptions.integer("--vocab-size", 4096);
+            cfgTraining.strLossTarget =
+                optOptions.string("--loss-target", "all");
             cfgTraining.nSeed = nSeed;
             cfgTraining.nEpochs =
                 optOptions.integer("--epochs", cfgTraining.nEpochs);
@@ -93,6 +97,9 @@ int main(int nArgc, char **lpArgv) {
             ResumeTraining(lpArgv[1], lpArgv[2], cfgTraining.nEpochs,
                            hasLearningRate
                                ? std::optional<float>(cfgTraining.fLearningRate)
+                               : std::nullopt,
+                           hasLossTarget
+                               ? std::optional<std::string>(cfgTraining.strLossTarget)
                                : std::nullopt,
                            std::cout);
         } else if (isFinetuning) {

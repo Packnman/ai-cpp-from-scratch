@@ -143,7 +143,8 @@ void _Prop(
     std::ostream &stmLog,
     const std::string &c_strSource = {},
     bool isResume = false,
-    std::optional<float> fResumeLearningRate = std::nullopt
+    std::optional<float> fResumeLearningRate = std::nullopt,
+    std::optional<std::string> strResumeLossTarget = std::nullopt
 )
 {
     ConfigTraining cfgTraining = c_cfgTraining;
@@ -156,6 +157,7 @@ void _Prop(
                                 *fResumeLearningRate <= 0.0f))) {
       throw std::invalid_argument("Invalid training configuration");
     }
+    auto enmLossTarget = g_parseConversationLossTarget(cfgTraining.strLossTarget);
     // 学習・検証・最終テストのデータを読み込み、分割の妥当性を確認する。
     const auto cnvTrain =
         g_readConversations(c_strDataDirectory + "/train.jsonl");
@@ -186,6 +188,13 @@ void _Prop(
       cfgTraining.fClipNorm = training.at("clip_norm").get<float>();
       cfgTraining.nSeed = training.at("seed").get<std::uint64_t>();
       cfgTraining.nMaxBatches = training.at("max_batches").get<int>();
+      cfgTraining.strLossTarget =
+          training.value("loss_target", std::string("all"));
+      if (strResumeLossTarget && *strResumeLossTarget != cfgTraining.strLossTarget)
+        throw std::runtime_error(
+            "Cannot change loss target when resuming: checkpoint=" +
+            cfgTraining.strLossTarget + " requested=" + *strResumeLossTarget);
+      enmLossTarget = g_parseConversationLossTarget(cfgTraining.strLossTarget);
       cfgTraining.fLearningRate = jsnResume.at("learning_rate").get<float>();
       if (fResumeLearningRate)
         cfgTraining.fLearningRate = *fResumeLearningRate;
@@ -237,9 +246,13 @@ void _Prop(
     auto &trnModel = *bunModel.spModel;
     const auto &tokTokenizer = bunModel.tokTokenizer;
     cfgModel = trnModel.config();
-    ConversationDataset datTrain(cnvTrain, tokTokenizer, cfgModel.nContext);
-    ConversationDataset datValidation(cnvValidation, tokTokenizer, cfgModel.nContext);
-    ConversationDataset datTest(cnvTest, tokTokenizer, cfgModel.nContext);
+    ConversationDataset datTrain(cnvTrain, tokTokenizer, cfgModel.nContext, enmLossTarget);
+    ConversationDataset datValidation(cnvValidation, tokTokenizer, cfgModel.nContext,
+                                      enmLossTarget);
+    ConversationDataset datTest(cnvTest, tokTokenizer, cfgModel.nContext, enmLossTarget);
+    if( datTrain.size() == 0 || datValidation.size() == 0 || datTest.size() == 0 )
+        throw std::invalid_argument(
+            "Loss target produced an empty train, validation, or test dataset" );
     // 追加学習でも Adam の移動平均・更新回数は引き継がず、新しく初期化する。
     Adam optAdam(&trnModel, cfgTraining.fLearningRate);
     optAdam.init();
@@ -303,6 +316,8 @@ void _Prop(
     }
     stmLog << "vocabulary=" << cfgModel.nVocabulary
         << " windows=" << datTrain.size()
+        << " loss_target=" << g_conversationLossTargetName(enmLossTarget)
+        << " excluded_responses=" << datTrain.excludedResponses()
         << " max_batches=" << cfgTraining.nMaxBatches << '\n';
     const auto memoryMode = cu_memory::statistics();
     // 再現に必要な設定と実際のメモリ確保方式を、開始ログに記録する。
@@ -311,6 +326,8 @@ void _Prop(
         {"tokenizer", tokTokenizer.isSubword() ? "bpe" : "character"},
         {"vocabulary", tokTokenizer.vocabSize()},
         {"event", "training_start"},
+        {"loss_target", g_conversationLossTargetName(enmLossTarget)},
+        {"excluded_responses", datTrain.excludedResponses()},
         {"source_model", c_strSource},
         {"optimizer", "Adam newly initialized"},
         {"epochs", cfgTraining.nEpochs},
@@ -456,6 +473,7 @@ void _Prop(
           {"dropout_counters", trnModel.dropoutCounters()},
           {"training", {
               {"batch_size", cfgTraining.nBatchSize},
+              {"loss_target", g_conversationLossTargetName(enmLossTarget)},
               {"clip_norm", cfgTraining.fClipNorm},
               {"seed", cfgTraining.nSeed},
               {"max_batches", cfgTraining.nMaxBatches}}},
@@ -569,6 +587,7 @@ void ResumeTraining(
     const std::string &c_strModelDirectory,
     int nAdditionalEpochs,
     std::optional<float> fLearningRate,
+    std::optional<std::string> strLossTarget,
     std::ostream &stmLog
 )
 {
@@ -582,6 +601,7 @@ void ResumeTraining(
         stmLog,
         c_strModelDirectory,
         true,
-        fLearningRate
+        fLearningRate,
+        strLossTarget
     );
 }

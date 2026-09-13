@@ -174,6 +174,7 @@ build/release/main_train data/conversation models/conversation
 | `--clip` | 1.0 | 全体勾配 L2 norm の上限 |
 | `--seed` | 42 | 新規学習のモデル初期化・dropout・shuffle 用 seed |
 | `--max-batches` | 0 | 各 split／epoch のバッチ数上限。0は全件 |
+| `--loss-target` | `all` | `all`: 全次token、`response`: B回答と発話終端のみ |
 
 モデルは FP32 の decoder-only Transformer です。学習可能な位置埋め込み、Pre-LayerNorm、因果 Attention、GELU、dropout を使用し、入出力の重みは共有しません。
 
@@ -192,6 +193,17 @@ build/release/main_train data/conversation models/conversation
 build/release/main_train data/conversation models/conversation \
     --epochs 10 --batch 64 --lr 0.0003 --clip 1 --seed 42 \
     --blocks 4 --embedding 256 --heads 4 --hidden 1024 --context 128 --dropout 0.1
+```
+
+`--loss-target response` では各B回答ごとに、直前のA質問と回答を同じサンプルへ
+置く。空きには古い完全なA/Bターンを追加し、長い場合は古いターン単位で落とす。
+直前のQ/Aだけで context を超える例は分断せず除外し、件数を開始ログの
+`excluded_responses` に記録する。質問・履歴はPADマスクで損失対象外となり、
+B回答本文と末尾の `UTTERANCE_END` だけを最適化する。
+
+```sh
+build/release/main_train data/conversation models/conversation-response \
+    --loss-target response --context 512 --epochs 10
 ```
 
 短い動作確認では、バッチサイズと処理バッチ数を指定できます。
@@ -247,6 +259,8 @@ checkpoint が epoch 30 なら、上記は epoch 31～40 を実行します。`-
 ## 保存モデルの評価
 
 ```sh
+損失方式は metrics と checkpoint に保存される。`--resume --loss-target ...` で保存値と異なる方式を指定すると、更新前にエラーになる。
+
 # validation 全件の評価
 build/release/main_validation data/conversation models/conversation \
     --split validation --batch 64 --max-batches 0

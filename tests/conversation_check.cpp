@@ -478,7 +478,7 @@ void g_checkpoint( const std::filesystem::path& c_pthRoot )
     Training( data, resumed.string(), model, training, log );
     std::ifstream beforeStream( resumed / "metrics.jsonl", std::ios::binary );
     const std::string metricsBefore( ( std::istreambuf_iterator<char>( beforeStream ) ), {} );
-    ResumeTraining( data, resumed.string(), 1, std::nullopt, log );
+    ResumeTraining( data, resumed.string(), 1, std::nullopt, std::nullopt, log );
     auto read = []( const std::filesystem::path& path ) {
         std::ifstream stream( path, std::ios::binary );
         return std::string( ( std::istreambuf_iterator<char>( stream ) ), {} );
@@ -490,6 +490,11 @@ void g_checkpoint( const std::filesystem::path& c_pthRoot )
     };
     const auto left = metadata( continuous );
     const auto right = metadata( resumed );
+    g_require( right.at( "training" ).at( "loss_target" ) == "all" &&
+                   metricsBefore.find( "\"loss_target\":\"all\"" ) != std::string::npos,
+               "Loss target must be recorded in checkpoint and metrics" );
+    g_throws( [&] { ResumeTraining( data, resumed.string(), 1, std::nullopt,
+                                    std::optional<std::string>( "response" ), log ); } );
     g_require( left.at( "completed_epoch" ) == 2 && right.at( "completed_epoch" ) == 2,
                "Resumed epoch numbering" );
     for( const auto* field : { "adam_step", "shuffle_state", "dropout_counters", "best_epoch",
@@ -507,7 +512,7 @@ void g_checkpoint( const std::filesystem::path& c_pthRoot )
                    metricsAfter.find( "\"start_epoch\":2" ) != std::string::npos,
                "Resume event is missing" );
     const auto step = right.at( "adam_step" ).get<std::uint64_t>();
-    ResumeTraining( data, resumed.string(), 1, 0.0001f, log );
+    ResumeTraining( data, resumed.string(), 1, 0.0001f, std::nullopt, log );
     const auto changed = metadata( resumed );
     g_require( changed.at( "learning_rate" ) == 0.0001f &&
                    changed.at( "adam_step" ).get<std::uint64_t>() > step,
@@ -515,13 +520,13 @@ void g_checkpoint( const std::filesystem::path& c_pthRoot )
     const auto checkpointFile = resumed / "checkpoint" / changed.at( "weights" ).get<std::string>();
     const auto checkpointBytes = read( checkpointFile );
     std::ofstream( checkpointFile, std::ios::binary | std::ios::trunc ) << "corrupt";
-    g_throws( [&] { ResumeTraining( data, resumed.string(), 1, std::nullopt, log ); } );
+    g_throws( [&] { ResumeTraining( data, resumed.string(), 1, std::nullopt, std::nullopt, log ); } );
     { std::ofstream restore( checkpointFile, std::ios::binary | std::ios::trunc );
       restore.write( checkpointBytes.data(), checkpointBytes.size() ); }
     const auto trainFile = c_pthRoot / "prepared/train.jsonl";
     const auto trainBytes = read( trainFile );
     std::ofstream( trainFile, std::ios::app ) << '\n';
-    g_throws( [&] { ResumeTraining( data, resumed.string(), 1, std::nullopt, log ); } );
+    g_throws( [&] { ResumeTraining( data, resumed.string(), 1, std::nullopt, std::nullopt, log ); } );
     { std::ofstream restore( trainFile, std::ios::binary | std::ios::trunc );
       restore.write( trainBytes.data(), trainBytes.size() ); }
     std::cout << "checkpoint/resume checks passed\n";

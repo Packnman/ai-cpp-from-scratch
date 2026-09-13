@@ -26,6 +26,15 @@ struct ConversationBatch
     TokenIds nTargets;
 };
 
+enum class ConversationLossTarget
+{
+    All,
+    Response
+};
+
+ConversationLossTarget g_parseConversationLossTarget( const std::string& c_strValue );
+const char* g_conversationLossTargetName( ConversationLossTarget enmTarget );
+
 std::vector<Conversation> g_readConversations( const std::string& c_strFile );
 void g_prepareConversations( const std::string& c_strSourceDirectory,
                              const std::string& c_strOutputDirectory,
@@ -36,12 +45,16 @@ class ConversationDataset
 {
 public:
     ConversationDataset( const std::vector<Conversation>& c_cnvConversations,
-                         const TokenConversation& c_tokTokenizer, int nContext = 128 );
+                         const TokenConversation& c_tokTokenizer, int nContext = 128,
+                         ConversationLossTarget enmTarget = ConversationLossTarget::All );
     std::size_t size() const;
+    std::size_t excludedResponses() const;
     ConversationBatch batch( const std::vector<std::size_t>& c_nOrder, std::size_t nStart,
                              int nBatchSize ) const;
 
 private:
     int _nContext;
     std::vector<TokenIds> _nWindows;
+    std::vector<TokenIds> _nTargetWindows;
+    std::size_t _nExcludedResponses = 0;
 };

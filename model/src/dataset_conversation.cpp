@@ -206,34 +206,110 @@ std::string g_trainingText( const std::vector<Conversation>& c_cnvConversations 
     return strText;
 }
 
+ConversationLossTarget g_parseConversationLossTarget( const std::string& c_strValue )
+{
+    if( c_strValue == "all" ) return ConversationLossTarget::All;
+    if( c_strValue == "response" ) return ConversationLossTarget::Response;
+    throw std::invalid_argument( "Loss target must be all or response" );
+}
+
+const char* g_conversationLossTargetName( ConversationLossTarget enmTarget )
+{
+    return enmTarget == ConversationLossTarget::All ? "all" : "response";
+}
+
 ConversationDataset::ConversationDataset( const std::vector<Conversation>& c_cnvConversations,
-                                          const TokenConversation& c_tokTokenizer, int nContext )
+                                          const TokenConversation& c_tokTokenizer, int nContext,
+                                          ConversationLossTarget enmTarget )
     : _nContext( nContext )
 {
     if( nContext <= 0 )
     {
         throw std::invalid_argument( "Context must be positive" );
     }
+    auto fnUtterance = [&]( const ConversationUtterance& c_uttUtterance )
+    {
+        TokenIds nIds = { c_uttUtterance.nSpeaker == 0 ? TokenConversation::SPEAKER_A
+                                                        : TokenConversation::SPEAKER_B };
+        const auto nText = c_tokTokenizer.encode( c_uttUtterance.strText );
+        nIds.insert( nIds.end(), nText.begin(), nText.end() );
+        nIds.push_back( TokenConversation::UTTERANCE_END );
+        return nIds;
+    };
     for( const auto& c_cnvDialogue : c_cnvConversations )
     {
-        TokenIds nIds = { TokenConversation::BEGIN };
         for( const auto& c_uttUtterance : c_cnvDialogue.uttUtterances )
         {
             if( c_uttUtterance.nSpeaker != 0 && c_uttUtterance.nSpeaker != 1 )
             {
                 throw std::invalid_argument( "Invalid speaker" );
             }
-            nIds.push_back( c_uttUtterance.nSpeaker == 0 ? TokenConversation::SPEAKER_A
-                                                         : TokenConversation::SPEAKER_B );
-            const auto nText = c_tokTokenizer.encode( c_uttUtterance.strText );
-            nIds.insert( nIds.end(), nText.begin(), nText.end() );
-            nIds.push_back( TokenConversation::UTTERANCE_END );
         }
-        nIds.push_back( TokenConversation::END );
-        for( std::size_t nStart = 0; nStart + 1 < nIds.size(); nStart += nContext )
+        if( enmTarget == ConversationLossTarget::All )
         {
-            const auto nEnd = std::min( nIds.size(), nStart + nContext + 1 );
-            _nWindows.emplace_back( nIds.begin() + nStart, nIds.begin() + nEnd );
+            TokenIds nIds = { TokenConversation::BEGIN };
+            for( const auto& c_uttUtterance : c_cnvDialogue.uttUtterances )
+            {
+                const auto nUtterance = fnUtterance( c_uttUtterance );
+                nIds.insert( nIds.end(), nUtterance.begin(), nUtterance.end() );
+            }
+            nIds.push_back( TokenConversation::END );
+            for( std::size_t nStart = 0; nStart + 1 < nIds.size(); nStart += nContext )
+            {
+                const auto nEnd = std::min( nIds.size(), nStart + nContext + 1 );
+                _nWindows.emplace_back( nIds.begin() + nStart, nIds.begin() + nEnd );
+                _nTargetWindows.emplace_back();
+            }
+            continue;
+        }
+
+        std::vector<TokenIds> nCompleteTurns;
+        for( std::size_t nIndex = 1; nIndex < c_cnvDialogue.uttUtterances.size(); ++nIndex )
+        {
+            const auto& c_uttQuestion = c_cnvDialogue.uttUtterances[nIndex - 1];
+            const auto& c_uttResponse = c_cnvDialogue.uttUtterances[nIndex];
+            if( c_uttQuestion.nSpeaker != 0 || c_uttResponse.nSpeaker != 1 )
+            {
+                continue;
+            }
+            const auto nQuestion = fnUtterance( c_uttQuestion );
+            const auto nResponse = fnUtterance( c_uttResponse );
+            const std::size_t nRequired = 1 + nQuestion.size() + nResponse.size();
+            if( nRequired > static_cast<std::size_t>( nContext ) + 1 )
+            {
+                ++_nExcludedResponses;
+            }
+            else
+            {
+                std::size_t nHistoryStart = nCompleteTurns.size();
+                std::size_t nSize = nRequired;
+                while( nHistoryStart > 0 &&
+                       nSize + nCompleteTurns[nHistoryStart - 1].size() <=
+                           static_cast<std::size_t>( nContext ) + 1 )
+                {
+                    --nHistoryStart;
+                    nSize += nCompleteTurns[nHistoryStart].size();
+                }
+                TokenIds nIds = { TokenConversation::BEGIN };
+                for( std::size_t nTurn = nHistoryStart; nTurn < nCompleteTurns.size(); ++nTurn )
+                {
+                    nIds.insert( nIds.end(), nCompleteTurns[nTurn].begin(),
+                                 nCompleteTurns[nTurn].end() );
+                }
+                nIds.insert( nIds.end(), nQuestion.begin(), nQuestion.end() );
+                const std::size_t nResponseStart = nIds.size() + 1;
+                nIds.insert( nIds.end(), nResponse.begin(), nResponse.end() );
+                TokenIds nTargets( nIds.size() - 1, TokenConversation::PAD );
+                for( std::size_t nNext = nResponseStart; nNext < nIds.size(); ++nNext )
+                {
+                    nTargets[nNext - 1] = nIds[nNext];
+                }
+                _nWindows.push_back( std::move( nIds ) );
+                _nTargetWindows.push_back( std::move( nTargets ) );
+            }
+            TokenIds nTurn = nQuestion;
+            nTurn.insert( nTurn.end(), nResponse.begin(), nResponse.end() );
+            nCompleteTurns.push_back( std::move( nTurn ) );
         }
     }
 }
@@ -241,6 +317,11 @@ ConversationDataset::ConversationDataset( const std::vector<Conversation>& c_cnv
 std::size_t ConversationDataset::size() const
 {
     return _nWindows.size();
+}
+
+std::size_t ConversationDataset::excludedResponses() const
+{
+    return _nExcludedResponses;
 }
 
 ConversationBatch ConversationDataset::batch( const std::vector<std::size_t>& c_nOrder,
@@ -258,12 +339,19 @@ ConversationBatch ConversationDataset::batch( const std::vector<std::size_t>& c_
         TokenIds( static_cast<std::size_t>( _nContext ) * nBatch, TokenConversation::PAD ) };
     for( int nColumn = 0; nColumn < nBatch; ++nColumn )
     {
-        const auto& c_nWindow = _nWindows.at( c_nOrder[nStart + nColumn] );
+        const auto nWindowIndex = c_nOrder[nStart + nColumn];
+        const auto& c_nWindow = _nWindows.at( nWindowIndex );
+        const auto& c_nTargetWindow = _nTargetWindows.at( nWindowIndex );
         for( std::size_t nToken = 0; nToken < c_nWindow.size() &&
              nToken < static_cast<std::size_t>( _nContext ); ++nToken )
         {
             batResult.nInputs[nToken * nBatch + nColumn] = c_nWindow[nToken];
-            if( nToken + 1 < c_nWindow.size() )
+            if( !c_nTargetWindow.empty() && nToken < c_nTargetWindow.size() )
+            {
+                batResult.nTargets[nToken * nBatch + nColumn] = c_nTargetWindow[nToken];
+                if( c_nTargetWindow[nToken] != TokenConversation::PAD ) ++batResult.nValid;
+            }
+            else if( c_nTargetWindow.empty() && nToken + 1 < c_nWindow.size() )
             {
                 batResult.nTargets[nToken * nBatch + nColumn] = c_nWindow[nToken + 1];
                 ++batResult.nValid;
