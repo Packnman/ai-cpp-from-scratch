@@ -9,7 +9,7 @@ int main( int nArgc, char** lpArgv )
         if( nArgc < 3 )
             throw std::invalid_argument(
                 "Usage: main_validation DATA MODEL [--split validation|test --batch N --max-batches N] "
-                "| main_validation chat MODEL [--temperature F --top-k N --max-tokens N --seed N]" );
+                "| main_validation chat MODEL [--temperature F --top-k N --max-tokens N --input-context N --seed N]" );
         CliOptions optOptions( nArgc, lpArgv, 3 );
         // chat は対話生成、それ以外はデータセットに対する損失評価へ進む。
         if( std::string( lpArgv[1] ) == "chat" )
@@ -18,13 +18,17 @@ int main( int nArgc, char** lpArgv )
             if( nSeed < 0 ) throw std::invalid_argument( "Seed must be nonnegative" );
             ConfigGeneration cfgGeneration;
             {
-                cfgGeneration.fTemperature  =optOptions.real( "--temperature", cfgGeneration.fTemperature );
-                cfgGeneration.nTopK         =optOptions.integer( "--top-k", cfgGeneration.nTopK );
-                cfgGeneration.nMaxTokens    =optOptions.integer( "--max-tokens", cfgGeneration.nMaxTokens );
+                cfgGeneration.fTemperature  = optOptions.real( "--temperature", cfgGeneration.fTemperature );
+                cfgGeneration.nTopK         = optOptions.integer( "--top-k", cfgGeneration.nTopK );
+                cfgGeneration.nMaxTokens    = optOptions.integer( "--max-tokens", cfgGeneration.nMaxTokens );
+                cfgGeneration.nContext      = optOptions.integer( "--input-context", 0 );
             }
             optOptions.finish();
             // モデルは対話開始時に一度だけ読み込み、会話履歴と乱数状態を保持する。
             auto bunModel = g_loadConversation( lpArgv[2] );
+            const int nContext = cfgGeneration.nContext == 0 ? bunModel.spModel->config().nContext : cfgGeneration.nContext;
+            if( nContext <= 0 || nContext > bunModel.spModel->config().nContext )
+                throw std::invalid_argument( "Input context must not exceed saved model context" );
             std::mt19937 rngRandom( nSeed );
             TokenIds nHistory = { TokenConversation::BEGIN };
             std::string strInput;
@@ -51,9 +55,9 @@ int main( int nArgc, char** lpArgv )
                     nHistory.push_back( TokenConversation::UTTERANCE_END );
                 }
                 // 長い対話では古い履歴を捨て、次回に保持する ID 数を制限する。
-                if( nHistory.size() > 128 )
+                if( nHistory.size() > static_cast<std::size_t>( nContext ) )
                 {
-                    nHistory.erase( nHistory.begin(), nHistory.end() - 128 );
+                    nHistory.erase( nHistory.begin(), nHistory.end() - nContext );
                 }
                 std::cout << "A> " << std::flush;
             }

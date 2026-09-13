@@ -49,6 +49,19 @@ void TransformerBlock::init( std::mt19937& rngRandom )
     _ffdFeedForward.init( rngRandom );
 }
 
+std::vector<std::uint64_t> TransformerBlock::dropoutCounters() const
+{
+    return { _attAttention.dropoutCounter(), _ffdFeedForward.dropoutCounter() };
+}
+
+void TransformerBlock::setDropoutCounters( const std::vector<std::uint64_t>& c_nCounters )
+{
+    if( c_nCounters.size() != 2 )
+        throw std::invalid_argument( "TransformerBlock: invalid dropout state" );
+    _attAttention.setDropoutCounter( c_nCounters[0] );
+    _ffdFeedForward.setDropoutCounter( c_nCounters[1] );
+}
+
 TensorPtr TransformerBlock::forward( TensorList& spmInputs )
 {
     // Pre-LN 構成：正規化 → Attention → 入力との残差加算の順に処理する。
@@ -98,6 +111,26 @@ Transformer::Transformer( const TransformerConfig& c_cfgConfig )
 const TransformerConfig& Transformer::config() const
 {
     return _cfgConfig;
+}
+
+std::vector<std::uint64_t> Transformer::dropoutCounters() const
+{
+    std::vector<std::uint64_t> result;
+    result.reserve( _spBlocks.size() * 2 );
+    for( const auto& block : _spBlocks )
+    {
+        const auto counters = block->dropoutCounters();
+        result.insert( result.end(), counters.begin(), counters.end() );
+    }
+    return result;
+}
+
+void Transformer::setDropoutCounters( const std::vector<std::uint64_t>& c_nCounters )
+{
+    if( c_nCounters.size() != _spBlocks.size() * 2 )
+        throw std::invalid_argument( "Transformer: dropout state count mismatch" );
+    for( std::size_t i = 0; i < _spBlocks.size(); ++i )
+        _spBlocks[i]->setDropoutCounters( { c_nCounters[2 * i], c_nCounters[2 * i + 1] } );
 }
 
 TensorPtr Transformer::forward( TensorList& spmInputs )

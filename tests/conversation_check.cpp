@@ -462,6 +462,71 @@ void g_finetune( const std::filesystem::path& c_pthRoot )
     std::cout << "finetuning checks passed: validation " << dblInitial << " -> " << dblBest << '\n';
 }
 
+void g_checkpoint( const std::filesystem::path& c_pthRoot )
+{
+    const auto data = ( c_pthRoot / "prepared" ).string();
+    const auto continuous = c_pthRoot / "continuous";
+    const auto resumed = c_pthRoot / "resumed";
+    TransformerConfig model;
+    model.nBlocks = 1; model.nEmbedding = 8; model.nHeads = 2; model.nHidden = 16;
+    model.nContext = 8; model.fDropout = 0.2f;
+    ConfigTraining training;
+    training.nEpochs = 2; training.nBatchSize = 16; training.nMaxBatches = 1; training.nSeed = 73;
+    std::ostringstream log;
+    Training( data, continuous.string(), model, training, log );
+    training.nEpochs = 1;
+    Training( data, resumed.string(), model, training, log );
+    std::ifstream beforeStream( resumed / "metrics.jsonl", std::ios::binary );
+    const std::string metricsBefore( ( std::istreambuf_iterator<char>( beforeStream ) ), {} );
+    ResumeTraining( data, resumed.string(), 1, std::nullopt, log );
+    auto read = []( const std::filesystem::path& path ) {
+        std::ifstream stream( path, std::ios::binary );
+        return std::string( ( std::istreambuf_iterator<char>( stream ) ), {} );
+    };
+    auto metadata = [&]( const std::filesystem::path& directory ) {
+        const auto latest = nlohmann::json::parse( read( directory / "checkpoint/latest.json" ) );
+        return nlohmann::json::parse(
+            read( directory / "checkpoint" / latest.at( "checkpoint" ).get<std::string>() ) );
+    };
+    const auto left = metadata( continuous );
+    const auto right = metadata( resumed );
+    g_require( left.at( "completed_epoch" ) == 2 && right.at( "completed_epoch" ) == 2,
+               "Resumed epoch numbering" );
+    for( const auto* field : { "adam_step", "shuffle_state", "dropout_counters", "best_epoch",
+                               "best_validation_loss", "learning_rate" } )
+        g_require( left.at( field ) == right.at( field ), "Checkpoint continuation state mismatch" );
+    g_require( read( continuous / "checkpoint" / left.at( "weights" ).get<std::string>() ) ==
+                   read( resumed / "checkpoint" / right.at( "weights" ).get<std::string>() ),
+               "Continuous and resumed weights differ" );
+    g_require( read( continuous / "checkpoint" / left.at( "adam" ).get<std::string>() ) ==
+                   read( resumed / "checkpoint" / right.at( "adam" ).get<std::string>() ),
+               "Continuous and resumed Adam states differ" );
+    const auto metricsAfter = read( resumed / "metrics.jsonl" );
+    g_require( metricsAfter.starts_with( metricsBefore ), "Resume replaced existing metrics" );
+    g_require( metricsAfter.find( "\"event\":\"resume_start\"" ) != std::string::npos &&
+                   metricsAfter.find( "\"start_epoch\":2" ) != std::string::npos,
+               "Resume event is missing" );
+    const auto step = right.at( "adam_step" ).get<std::uint64_t>();
+    ResumeTraining( data, resumed.string(), 1, 0.0001f, log );
+    const auto changed = metadata( resumed );
+    g_require( changed.at( "learning_rate" ) == 0.0001f &&
+                   changed.at( "adam_step" ).get<std::uint64_t>() > step,
+               "Learning-rate override did not preserve and advance Adam" );
+    const auto checkpointFile = resumed / "checkpoint" / changed.at( "weights" ).get<std::string>();
+    const auto checkpointBytes = read( checkpointFile );
+    std::ofstream( checkpointFile, std::ios::binary | std::ios::trunc ) << "corrupt";
+    g_throws( [&] { ResumeTraining( data, resumed.string(), 1, std::nullopt, log ); } );
+    { std::ofstream restore( checkpointFile, std::ios::binary | std::ios::trunc );
+      restore.write( checkpointBytes.data(), checkpointBytes.size() ); }
+    const auto trainFile = c_pthRoot / "prepared/train.jsonl";
+    const auto trainBytes = read( trainFile );
+    std::ofstream( trainFile, std::ios::app ) << '\n';
+    g_throws( [&] { ResumeTraining( data, resumed.string(), 1, std::nullopt, log ); } );
+    { std::ofstream restore( trainFile, std::ios::binary | std::ios::trunc );
+      restore.write( trainBytes.data(), trainBytes.size() ); }
+    std::cout << "checkpoint/resume checks passed\n";
+}
+
 } // namespace
 
 int main()
@@ -477,6 +542,7 @@ int main()
         g_dropoutLifetime();
         g_model( pthRoot );
         g_finetune( pthRoot );
+        g_checkpoint( pthRoot );
         std::filesystem::remove_all( pthRoot );
         return 0;
     }

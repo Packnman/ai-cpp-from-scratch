@@ -8,6 +8,7 @@ struct ConfigGeneration
     float fTemperature = 0.8f;
     int nTopK = 40;
     int nMaxTokens = 128;
+    int nContext = 0; // 0: saved model context; positive: input window <= saved context.
 };
 
 TokenIds

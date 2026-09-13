@@ -40,6 +40,9 @@ void FeedForward::init( std::mt19937& rngRandom )
     cuda_fill( _spmBias2->_mData, 0.0f );
 }
 
+std::uint64_t FeedForward::dropoutCounter() const noexcept { return _nDropoutSeed; }
+void FeedForward::setDropoutCounter( std::uint64_t nCounter ) noexcept { _nDropoutSeed = nCounter; }
+
 TensorPtr FeedForward::forward( TensorList& spmInputs )
 {
     // 各位置に共通の変換を適用する：埋め込み → 隠れ層 → GELU → 元の埋め込み幅。

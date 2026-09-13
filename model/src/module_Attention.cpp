@@ -60,6 +60,9 @@ void Attention::init( std::mt19937& rngRandom )
     }
 }
 
+std::uint64_t Attention::dropoutCounter() const noexcept { return _nDropoutSeed; }
+void Attention::setDropoutCounter( std::uint64_t nCounter ) noexcept { _nDropoutSeed = nCounter; }
+
 TensorPtr Attention::forward( TensorList& spmInputs )
 {
     if( spmInputs.size() != 1 || !spmInputs[0] || spmInputs[0]->_mData.dim() != 3 ||

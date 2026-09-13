@@ -27,5 +27,7 @@ private:
     
 public:
     void init( std::mt19937& rngRandom );
+    std::vector<std::uint64_t> dropoutCounters() const;
+    void setDropoutCounters( const std::vector<std::uint64_t>& c_nCounters );
     TensorPtr forward( TensorList& spmInputs ) override;
 };

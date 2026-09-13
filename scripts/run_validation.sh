@@ -12,7 +12,7 @@ export AI_CPP_CUDA_MEMORY_POOL="${MEMORY_POOL}"
 BUILD_JOBS="${BUILD_JOBS:-2}"
 RUN_BUILD="${RUN_BUILD:-1}"       # 1: 実行前にビルド、0: ビルド済みを使用
 DRY_RUN="${DRY_RUN:-0}"           # 1: コマンド表示のみ（ビルド・評価しない）
-MODE="${MODE:-evaluate}"         # evaluate: loss/perplexity 評価、chat: 対話生成
+MODE="${MODE:-chat}"         # evaluate: loss/perplexity 評価、chat: 対話生成
 MODEL_DIR="${MODEL_DIR:-models/conversation}"
 
 # evaluate 専用
@@ -25,6 +25,7 @@ MAX_BATCHES="${MAX_BATCHES:-0}"  # 0: 全件、正数: バッチ数上限
 TEMPERATURE="${TEMPERATURE:-0.8}"
 TOP_K="${TOP_K:-40}"
 MAX_TOKENS="${MAX_TOKENS:-256}"
+INPUT_CONTEXT="${INPUT_CONTEXT:-0}" # 0: 保存モデルの文脈長
 SEED="${SEED:-42}"
 
 cd "${repo_root}"
@@ -36,7 +37,7 @@ case "${MODE}" in
     chat)
         args=("${BUILD_DIR}/main_validation" chat "${MODEL_DIR}"
             --temperature "${TEMPERATURE}" --top-k "${TOP_K}"
-            --max-tokens "${MAX_TOKENS}" --seed "${SEED}")
+            --max-tokens "${MAX_TOKENS}" --input-context "${INPUT_CONTEXT}" --seed "${SEED}")
         ;;
     *)
         echo "MODE must be evaluate or chat: ${MODE}" >&2

@@ -9,6 +9,7 @@ TokenConversation::TokenConversation( std::string_view c_strTrainingText )
 
 TokenIds TokenConversation::encode( std::string_view c_strText ) const
 {
+    if( isSubword() ) return _encodeSubword( c_strText );
     auto nIds = _tokCharacters.encodeUnknown( c_strText, -1 );
     for( auto& nId : nIds )
     {
@@ -19,6 +20,7 @@ TokenIds TokenConversation::encode( std::string_view c_strText ) const
 
 std::string TokenConversation::decode( const TokenIds& c_nIds ) const
 {
+    if( isSubword() ) return _decodeSubword( c_nIds );
     std::string strResult;
     for( int nId : c_nIds )
     {
@@ -40,6 +42,7 @@ std::string TokenConversation::decode( const TokenIds& c_nIds ) const
 
 std::string TokenConversation::vocabulary() const
 {
+    if( isSubword() ) throw std::logic_error( "Subword vocabulary is stored in tokenizer.model" );
     TokenIds nIds( _tokCharacters.vocabSize() );
     std::iota( nIds.begin(), nIds.end(), 0 );
     return _tokCharacters.decode( nIds );
@@ -47,5 +50,6 @@ std::string TokenConversation::vocabulary() const
 
 int TokenConversation::vocabSize() const
 {
+    if( isSubword() ) return _subwordSize();
     return static_cast<int>( _tokCharacters.vocabSize() ) + SPECIAL_COUNT;
 }

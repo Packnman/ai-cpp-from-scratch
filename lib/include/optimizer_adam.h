@@ -34,6 +34,11 @@ class Adam : public Optimizer{
 public:
     Adam(Model* lpModel,float fLearningRate);
     ~Adam();
+    void saveState(const std::string& c_strFileName) const;
+    void loadState(const std::string& c_strFileName);
+    float learningRate() const noexcept;
+    std::uint64_t step() const noexcept;
+    void setLearningRate(float fLearningRate);
 protected:
     std::shared_ptr<OptimizerParams> createOptimizerParams(Tensor* lpTensor) override;
     void update_param(Tensor* lpTensor,OptimizerParams* lpOptimizerParams) override;

@@ -32,20 +32,22 @@ Generate(
     if( c_nHistory.empty() || trnModel.config().nVocabulary != c_tokTokenizer.vocabSize() ||
         !std::isfinite( c_cfgGeneration.fTemperature ) || c_cfgGeneration.fTemperature <= 0.0f ||
         c_cfgGeneration.nTopK <= 0 || c_cfgGeneration.nMaxTokens <= 0 ||
-        c_cfgGeneration.nMaxTokens > 128 )
+        c_cfgGeneration.nContext < 0 || c_cfgGeneration.nContext > trnModel.config().nContext )
     {
         throw std::invalid_argument( "Invalid generation configuration or history" );
     }
     ModeRestore modRestore{ trnModel, trnModel.isTraining() };
     trnModel.setTraining( false );
-    TokenIds nHistory = c_nHistory;
+    const int nContext = c_cfgGeneration.nContext == 0 ? trnModel.config().nContext : c_cfgGeneration.nContext;
+    TokenIds nHistory( c_nHistory.end() - std::min( c_nHistory.size(), static_cast<std::size_t>( nContext ) ),
+                       c_nHistory.end() );
     TokenIds nGenerated;
     for( int nStep = 0; nStep < c_cfgGeneration.nMaxTokens; ++nStep )
     {
         // 文脈長を超えた古い履歴を除き、直近のトークンだけをモデルへ渡す。
         const int nSequence = static_cast<int>(
             std::min( nHistory.size(),
-                      static_cast<std::size_t>( std::min( 128, trnModel.config().nContext ) ) ) );
+                      static_cast<std::size_t>( nContext ) ) );
         auto spmInput = std::make_shared<cunMat>( nSequence, 1 );
         spmInput->copyFromHost( nHistory.data() + nHistory.size() - nSequence, nSequence );
         const auto fLogits = trnModel.forward( spmInput )->_mData.toHost();
@@ -86,6 +88,7 @@ Generate(
         const int nNext = nCandidates[dstSample( rngRandom )];
         nGenerated.push_back( nNext );
         nHistory.push_back( nNext );
+        if( nHistory.size() > static_cast<std::size_t>( nContext ) ) nHistory.erase( nHistory.begin() );
         if( nNext == TokenConversation::END || nNext == TokenConversation::UTTERANCE_END )
         {
             break;

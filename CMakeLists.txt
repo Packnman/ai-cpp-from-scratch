@@ -17,6 +17,7 @@ set(AI_CPP_CUDA_ARCHITECTURES "86" CACHE STRING
     "CUDA architectures to build for (for example: 86 or 86;89)")
 
 add_library(ai_cpp STATIC
+    lib/src/cli_options.cpp
     lib/src/tokenizer_character.cpp
     lib/src/cuda_memory.cpp
     lib/src/cuda_matrix.cpp
@@ -165,15 +166,33 @@ if(BUILD_TESTING)
     add_test(NAME cifar10_model_check COMMAND cifar10_model_check)
 endif()
 
+# Pinned SentencePiece; use FETCHCONTENT_SOURCE_DIR_SENTENCEPIECE for an offline checkout.
+include(FetchContent)
+set(SPM_ENABLE_SHARED OFF CACHE BOOL "" FORCE)
+set(SPM_ENABLE_TCMALLOC OFF CACHE BOOL "" FORCE)
+set(SPM_BUILD_TEST OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(sentencepiece
+    GIT_REPOSITORY https://github.com/google/sentencepiece.git
+    GIT_TAG 31646a467d2051eb904e0b45de3a73e91fe1c1e3
+)
+FetchContent_MakeAvailable(sentencepiece)
+
 # Shared conversation data/model and two application entry points.
 # Vendored nlohmann/json 3.12.0 (MIT); no download is required at build time.
 target_sources(ai_cpp PRIVATE lib/src/cuda_function_IndexCrossEntropy.cu)
 add_library(conversation_data STATIC
     model/src/tokenizer_conversation.cpp
+    model/src/tokenizer_subword.cpp
     model/src/dataset_conversation.cpp
     lib/src/tokenizer_character.cpp
 )
 target_include_directories(conversation_data PUBLIC model/include lib/include PRIVATE third_party)
+target_include_directories(conversation_data SYSTEM PRIVATE
+    ${sentencepiece_SOURCE_DIR}/src
+    ${sentencepiece_SOURCE_DIR}/src/builtin_pb
+    ${sentencepiece_SOURCE_DIR}/third_party/protobuf-lite
+)
+target_link_libraries(conversation_data PUBLIC sentencepiece_train-static)
 add_library(conversation_runtime STATIC
     model/src/module_Attention.cpp
     model/src/module_FeedForward.cpp
@@ -197,6 +216,9 @@ add_executable(main_validation validation/main_validation.cpp)
 target_link_libraries(main_validation PRIVATE conversation_validation)
 
 if(BUILD_TESTING)
+    add_executable(subword_check tests/subword_check.cpp)
+    target_link_libraries(subword_check PRIVATE conversation_training conversation_validation)
+    add_test(NAME subword_check COMMAND subword_check)
     add_executable(conversation_check tests/conversation_check.cpp)
     target_include_directories(conversation_check PRIVATE third_party)
     target_link_libraries(conversation_check PRIVATE conversation_training conversation_validation)
@@ -207,5 +229,6 @@ if(BUILD_TESTING)
         -DPROGRAM=$<TARGET_FILE:cuda_memory_numerics>
         -P ${PROJECT_SOURCE_DIR}/tests/cuda_memory_compare.cmake)
     add_executable(cuda_memory_benchmark tests/cuda_memory_benchmark.cpp)
+    target_include_directories(cuda_memory_benchmark PRIVATE third_party)
     target_link_libraries(cuda_memory_benchmark PRIVATE conversation_training)
 endif()

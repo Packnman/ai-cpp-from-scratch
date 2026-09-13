@@ -1,118 +1,43 @@
-# 設計仕様書
+# 文書一覧
 
-このディレクトリには、公開ヘッダーごとの設計仕様をまとめる。仕様は現在の宣言と実装を基準とし、責務、所有権、データ形状、API契約、例外条件、利用上の注意を記載する。
+現在の利用手順と実装状況は、リポジトリルートの [README](../README.md) を正とする。このディレクトリには、再現に必要な検証条件と補足情報だけを置く。
 
-## アプリケーション層
-
-| ヘッダー | 設計仕様 |
+| 文書 | 内容 |
 | --- | --- |
-| `tests/fixtures/include/dataset_mnist.h` | [mnist.md](mnist.md) |
-| `tests/fixtures/include/neuralnet_mnist.h` | [mnist_neuralnet.md](mnist_neuralnet.md) |
-| `tests/fixtures/include/dataset_cifar10.h` | [cifar10.md](cifar10.md) |
-| `tests/fixtures/include/neuralnet_cifar10.h` | [neuralnet.md](neuralnet.md) |
-| `model/include/module_Attention.h` | [module_attention.md](module_attention.md) |
-| `model/include/module_FeedForward.h` | [module_feed_forward.md](module_feed_forward.md) |
-| `tests/fixtures/include/trainer.h` | [trainer.md](trainer.md) |
+| [training_foundation.md](training_foundation.md) | SentencePiece BPE、文脈長512、GPU性能・メモリ測定、checkpoint完全再開の検証記録 |
 
-## ライブラリ層
+## 主要な実装参照先
 
-| ヘッダー | 設計仕様 |
-| --- | --- |
-| `lib/include/cuda_bublas.h` | [cuda_bublas.md](cuda_bublas.md) |
-| `lib/include/cuda_function.h` | [cuda_function.md](cuda_function.md) |
-| `lib/include/cuda_memory.h` | [cuda_memory.md](cuda_memory.md) |
-| `lib/include/cuda_matrix.h` | [cuda_matrix.md](cuda_matrix.md) |
-| `lib/include/cuda_tensor.h` | [cuda_tensor.md](cuda_tensor.md) |
-| `lib/include/matrix.h` | [matrix.md](matrix.md) |
-| `lib/include/module.h` | [module.md](module.md) |
-| `lib/include/optimizer.h` | [optimizer.md](optimizer.md) |
-
-## CUDA Function 詳細設計
-
-次のクラスは実装済みであり、各ページにAPI、計算式、制約、完了条件を記載する。
-
-| クラス | 設計仕様 |
-| --- | --- |
-| `Add` | [cuda_function_add.md](cuda_function_add.md) |
-| `BatchMatMul` | [cuda_function_batch_mat_mul.md](cuda_function_batch_mat_mul.md) |
-| `LayerNorm` | [cuda_function_layer_norm.md](cuda_function_layer_norm.md) |
-| `Mask` | [cuda_function_mask.md](cuda_function_mask.md) |
-| `Permute` | [cuda_function_permute.md](cuda_function_permute.md) |
-| `Reshape` | [cuda_function_reshape.md](cuda_function_reshape.md) |
-| `Scale` | [cuda_function_scale.md](cuda_function_scale.md) |
-| `Softmax` | [cuda_function_softmax.md](cuda_function_softmax.md) |
-
-## 共通規約
-
-- ニューラルネットワークの行列は「特徴量またはクラス数 × バッチ数」で表す。
-- `Mat`と`cufMat`はrow-majorであり、2次元要素位置は`row * cols + column`である。
-- `Tensor`のデータと勾配はGPU上に置く。
-- 学習ParameterとBufferの所有権は派生`Module`が持ち、基底`Module`は非所有pointerを登録する。
-- CUDA演算のbackwardは、原則として既存の勾配へ加算する。
-
-### 命名規則
-
-変数名は型や所有関係を示すprefixと、意味を示す大文字始まりの本体を組み合わせる。constやpointerなど複数の性質がある場合は、`c_spmInput`のようにprefixを重ねる。
-
-| 優先度 | prefix・形式 | 対象 |
+| 領域 | 公開API | 実装・入口 |
 | --- | --- | --- |
-| 1 | `g_` | global関数・変数 |
-| 2 | `_` | メンバー変数 |
-| 3 | `c_` | const。global定数はprefixを付けず全大文字、またはmacroとする |
-| 4 | `lp` | raw pointer |
-| 5 | `sp` | `shared_ptr` |
-| 6 | `wp` | `weak_ptr` |
-| 7 | `n` | 整数 |
-| 8 | `f` | `float` |
-| 9 | `dbl` | `double` |
-| 10 | `is` / `can` | `bool` |
-| 11 | `str` | 文字列 |
-| 12 | クラス名の3文字略称 | クラス型の変数 |
-| 13 | 本体を複数形 | `vector`などのコレクション |
+| 学習・追加学習・再開 | `train/include/train.h` | `train/src/train.cpp`、`train/main_train.cpp` |
+| 評価・対話生成 | `validation/include/validation.h` | `validation/src/validation.cpp`、`validation/main_validation.cpp` |
+| Transformer | `model/include/model_transformer.h` | `model/src/model_transformer.cpp` |
+| tokenizer・会話bundle | `model/include/tokenizer_conversation.h` | `model/src/tokenizer_conversation.cpp`、`model/src/tokenizer_subword.cpp` |
+| Adam・状態保存 | `lib/include/optimizer_adam.h` | `lib/src/optimizer_adam.cpp` |
+| CUDAメモリ | `lib/include/cuda_memory.h` | `lib/src/cuda_memory.cpp` |
 
-### コーディングスタイル
+## 学習方法の区別
+
+| 方法 | 出力先 | 引き継ぐ状態 |
+| --- | --- | --- |
+| 新規学習 | 新規または空のディレクトリ | なし |
+| `--from-model SOURCE` | SOURCEとは別の新規または空のディレクトリ | 重み、tokenizer、モデル設定。Adamと乱数状態は新規 |
+| `--resume` | checkpointを持つ同じモデルディレクトリ | 最新epochの重み、Adam、shuffle、dropout、最良モデル情報 |
+
+checkpointは各epochの完了後に作られる。`weights.bin` はvalidation lossが最良だった評価・生成用モデル、`checkpoint/epoch-N.weights.bin` は完全再開用の最新epochモデルであり、用途が異なる。
+
+## checkpointの検証範囲
+
+`tests/conversation_check.cpp` は次を検証する。
+
+- 連続2 epochと、1 epoch後にcheckpointから再開した1 epochの状態が一致する。
+- モデル重み、Adam、shuffle、dropout、epoch番号、最良validation情報を復元する。
+- `metrics.jsonl` を置き換えず、`resume_start` を追記する。
+- `--lr` の変更時もAdamのmomentとstepを維持する。
+- checkpointの破損や学習データの変更を、更新開始前に拒否する。
+
+## コーディングスタイル
 
 - インデントは半角スペース4個とし、タブ文字は使用しない。
-- `namespace`、`class`、`struct`、関数、制御文の開始波括弧は宣言または条件の次行に置く。
-- `if`、`else`、`for`、`while`などの制御文は、本体が1文だけでも必ず波括弧で囲む。
-- 1行には原則として1文だけを記述する。
-- pointerとreferenceの記号は型側へ寄せ、`Tensor* lpTensor`、`const cufMat& c_mValue`のように記述する。
-- 代入演算子と二項演算子の前後、およびカンマの後には半角スペースを置く。
-- 空でない丸括弧の内側には半角スペースを置く。空の引数リストは`()`と記述する。
-- 長い関数宣言、関数呼出し、条件式は意味のまとまりで改行し、継続行もスペースで整列する。
-- formatterを使用する場合も、インデント幅4、タブ不使用、Allman形式、制御文への波括弧追加を維持する。
-
-```cpp
-void updateTensor( Tensor* lpTensor, const cufMat& c_mGradient )
-{
-    if( lpTensor == nullptr )
-    {
-        throw std::invalid_argument( "tensor must not be null" );
-    }
-
-    for( int nRow = 0; nRow < lpTensor->_mData._nRows; ++nRow )
-    {
-        updateRow( lpTensor, c_mGradient, nRow );
-    }
-}
-```
-
-## 会話 Transformer（実装済み）
-
-| 公開ヘッダ | 設計仕様 |
-| --- | --- |
-| `model/include/model_transformer.h` | [model_transformer.md](model_transformer.md) |
-| `model/include/module_TransformerBlock.h` | [module_transformer_block.md](module_transformer_block.md) |
-| `model/include/module_Attention.h` | [module_attention.md](module_attention.md) |
-| `model/include/module_FeedForward.h` | [module_feed_forward.md](module_feed_forward.md) |
-| `model/include/dataset_conversation.h` | [dataset_conversation.md](dataset_conversation.md) |
-| `model/include/tokenizer_conversation.h` | [tokenizer_conversation.md](tokenizer_conversation.md) |
-| `model/include/conversation_runtime.h` | [conversation_runtime.md](conversation_runtime.md) |
-| `lib/include/tokenizer_character.h` | [tokenizer_character.md](tokenizer_character.md) |
-| `lib/include/cuda_function_IndexCrossEntropy.h` | [cuda_function_index_cross_entropy.md](cuda_function_index_cross_entropy.md) |
-| `lib/include/cuda_function_Linear.h` | [cuda_function_linear.md](cuda_function_linear.md) |
-| `lib/include/cuda_function.h`（Context 所有権追加） | [cuda_function.md](cuda_function.md) |
-
-実データと GPU の検証結果は [conversation_validation.md](conversation_validation.md) を参照する。
-
-学習 API は `train/include/conversation_training.h`、評価・生成 API は `validation/include/conversation_validation.h`。いずれも [会話実行仕様](conversation_runtime.md) を参照。画像モデルの仕様は `tests/fixtures/` の回帰テスト用コードを対象とする。
+- `.editorconfig` と `.clang-format` をエディタ・formatterの基準にする。

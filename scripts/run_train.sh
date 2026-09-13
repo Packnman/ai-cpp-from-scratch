@@ -14,9 +14,9 @@ RUN_BUILD="${RUN_BUILD:-1}"       # 1: 実行前にビルド、0: ビルド済�
 DRY_RUN="${DRY_RUN:-0}"           # 1: コマンド表示のみ（ビルド・学習しない）
 DATA_DIR="${DATA_DIR:-data/conversation}"
 OUTPUT_DIR="${OUTPUT_DIR:-models/conversation_finetuned}"
-FROM_MODEL="${FROM_MODEL:-models/conversation}"     # 空: 新規学習、指定あり: 保存モデルから追加学習
+FROM_MODEL="${FROM_MODEL-models/conversation}"     # 空: 新規学習、指定あり: 保存モデルから追加学習
 EPOCHS="${EPOCHS:-10}"
-BATCH_SIZE="${BATCH_SIZE:-128}"
+BATCH_SIZE="${BATCH_SIZE:-32}"
 LEARNING_RATE="${LEARNING_RATE:-0.003}"
 CLIP_NORM="${CLIP_NORM:-1.0}"
 SEED="${SEED:-42}"
@@ -29,6 +29,8 @@ HEADS="${HEADS:-4}"
 HIDDEN="${HIDDEN:-1024}"
 CONTEXT="${CONTEXT:-256}"
 DROPOUT="${DROPOUT:-0.1}"
+TOKENIZER="${TOKENIZER:-character}"
+VOCAB_SIZE="${VOCAB_SIZE:-4096}"
 
 cd "${repo_root}"
 args=("${BUILD_DIR}/main_train" "${DATA_DIR}" "${OUTPUT_DIR}"
@@ -39,7 +41,8 @@ if [[ -n "${FROM_MODEL}" ]]; then
     args+=(--from-model "${FROM_MODEL}")
 else
     args+=(--blocks "${BLOCKS}" --embedding "${EMBEDDING}" --heads "${HEADS}"
-        --hidden "${HIDDEN}" --context "${CONTEXT}" --dropout "${DROPOUT}")
+        --hidden "${HIDDEN}" --context "${CONTEXT}" --dropout "${DROPOUT}"
+        --tokenizer "${TOKENIZER}" --vocab-size "${VOCAB_SIZE}")
 fi
 
 printf 'AI_CPP_CUDA_MEMORY_POOL=%s Command: ' "${MEMORY_POOL}"

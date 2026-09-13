@@ -15,6 +15,7 @@ __global__ void kernel_BatchMatMul_backward_A(float* lpfAGrad,const float* c_lpf
 __global__ void kernel_BatchMatMul_backward_B(float* lpfBGrad,const float* c_lpfOutputGrad,const float* c_lpfA,int nM,int nK,int nN,int nBatch,int nSize);
 __global__ void kernel_LayerNorm_forward(float* lpfResult,const float* c_lpfInput,const float* c_lpfGamma,const float* c_lpfBeta,int nFeatures,int nPositions,float fEpsilon);
 __global__ void kernel_LayerNorm_backward(float* lpfInputGrad,float* lpfGammaGrad,float* lpfBetaGrad,const float* c_lpfOutputGrad,const float* c_lpfInput,const float* c_lpfGamma,int nFeatures,int nPositions,float fEpsilon);
+__global__ void kernel_LayerNorm_parameter_reduce(float* lpfGammaGrad,float* lpfBetaGrad,const float* c_lpfGammaContributions,const float* c_lpfBetaContributions,int nFeatures,int nPositions);
 __global__ void kernel_Mask_forward(float* lpfResult,const float* c_lpfInput,const float* c_lpfMask,int* lpnError,int nKey,int nTrailing,bool isBroadcast,int nRows);
 __global__ void kernel_Mask_backward(float* lpfInputGrad,const float* c_lpfOutputGrad,const float* c_lpfMask,int nTrailing,bool isBroadcast,int nSize);
 __global__ void kernel_Permute(float* lpfResult,const float* c_lpfInput,const std::int64_t* c_lpnOutputShape,const std::int64_t* c_lpnInputStrides,int nRank,int nSize);
@@ -407,16 +408,30 @@ void cuda_LayerNorm_backward(
     if( nPositions==0 ) return;
 
     const int nThreads =256;
+    cufMat mGammaContributions;
+    cufMat mBetaContributions;
+    if( lpmGammaGrad!=nullptr )
+    {
+        mGammaContributions =cufMat({nFeatures,nPositions});
+        mBetaContributions =cufMat({nFeatures,nPositions});
+    }
     kernel_LayerNorm_backward<<<
         (nPositions+nThreads-1)/nThreads,nThreads
     >>>(
         mInputGrad.data(),
-        lpmGammaGrad==nullptr ? nullptr : lpmGammaGrad->data(),
-        lpmBetaGrad==nullptr ? nullptr : lpmBetaGrad->data(),
+        lpmGammaGrad==nullptr ? nullptr : mGammaContributions.data(),
+        lpmBetaGrad==nullptr ? nullptr : mBetaContributions.data(),
         c_mOutputGrad.data(),c_mInput.data(),
         c_lpmGamma==nullptr ? nullptr : c_lpmGamma->data(),
         nFeatures,nPositions,fEpsilon
     );
+    if( lpmGammaGrad!=nullptr )
+    {
+        kernel_LayerNorm_parameter_reduce<<<(nFeatures+nThreads-1)/nThreads,nThreads>>>(
+            lpmGammaGrad->data(),lpmBetaGrad->data(),mGammaContributions.data(),
+            mBetaContributions.data(),nFeatures,nPositions
+        );
+    }
     const cudaError_t cudError =cudaGetLastError();
     if( cudError!=cudaSuccess )
     {
@@ -1462,7 +1477,7 @@ void cuda_Embedding_backward(
         }
     }
 
-    const int nSize =static_cast<int>(c_mOutputGrad.numel());
+    const int nSize =static_cast<int>(mWeightGrad.size(0));
     if( nSize<=0 ) return;
     const int nThreads =256;
     const int nBlocks =(nSize+nThreads-1)/nThreads;
@@ -1733,14 +1748,9 @@ __global__ void kernel_LayerNorm_backward(
         dblGradNormalizedSum +=dblNormalizedGrad*dblNormalized;
         if( lpfGammaGrad!=nullptr )
         {
-            atomicAdd(
-                lpfGammaGrad+nFeature,
-                static_cast<float>(dblOutputGrad*dblNormalized)
-            );
-            atomicAdd(
-                lpfBetaGrad+nFeature,
-                static_cast<float>(dblOutputGrad)
-            );
+            lpfGammaGrad[nFeature*nPositions+nPosition] =
+                static_cast<float>(dblOutputGrad*dblNormalized);
+            lpfBetaGrad[nFeature*nPositions+nPosition] =static_cast<float>(dblOutputGrad);
         }
     }
 
@@ -1760,6 +1770,23 @@ __global__ void kernel_LayerNorm_backward(
              dblGradSum-dblNormalized*dblGradNormalizedSum);
         lpfInputGrad[nIndex] +=static_cast<float>(dblInputGrad);
     }
+}
+__global__ void kernel_LayerNorm_parameter_reduce(
+    float* lpfGammaGrad,float* lpfBetaGrad,const float* c_lpfGammaContributions,
+    const float* c_lpfBetaContributions,int nFeatures,int nPositions
+)
+{
+    const int nFeature =blockIdx.x*blockDim.x+threadIdx.x;
+    if( nFeature>=nFeatures ) return;
+    float fGamma =0.0f;
+    float fBeta =0.0f;
+    for( int nPosition=0;nPosition<nPositions;++nPosition )
+    {
+        fGamma +=c_lpfGammaContributions[nFeature*nPositions+nPosition];
+        fBeta +=c_lpfBetaContributions[nFeature*nPositions+nPosition];
+    }
+    lpfGammaGrad[nFeature] +=fGamma;
+    lpfBetaGrad[nFeature] +=fBeta;
 }
 __global__ void kernel_Mask_forward(
     float* lpfResult,
@@ -2498,14 +2525,13 @@ __global__ void kernel_Embedding_backward(
     int nSize
 )
 {
-    const int nIndex =blockIdx.x*blockDim.x+threadIdx.x;
-    if( nIndex<nSize )
+    const int nEmbedding =blockIdx.x*blockDim.x+threadIdx.x;
+    if( nEmbedding<nSize )
     {
-        const int nEmbedding =nIndex/nPositions;
-        const int nPosition =nIndex%nPositions;
-        atomicAdd(
-            lpfWeightGrad+nEmbedding*nVocabSize+c_lpnIndices[nPosition],
-            c_lpfOutputGrad[nIndex]
-        );
+        for( int nPosition=0;nPosition<nPositions;++nPosition )
+        {
+            lpfWeightGrad[nEmbedding*nVocabSize+c_lpnIndices[nPosition]] +=
+                c_lpfOutputGrad[nEmbedding*nPositions+nPosition];
+        }
     }
 }

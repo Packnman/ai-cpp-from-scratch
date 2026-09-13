@@ -35,6 +35,8 @@ private:
 
 public:
     void init( std::mt19937& rngRandom );
+    std::uint64_t dropoutCounter() const noexcept;
+    void setDropoutCounter( std::uint64_t nCounter ) noexcept;
     std::shared_ptr<Tensor> forward(
         std::vector<std::shared_ptr<Tensor>>& spmInputs
     ) override;

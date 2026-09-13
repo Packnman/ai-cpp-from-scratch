@@ -21,6 +21,8 @@ public:
     explicit Transformer( const TransformerConfig& c_cfgConfig );
     ~Transformer() override = default;
     const TransformerConfig& config() const;
+    std::vector<std::uint64_t> dropoutCounters() const;
+    void setDropoutCounters( const std::vector<std::uint64_t>& c_nCounters );
     TensorPtr forward( TensorList& spmInputs ) override;
     TensorPtr forward( const std::shared_ptr<const cunMat>& c_spmIds );
     TensorPtr loss(
