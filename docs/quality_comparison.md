@@ -5,10 +5,11 @@
 ## 実装済み範囲と実測状態
 
 A/B/C/Dを同じtokenizer、最適化token予算、実効batch token、固定質問、response
-validation loss/perplexityで比較する実行経路を実装した。リポジトリ内には固定済みjawiki
-dumpまたは抽出本文が存在しないため、30,000,000 tokenの本比較は未実行であり、比較値を
-記載していない。scripts/run_quality_comparison.sh が実行後に
-experiments/quality-comparison/summary.md を生成する。これは未実測値を推測で埋めない
+validation loss/perplexityで比較する実行経路を実装した。2026-09-01版jawikiコーパスは
+`data/jawiki-20260901/` に準備済みである。A/B/C学習はコーパス準備作業には含めて
+いないため、30,000,000 tokenの本比較は未実行であり、比較値はまだ記載していない。
+`scripts/run_quality_comparison.sh` が実行後に
+`experiments/quality-comparison/summary.md` を生成する。これは未実測値を推測で埋めない
 ための明示的な状態である。
 
 専用fixtureでは、本文JSONLの次token予測、外部BPEの不変保存、token予算停止、勾配累積、
@@ -23,25 +24,64 @@ bytes、pool予約量は3,087,007,744 bytesだった。既存の現行構成測�
 | 現行 | 4 | 256 | 4 | 1024 | 512 | 16 | 1 | 8192 |
 | 大型 | 6 | 384 | 6 | 1536 | 512 | 4 | 4 | 8192 |
 
-## jawikiを固定して準備する
+## 固定済みjawikiコーパス
 
-[公式dump](https://dumps.wikimedia.org/jawiki/latest/)で利用する日付を決めた後、
-latestではなく日付入りURLを記録し、dumpのSHA-256を別経路でも確認する。
-WikiExtractorもcommitを固定し、main namespaceだけをJSON出力する。例:
+2026-09-01版の
+[公式dump](https://dumps.wikimedia.org/jawiki/20260901/dumpstatus.json)が完了済みであることを
+確認し、日付入りURLから取得した。元dumpと公式状態ファイルは
+`data/raw/jawiki-20260901/`、WikiExtractorの中間JSONは
+`data/intermediate/jawiki-20260901/` に保持している。
+
+| 項目 | 実測値 |
+|---|---:|
+| 元dump容量 | 4,852,895,748 bytes |
+| 公式MD5 | `be3d5a8c1c7a1804628c1162f0a708df` |
+| 公式SHA-1 | `98be46ea8ba77352ece82a0b2c00863ddebc1c36` |
+| ローカルSHA-256 | `888a2a81e7e2888f364953a69d5fc55b88449df8977eb2be01316a4c53da7252` |
+| WikiExtractor revision | `e96bee708b6a0f3ee66a4b677294faa80e3557a6` |
+| WikiExtractor条件 | Python 3、8 process、namespace 0、JSON、template展開あり |
+| 抽出記事数 | 1,516,319 |
+| 中間抽出物 | 10,086 files、10,312,557,505 bytes |
+
+最終コーパスは空行区切りの段落を単位とし、空白を正規化して100文字未満を除外した。
+件数制限は設けていない。page IDのSHA-256先頭byteを20で割った剰余により、同じpageの
+段落がsplitをまたがない決定的90/5/5分割にした。
+
+| split | 文書数 | JSONL容量 | 本文文字数 | 比率 |
+|---|---:|---:|---:|---:|
+| train | 1,273,561 | 4,830,237,596 bytes | 1,685,610,310 | 90.63% |
+| validation | 65,572 | 246,544,279 bytes | 86,139,219 | 4.67% |
+| test | 66,164 | 248,149,734 bytes | 86,706,292 | 4.71% |
+| 合計 | 1,405,297 | 5,324,931,609 bytes | 1,858,455,821 | 100.00% |
+
+全行についてUTF-8 JSON、`id`、`source_page_id`、`title`、`url`、`text`、本文100文字
+以上、全splitを通したID一意性、pageのsplit非重複、split規則を検証済みである。
+metadataのSHA-256も元dumpから再計算した値と一致した。学習側本文ローダーで3 splitの
+全件を読み、各splitから32 valid tokenの少量batchを生成できた。train本文は約16.86億
+文字あり、15,000,000 tokenの事前学習予算に対して十分な規模である。
+
+再生成時の確定コマンドは次のとおり。本環境では`/dev/shm`が64MiBに固定されているため、
+内容を変えず共有blobのbacking storeだけを通常ファイルへ移す互換層とそのソースも
+`data/tools/`に保持している。
 
 ~~~sh
-sha256sum jawiki-YYYYMMDD-pages-articles-multistream.xml.bz2
+sha256sum data/raw/jawiki-20260901/jawiki-20260901-pages-articles-multistream.xml.bz2
 
-python WikiExtractor.py --json --processes 8 --namespaces 0 \
-  --output extracted-jawiki \
-  jawiki-YYYYMMDD-pages-articles-multistream.xml.bz2
+(
+  cd data/tools/WikiExtractor
+  LD_PRELOAD=../shm_file_backend.so python3 -m wikiextractor.WikiExtractor \
+    --json --processes 8 --namespaces 0 \
+    --output ../../../data/intermediate/jawiki-20260901 \
+    ../../../data/raw/jawiki-20260901/jawiki-20260901-pages-articles-multistream.xml.bz2
+)
 
-scripts/prepare_jawiki.py extracted-jawiki data/jawiki-YYYYMMDD \
-  --dump-file jawiki-YYYYMMDD-pages-articles-multistream.xml.bz2 \
-  --dump-date YYYYMMDD \
-  --dump-url https://dumps.wikimedia.org/jawiki/YYYYMMDD/jawiki-YYYYMMDD-pages-articles-multistream.xml.bz2 \
-  --dump-sha256 ACTUAL_SHA256 \
-  --extractor-revision WIKIEXTRACTOR_COMMIT
+scripts/prepare_jawiki.py data/intermediate/jawiki-20260901 data/jawiki-20260901 \
+  --dump-file data/raw/jawiki-20260901/jawiki-20260901-pages-articles-multistream.xml.bz2 \
+  --dump-date 20260901 \
+  --dump-url https://dumps.wikimedia.org/jawiki/20260901/jawiki-20260901-pages-articles-multistream.xml.bz2 \
+  --dump-sha256 888a2a81e7e2888f364953a69d5fc55b88449df8977eb2be01316a4c53da7252 \
+  --extractor-revision e96bee708b6a0f3ee66a4b677294faa80e3557a6 \
+  --min-chars 100 --max-documents 0
 ~~~
 
 準備スクリプトは元dumpのSHA-256を検証し、抽出器revision、段落条件、split規則、件数、
@@ -55,7 +95,7 @@ dump URL、[Wikimedia利用規約](https://foundation.wikimedia.org/wiki/Policy:
 
 ~~~sh
 build/quality/main_train tokenizer \
-  data/conversation/train.jsonl data/jawiki-YYYYMMDD/train.jsonl \
+  data/conversation/train.jsonl data/jawiki-20260901/train.jsonl \
   experiments/quality/common-tokenizer.model --vocab-size 4096
 ~~~
 
@@ -70,7 +110,7 @@ optimized_tokens とcheckpointへ保存される。--accumulate はmicro-batch�
 ## 比較手順
 
 ~~~sh
-TEXT_DATA=data/jawiki-YYYYMMDD \
+TEXT_DATA=data/jawiki-20260901 \
 OUTPUT_ROOT=experiments/quality-comparison \
 BUILD_DIR=build/quality-comparison \
 scripts/run_quality_comparison.sh
