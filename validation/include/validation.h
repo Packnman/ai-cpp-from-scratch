@@ -1,6 +1,8 @@
 #pragma once
 
 #include "conversation_runtime.h"
+#include <functional>
+#include <istream>
 #include <ostream>
 
 struct ConfigGeneration
@@ -19,6 +21,12 @@ Generate(
     std::mt19937& rngRandom,
     const ConfigGeneration& c_cfgGeneration = {}
 );
+
+using ConversationGenerator = std::function<TokenIds( const TokenIds& )>;
+
+void Chat( const TokenConversation& c_tokTokenizer, int nContext,
+           std::istream& stmInput, std::ostream& stmOutput,
+           const ConversationGenerator& c_fnGenerate );
 
 // Evaluate a saved bundle without optimizer updates or model writes.
 double

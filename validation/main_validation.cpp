@@ -30,37 +30,12 @@ int main( int nArgc, char** lpArgv )
             if( nContext <= 0 || nContext > bunModel.spModel->config().nContext )
                 throw std::invalid_argument( "Input context must not exceed saved model context" );
             std::mt19937 rngRandom( nSeed );
-            TokenIds nHistory = { TokenConversation::BEGIN };
-            std::string strInput;
-            std::cout << "A> " << std::flush;
-            while( std::getline( std::cin, strInput ) )
-            {
-                // 入力を「話者A・本文・発話終端・話者B」の形にし、B の応答生成を開始する。
-                nHistory.push_back( TokenConversation::SPEAKER_A );
-                const auto nText = bunModel.tokTokenizer.encode( strInput );
-                nHistory.insert( nHistory.end(), nText.begin(), nText.end() );
-                nHistory.push_back( TokenConversation::UTTERANCE_END );
-                nHistory.push_back( TokenConversation::SPEAKER_B );
-                const auto nResponse = Generate(
-                    *bunModel.spModel, bunModel.tokTokenizer, nHistory, rngRandom, cfgGeneration );
-                std::cout << "B> " << bunModel.tokTokenizer.decode( nResponse ) << '\n';
-                nHistory.insert( nHistory.end(), nResponse.begin(), nResponse.end() );
-                // 会話終端なら履歴を初期化し、長さ上限で切れた応答には発話終端を補う。
-                if( !nResponse.empty() && nResponse.back() == TokenConversation::END )
-                {
-                    nHistory = { TokenConversation::BEGIN };
-                }
-                else if( nResponse.empty() || nResponse.back() != TokenConversation::UTTERANCE_END )
-                {
-                    nHistory.push_back( TokenConversation::UTTERANCE_END );
-                }
-                // 長い対話では古い履歴を捨て、次回に保持する ID 数を制限する。
-                if( nHistory.size() > static_cast<std::size_t>( nContext ) )
-                {
-                    nHistory.erase( nHistory.begin(), nHistory.end() - nContext );
-                }
-                std::cout << "A> " << std::flush;
-            }
+            Chat( bunModel.tokTokenizer, nContext, std::cin, std::cout,
+                  [&]( const TokenIds& c_nHistory )
+                  {
+                      return Generate( *bunModel.spModel, bunModel.tokTokenizer,
+                                       c_nHistory, rngRandom, cfgGeneration );
+                  } );
         }
         else
         {

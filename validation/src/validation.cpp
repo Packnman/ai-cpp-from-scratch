@@ -97,6 +97,44 @@ Generate(
     return nGenerated;
 }
 
+void Chat( const TokenConversation& c_tokTokenizer, int nContext,
+           std::istream& stmInput, std::ostream& stmOutput,
+           const ConversationGenerator& c_fnGenerate )
+{
+    if( nContext <= 0 || !c_fnGenerate )
+    {
+        throw std::invalid_argument( "Chat context and generator must be valid" );
+    }
+    TokenIds nHistory = { TokenConversation::BEGIN };
+    std::string strInput;
+    stmOutput << "A> " << std::flush;
+    while( std::getline( stmInput, strInput ) )
+    {
+        nHistory.push_back( TokenConversation::SPEAKER_A );
+        const auto nText = c_tokTokenizer.encode( strInput );
+        nHistory.insert( nHistory.end(), nText.begin(), nText.end() );
+        nHistory.push_back( TokenConversation::UTTERANCE_END );
+        nHistory.push_back( TokenConversation::SPEAKER_B );
+        const auto nResponse = c_fnGenerate( nHistory );
+        stmOutput << "B> " << c_tokTokenizer.decode( nResponse ) << '\n';
+        nHistory.insert( nHistory.end(), nResponse.begin(), nResponse.end() );
+        if( !nResponse.empty() && nResponse.back() == TokenConversation::END )
+        {
+            stmOutput << "[system] 会話終端を検出したため、履歴をリセットしました。\n";
+            nHistory = { TokenConversation::BEGIN };
+        }
+        else if( nResponse.empty() || nResponse.back() != TokenConversation::UTTERANCE_END )
+        {
+            nHistory.push_back( TokenConversation::UTTERANCE_END );
+        }
+        if( nHistory.size() > static_cast<std::size_t>( nContext ) )
+        {
+            nHistory.erase( nHistory.begin(), nHistory.end() - nContext );
+        }
+        stmOutput << "A> " << std::flush;
+    }
+}
+
 // 保存モデルを指定 split で評価し、有効トークンあたりの損失と perplexity を出す。
 double Validation(
     const std::string& c_strDataDirectory,
