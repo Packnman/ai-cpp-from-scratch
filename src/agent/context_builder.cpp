@@ -4,9 +4,9 @@
 
 namespace ai::agent {
 ContextBuilder::ContextBuilder(std::size_t budget, Counter counter)
-    : budget_(budget), counter_(std::move(counter)) {
-    if (!counter_)
-        counter_ = utf8_codepoints;
+    : _budget(budget), _counter(std::move(counter)) {
+    if (!_counter)
+        _counter = utf8_codepoints;
 }
 std::size_t ContextBuilder::utf8_codepoints(std::string_view s) {
     std::size_t n = 0;
@@ -27,7 +27,7 @@ std::string ContextBuilder::build(const ContextInput &in) const {
         if (c.critical)
             critical += (critical.empty() ? "" : "\n") + c.text;
     fixed += section("Critical Constraints", critical);
-    if (counter_(fixed) > budget_)
+    if (_counter(fixed) > _budget)
         throw std::length_error("required context exceeds budget");
     std::vector<std::string> optional;
     for (auto it = in.recent.rbegin(); it != in.recent.rend(); ++it)
@@ -43,7 +43,7 @@ std::string ContextBuilder::build(const ContextInput &in) const {
         optional.push_back(section("Previous Result", r.value.dump()));
     std::string out = fixed;
     for (const auto &item : optional)
-        if (counter_(out) + counter_(item) <= budget_)
+        if (_counter(out) + _counter(item) <= _budget)
             out += item;
     return out;
 }

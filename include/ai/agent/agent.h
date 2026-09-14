@@ -12,15 +12,15 @@ class Agent {
 
     private:
         void finish_turn(const ParsedInput &, std::string_view response);
-        std::shared_ptr<IInputParser> parser_;
-        std::shared_ptr<IRouter> router_;
-        std::shared_ptr<IPlanner> planner_;
-        std::shared_ptr<IExecutor> executor_;
-        std::shared_ptr<IEvaluator> evaluator_;
-        std::shared_ptr<IAggregator> aggregator_;
-        std::shared_ptr<IMemoryManager> memory_;
-        std::shared_ptr<IReasoner> reasoner_;
-        std::vector<ConversationTurn> recent_;
-        std::string summary_;
+        std::shared_ptr<IInputParser> _parser;
+        std::shared_ptr<IRouter> _router;
+        std::shared_ptr<IPlanner> _planner;
+        std::shared_ptr<IExecutor> _executor;
+        std::shared_ptr<IEvaluator> _evaluator;
+        std::shared_ptr<IAggregator> _aggregator;
+        std::shared_ptr<IMemoryManager> _memory;
+        std::shared_ptr<IReasoner> _reasoner;
+        std::vector<ConversationTurn> _recent;
+        std::string _summary;
 };
 } // namespace ai::agent

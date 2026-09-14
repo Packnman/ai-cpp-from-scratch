@@ -31,12 +31,12 @@ void ToolRegistry::add(std::string name, std::shared_ptr<ITool> tool) {
     if (name.empty() || !tool)
         throw std::invalid_argument(
             "tool name and implementation are required");
-    tools_[std::move(name)] = std::move(tool);
+    _tools[std::move(name)] = std::move(tool);
 }
 ToolResult ToolRegistry::execute(std::string_view name,
                                  const nlohmann::json &args) const {
-    const auto it = tools_.find(name);
-    if (it == tools_.end())
+    const auto it = _tools.find(name);
+    if (it == _tools.end())
         return {.status = ToolStatus::PermanentError,
                 .error = "unknown tool: " + std::string(name)};
     try {
@@ -47,7 +47,7 @@ ToolResult ToolRegistry::execute(std::string_view name,
 }
 
 ParsedInput DefaultInputParser::parse(std::string_view input) {
-    return reasoner_->parse(input);
+    return _reasoner->parse(input);
 }
 
 RequestType DefaultRouter::route(const ParsedInput &in) {
@@ -66,17 +66,17 @@ RequestType DefaultRouter::route(const ParsedInput &in) {
 }
 Plan DefaultPlanner::create(const ParsedInput &p,
                             const std::vector<MemoryRecord> &m) {
-    return reasoner_->plan(p, m);
+    return _reasoner->plan(p, m);
 }
 Plan DefaultPlanner::replan(const ParsedInput &p, const Plan &plan,
                             const ToolResult &r, const EvaluationResult &e) {
-    return reasoner_->replan(p, plan, r, e);
+    return _reasoner->replan(p, plan, r, e);
 }
 ToolResult DefaultExecutor::execute(const Task &task,
                                     const std::vector<ToolResult> &) {
     ToolResult result;
     if (task.type == TaskType::Tool)
-        result = tools_->execute(task.operation, task.arguments);
+        result = _tools->execute(task.operation, task.arguments);
     else {
         result.status = ToolStatus::Success;
         result.value = {{"result", task.operation}};
@@ -86,7 +86,7 @@ ToolResult DefaultExecutor::execute(const Task &task,
 }
 EvaluationResult DefaultEvaluator::evaluate(const Task &t,
                                             const ToolResult &r) {
-    return reasoner_->evaluate(t, r);
+    return _reasoner->evaluate(t, r);
 }
 
 nlohmann::json

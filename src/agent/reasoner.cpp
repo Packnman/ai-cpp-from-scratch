@@ -216,7 +216,7 @@ nlohmann::json ModelReasoner::structured(ModelMode mode,
                                          std::string_view schema_text) {
     const auto schema = nlohmann::json::parse(schema_text);
     std::string answer =
-        model_->complete(mode, mode_token(mode) + "\n" + std::string(prompt) +
+        _model->complete(mode, mode_token(mode) + "\n" + std::string(prompt) +
                                    "\nSchema: " + std::string(schema_text));
     for (int attempt = 0; attempt < 2; ++attempt) {
         try {
@@ -248,7 +248,7 @@ nlohmann::json ModelReasoner::structured(ModelMode mode,
                     std::string("model returned invalid structured JSON after "
                                 "one repair: ") +
                     e.what());
-            answer = model_->complete(
+            answer = _model->complete(
                 mode,
                 mode_token(mode) +
                     "\nRepair this JSON once. Return JSON only.\nSchema: " +
@@ -302,7 +302,7 @@ EvaluationResult ModelReasoner::evaluate(const Task &t, const ToolResult &r) {
 }
 std::string ModelReasoner::summarize(const std::vector<ConversationTurn> &t,
                                      std::string_view old) {
-    return model_->complete(
+    return _model->complete(
         ModelMode::Summarize,
         mode_token(ModelMode::Summarize) + "\n" +
             nlohmann::json{{"previous", old}, {"turn_count", t.size()}}.dump());
@@ -324,13 +324,13 @@ std::string ModelReasoner::chat(const ParsedInput &p,
                                 const std::vector<MemoryRecord> &,
                                 const std::vector<ConversationTurn> &,
                                 std::string_view summary) {
-    return model_->complete(ModelMode::Chat,
+    return _model->complete(ModelMode::Chat,
                             mode_token(ModelMode::Chat) + "\nSummary: " +
                                 std::string(summary) + "\nUser: " + p.raw);
 }
 std::string ModelReasoner::final_response(const ParsedInput &p,
                                           const nlohmann::json &a) {
-    return model_->complete(
+    return _model->complete(
         ModelMode::Final,
         mode_token(ModelMode::Final) + "\n" +
             nlohmann::json{{"input", p.raw}, {"aggregate", a}}.dump());

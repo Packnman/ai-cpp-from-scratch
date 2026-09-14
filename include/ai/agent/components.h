@@ -43,7 +43,7 @@ class ToolRegistry {
                            const nlohmann::json &arguments) const;
 
     private:
-        std::map<std::string, std::shared_ptr<ITool>, std::less<>> tools_;
+        std::map<std::string, std::shared_ptr<ITool>, std::less<>> _tools;
 };
 
 class IExecutor {
@@ -118,11 +118,11 @@ class IReasoner {
 class DefaultInputParser final : public IInputParser {
     public:
         explicit DefaultInputParser(std::shared_ptr<IReasoner> reasoner)
-            : reasoner_(std::move(reasoner)) {}
+            : _reasoner(std::move(reasoner)) {}
         ParsedInput parse(std::string_view input) override;
 
     private:
-        std::shared_ptr<IReasoner> reasoner_;
+        std::shared_ptr<IReasoner> _reasoner;
 };
 
 class DefaultRouter final : public IRouter {
@@ -132,33 +132,33 @@ class DefaultRouter final : public IRouter {
 class DefaultPlanner final : public IPlanner {
     public:
         explicit DefaultPlanner(std::shared_ptr<IReasoner> r)
-            : reasoner_(std::move(r)) {}
+            : _reasoner(std::move(r)) {}
         Plan create(const ParsedInput &,
                     const std::vector<MemoryRecord> &) override;
         Plan replan(const ParsedInput &, const Plan &, const ToolResult &,
                     const EvaluationResult &) override;
 
     private:
-        std::shared_ptr<IReasoner> reasoner_;
+        std::shared_ptr<IReasoner> _reasoner;
 };
 class DefaultExecutor final : public IExecutor {
     public:
         explicit DefaultExecutor(std::shared_ptr<ToolRegistry> tools)
-            : tools_(std::move(tools)) {}
+            : _tools(std::move(tools)) {}
         ToolResult execute(const Task &,
                            const std::vector<ToolResult> &) override;
 
     private:
-        std::shared_ptr<ToolRegistry> tools_;
+        std::shared_ptr<ToolRegistry> _tools;
 };
 class DefaultEvaluator final : public IEvaluator {
     public:
         explicit DefaultEvaluator(std::shared_ptr<IReasoner> r)
-            : reasoner_(std::move(r)) {}
+            : _reasoner(std::move(r)) {}
         EvaluationResult evaluate(const Task &, const ToolResult &) override;
 
     private:
-        std::shared_ptr<IReasoner> reasoner_;
+        std::shared_ptr<IReasoner> _reasoner;
 };
 class DefaultAggregator final : public IAggregator {
     public:

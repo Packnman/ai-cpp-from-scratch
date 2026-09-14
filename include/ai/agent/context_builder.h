@@ -20,7 +20,7 @@ class ContextBuilder {
         static std::size_t utf8_codepoints(std::string_view);
 
     private:
-        std::size_t budget_;
-        Counter counter_;
+        std::size_t _budget;
+        Counter _counter;
 };
 } // namespace ai::agent

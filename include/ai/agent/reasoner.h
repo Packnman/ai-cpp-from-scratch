@@ -25,7 +25,7 @@ class RuleReasoner final : public IReasoner {
 class ModelReasoner final : public IReasoner {
     public:
         explicit ModelReasoner(std::shared_ptr<ILanguageModel> model)
-            : model_(std::move(model)) {}
+            : _model(std::move(model)) {}
         ParsedInput parse(std::string_view) override;
         Plan plan(const ParsedInput &,
                   const std::vector<MemoryRecord> &) override;
@@ -45,7 +45,7 @@ class ModelReasoner final : public IReasoner {
     private:
         nlohmann::json structured(ModelMode, std::string_view,
                                   std::string_view schema);
-        std::shared_ptr<ILanguageModel> model_;
+        std::shared_ptr<ILanguageModel> _model;
 };
 
 } // namespace ai::agent

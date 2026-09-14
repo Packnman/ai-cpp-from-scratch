@@ -44,38 +44,38 @@ MemoryRecord row(sqlite3_stmt *s) {
 SqliteMemory::SqliteMemory(const std::filesystem::path &path) {
     if (path.has_parent_path())
         std::filesystem::create_directories(path.parent_path());
-    int rc = sqlite3_open_v2(path.string().c_str(), &db_,
+    int rc = sqlite3_open_v2(path.string().c_str(), &_db,
                              SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE |
                                  SQLITE_OPEN_FULLMUTEX,
                              nullptr);
     if (rc != SQLITE_OK) {
-        std::string msg = db_ ? sqlite3_errmsg(db_) : "open failed";
-        if (db_)
-            sqlite3_close(db_);
-        db_ = nullptr;
+        std::string msg = _db ? sqlite3_errmsg(_db) : "open failed";
+        if (_db)
+            sqlite3_close(_db);
+        _db = nullptr;
         throw std::runtime_error(msg);
     }
     try {
-        sqlite3_busy_timeout(db_, 5000);
-        exec(db_, "PRAGMA journal_mode=WAL;");
-        exec(db_, "PRAGMA foreign_keys=ON;");
+        sqlite3_busy_timeout(_db, 5000);
+        exec(_db, "PRAGMA journal_mode=WAL;");
+        exec(_db, "PRAGMA foreign_keys=ON;");
         migrate();
     } catch (...) {
-        sqlite3_close(db_);
-        db_ = nullptr;
+        sqlite3_close(_db);
+        _db = nullptr;
         throw;
     }
 }
 SqliteMemory::~SqliteMemory() {
-    if (db_)
-        sqlite3_close(db_);
+    if (_db)
+        sqlite3_close(_db);
 }
 void SqliteMemory::migrate() {
     sqlite3_stmt *s = nullptr;
-    check(sqlite3_prepare_v2(db_, "PRAGMA user_version", -1, &s, nullptr), db_,
+    check(sqlite3_prepare_v2(_db, "PRAGMA user_version", -1, &s, nullptr), _db,
           "read schema version");
     int rc = sqlite3_step(s);
-    check(rc, db_, "read schema version");
+    check(rc, _db, "read schema version");
     int version = sqlite3_column_int(s, 0);
     sqlite3_finalize(s);
     if (version > 1)
@@ -83,7 +83,7 @@ void SqliteMemory::migrate() {
             "memory schema is newer than this application");
     if (version == 1)
         return;
-    exec(db_, R"SQL(BEGIN IMMEDIATE;
+    exec(_db, R"SQL(BEGIN IMMEDIATE;
 CREATE TABLE memories(id INTEGER PRIMARY KEY, type TEXT NOT NULL CHECK(type IN('semantic','episodic','project')), content TEXT NOT NULL,
  importance REAL NOT NULL, confidence REAL NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, last_accessed_at INTEGER NOT NULL,
  UNIQUE(type,content));
@@ -103,7 +103,7 @@ void SqliteMemory::store_unchecked(const MemoryCandidate &c) {
         R"SQL(INSERT INTO memories(type,content,importance,confidence,created_at,updated_at,last_accessed_at)
 VALUES(?1,?2,?3,?4,unixepoch(),unixepoch(),unixepoch()) ON CONFLICT(type,content) DO UPDATE SET importance=max(importance,excluded.importance),
 confidence=max(confidence,excluded.confidence),updated_at=unixepoch())SQL";
-    check(sqlite3_prepare_v2(db_, sql, -1, &s, nullptr), db_,
+    check(sqlite3_prepare_v2(_db, sql, -1, &s, nullptr), _db,
           "prepare memory upsert");
     auto type = to_string(c.type);
     sqlite3_bind_text(s, 1, type.c_str(), -1, SQLITE_TRANSIENT);
@@ -112,18 +112,18 @@ confidence=max(confidence,excluded.confidence),updated_at=unixepoch())SQL";
     sqlite3_bind_double(s, 4, c.confidence);
     int rc = sqlite3_step(s);
     sqlite3_finalize(s);
-    check(rc, db_, "memory upsert");
+    check(rc, _db, "memory upsert");
 }
 void SqliteMemory::store(const MemoryCandidate &c) { store_batch({c}); }
 void SqliteMemory::store_batch(const std::vector<MemoryCandidate> &cs) {
-    exec(db_, "BEGIN IMMEDIATE;");
+    exec(_db, "BEGIN IMMEDIATE;");
     try {
         for (const auto &c : cs)
             store_unchecked(c);
-        exec(db_, "COMMIT;");
+        exec(_db, "COMMIT;");
     } catch (...) {
         try {
-            exec(db_, "ROLLBACK;");
+            exec(_db, "ROLLBACK;");
         } catch (...) {
         }
         throw;
@@ -151,7 +151,7 @@ std::vector<MemoryRecord> SqliteMemory::retrieve(std::string_view query,
               "ON m.id=memories_fts.rowid WHERE memories_fts MATCH ?1 AND (?2 "
               "IS NULL OR m.type=?2) ORDER BY bm25(memories_fts),m.importance "
               "DESC,m.confidence DESC,m.id DESC LIMIT ?3";
-    check(sqlite3_prepare_v2(db_, sql.c_str(), -1, &s, nullptr), db_,
+    check(sqlite3_prepare_v2(_db, sql.c_str(), -1, &s, nullptr), _db,
           "prepare memory query");
     std::string bound(query);
     if (codepoints(query) >= 3) {
@@ -180,30 +180,30 @@ std::vector<MemoryRecord> SqliteMemory::retrieve(std::string_view query,
             break;
         if (rc != SQLITE_ROW) {
             sqlite3_finalize(s);
-            check(rc, db_, "memory query");
+            check(rc, _db, "memory query");
         }
         out.push_back(row(s));
     }
     sqlite3_finalize(s);
     if (!out.empty()) {
-        exec(db_, "BEGIN IMMEDIATE;");
+        exec(_db, "BEGIN IMMEDIATE;");
         try {
             sqlite3_stmt *u = nullptr;
-            check(sqlite3_prepare_v2(db_,
+            check(sqlite3_prepare_v2(_db,
                                      "UPDATE memories SET "
                                      "last_accessed_at=unixepoch() WHERE id=?1",
                                      -1, &u, nullptr),
-                  db_, "prepare access update");
+                  _db, "prepare access update");
             for (const auto &r : out) {
                 sqlite3_bind_int64(u, 1, r.id);
-                check(sqlite3_step(u), db_, "access update");
+                check(sqlite3_step(u), _db, "access update");
                 sqlite3_reset(u);
             }
             sqlite3_finalize(u);
-            exec(db_, "COMMIT;");
+            exec(_db, "COMMIT;");
         } catch (...) {
             try {
-                exec(db_, "ROLLBACK;");
+                exec(_db, "ROLLBACK;");
             } catch (...) {
             }
             throw;
@@ -225,7 +225,7 @@ ToolResult MemoryRetrieveTool::execute(const nlohmann::json &a) {
     std::size_t limit = a.value("limit", 8U);
     try {
         auto rows =
-            memory_->retrieve(a["query"].get<std::string>(), type, limit);
+            _memory->retrieve(a["query"].get<std::string>(), type, limit);
         nlohmann::json j = nlohmann::json::array();
         for (const auto &r : rows)
             j.push_back({{"id", r.id},

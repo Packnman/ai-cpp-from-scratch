@@ -20,17 +20,17 @@ class SqliteMemory final : public IMemoryManager {
     private:
         void migrate();
         void store_unchecked(const MemoryCandidate &);
-        sqlite3 *db_{};
+        sqlite3 *_db{};
 };
 
 class MemoryRetrieveTool final : public ITool {
     public:
         explicit MemoryRetrieveTool(std::shared_ptr<IMemoryManager> memory)
-            : memory_(std::move(memory)) {}
+            : _memory(std::move(memory)) {}
         ToolResult execute(const nlohmann::json &) override;
 
     private:
-        std::shared_ptr<IMemoryManager> memory_;
+        std::shared_ptr<IMemoryManager> _memory;
 };
 
 } // namespace ai::agent

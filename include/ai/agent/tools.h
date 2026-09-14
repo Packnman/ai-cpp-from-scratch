@@ -12,6 +12,6 @@ class FileReadTool final : public ITool {
         ToolResult execute(const nlohmann::json &) override;
 
     private:
-        std::filesystem::path root_;
+        std::filesystem::path _root;
 };
 } // namespace ai::agent
