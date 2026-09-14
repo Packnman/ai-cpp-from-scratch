@@ -1,5 +1,6 @@
 #pragma once
 #include "ai/agent/components.h"
+#include "ai/agent/context_builder.h"
 
 namespace ai::agent {
 
@@ -43,6 +44,7 @@ class ModelReasoner final : public IReasoner {
                                    const nlohmann::json &) override;
 
     private:
+        std::string build_prompt(const ContextInput &) const;
         nlohmann::json structured(ModelMode, std::string_view,
                                   std::string_view schema);
         std::shared_ptr<ILanguageModel> _model;

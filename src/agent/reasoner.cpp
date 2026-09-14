@@ -42,13 +42,6 @@ Plan plan_from_json(const nlohmann::json &j) {
         throw std::runtime_error(e);
     return p;
 }
-std::string mode_token(ModelMode m) {
-    static constexpr const char *x[] = {
-        "<CHAT>",         "<PARSE>",     "<PLAN>",
-        "<EVALUATE>",     "<SUMMARIZE>", "<MEMORY_WRITE>",
-        "<MEMORY_QUERY>", "<FINAL>",     "<TOOL>"};
-    return x[static_cast<int>(m)];
-}
 } // namespace
 
 ParsedInput RuleReasoner::parse(std::string_view input) {
@@ -215,9 +208,11 @@ nlohmann::json ModelReasoner::structured(ModelMode mode,
                                          std::string_view prompt,
                                          std::string_view schema_text) {
     const auto schema = nlohmann::json::parse(schema_text);
-    std::string answer =
-        _model->complete(mode, mode_token(mode) + "\n" + std::string(prompt) +
-                                   "\nSchema: " + std::string(schema_text));
+    ContextInput context;
+    context.current_input = std::string(prompt);
+    context.goal = "Return an answer matching the requested mode";
+    context.current_task = "Schema: " + std::string(schema_text);
+    std::string answer = _model->complete(mode, build_prompt(context));
     for (int attempt = 0; attempt < 2; ++attempt) {
         try {
             auto j = nlohmann::json::parse(answer);
@@ -241,6 +236,35 @@ nlohmann::json ModelReasoner::structured(ModelMode mode,
                 require_string(key);
             for (const char *key : {"constraints", "tasks", "memories"})
                 require_array(key);
+            if (mode == ModelMode::Parse)
+                for (const auto &item : j.at("constraints"))
+                    if (!item.is_object() || !item.contains("text") ||
+                        !item.at("text").is_string() ||
+                        (item.contains("critical") &&
+                         !item.at("critical").is_boolean()))
+                        throw std::runtime_error("invalid nested constraint");
+            if (mode == ModelMode::Plan)
+                for (const auto &item : j.at("tasks"))
+                    if (!item.is_object() || !item.contains("id") ||
+                        !item.at("id").is_string() ||
+                        !item.contains("operation") ||
+                        !item.at("operation").is_string() ||
+                        (item.contains("arguments") &&
+                         !item.at("arguments").is_object()) ||
+                        (item.contains("depends_on") &&
+                         !item.at("depends_on").is_array()))
+                        throw std::runtime_error("invalid nested task");
+            if (mode == ModelMode::MemoryWrite)
+                for (const auto &item : j.at("memories"))
+                    if (!item.is_object() || !item.contains("type") ||
+                        !item.at("type").is_string() ||
+                        !item.contains("content") ||
+                        !item.at("content").is_string() ||
+                        !item.contains("importance") ||
+                        !item.at("importance").is_number() ||
+                        !item.contains("confidence") ||
+                        !item.at("confidence").is_number())
+                        throw std::runtime_error("invalid nested memory");
             return j;
         } catch (const std::exception &e) {
             if (attempt == 1)
@@ -248,14 +272,20 @@ nlohmann::json ModelReasoner::structured(ModelMode mode,
                     std::string("model returned invalid structured JSON after "
                                 "one repair: ") +
                     e.what());
-            answer = _model->complete(
-                mode,
-                mode_token(mode) +
-                    "\nRepair this JSON once. Return JSON only.\nSchema: " +
-                    std::string(schema_text) + "\nInvalid: " + answer);
+            ContextInput repair;
+            repair.current_input = answer;
+            repair.goal = "Repair invalid JSON once and return JSON only";
+            repair.current_task = "Schema: " + std::string(schema_text);
+            answer = _model->complete(mode, build_prompt(repair));
         }
     }
     throw std::runtime_error("unreachable");
+}
+std::string ModelReasoner::build_prompt(const ContextInput &input) const {
+    ContextBuilder builder(1022, [this](std::string_view text) {
+        return _model->token_count(text);
+    });
+    return builder.build(input);
 }
 ParsedInput ModelReasoner::parse(std::string_view s) {
     auto j =
@@ -302,10 +332,13 @@ EvaluationResult ModelReasoner::evaluate(const Task &t, const ToolResult &r) {
 }
 std::string ModelReasoner::summarize(const std::vector<ConversationTurn> &t,
                                      std::string_view old) {
-    return _model->complete(
-        ModelMode::Summarize,
-        mode_token(ModelMode::Summarize) + "\n" +
-            nlohmann::json{{"previous", old}, {"turn_count", t.size()}}.dump());
+    ContextInput context;
+    context.current_input = "Summarize the conversation";
+    context.goal = "Preserve decisions, open questions, and current intent";
+    context.current_task = "Conversation summary";
+    context.recent = t;
+    context.summary = std::string(old);
+    return _model->complete(ModelMode::Summarize, build_prompt(context));
 }
 std::vector<MemoryCandidate>
 ModelReasoner::memory_candidates(const ParsedInput &p,
@@ -321,18 +354,26 @@ ModelReasoner::memory_candidates(const ParsedInput &p,
     return out;
 }
 std::string ModelReasoner::chat(const ParsedInput &p,
-                                const std::vector<MemoryRecord> &,
-                                const std::vector<ConversationTurn> &,
+                                const std::vector<MemoryRecord> &memories,
+                                const std::vector<ConversationTurn> &recent,
                                 std::string_view summary) {
-    return _model->complete(ModelMode::Chat,
-                            mode_token(ModelMode::Chat) + "\nSummary: " +
-                                std::string(summary) + "\nUser: " + p.raw);
+    ContextInput context;
+    context.current_input = p.raw;
+    context.goal = p.goal;
+    context.current_task = "Natural Japanese conversation";
+    context.constraints = p.constraints;
+    context.memories = memories;
+    context.recent = recent;
+    context.summary = std::string(summary);
+    return _model->complete(ModelMode::Chat, build_prompt(context));
 }
 std::string ModelReasoner::final_response(const ParsedInput &p,
                                           const nlohmann::json &a) {
-    return _model->complete(
-        ModelMode::Final,
-        mode_token(ModelMode::Final) + "\n" +
-            nlohmann::json{{"input", p.raw}, {"aggregate", a}}.dump());
+    ContextInput context;
+    context.current_input = p.raw;
+    context.goal = p.goal;
+    context.current_task = "Produce the final response from: " + a.dump();
+    context.constraints = p.constraints;
+    return _model->complete(ModelMode::Final, build_prompt(context));
 }
 } // namespace ai::agent

@@ -92,6 +92,7 @@ class ILanguageModel {
         virtual ~ILanguageModel() = default;
         virtual std::string complete(ModelMode mode,
                                      std::string_view prompt) = 0;
+        virtual std::size_t token_count(std::string_view text) const;
 };
 
 class IReasoner {

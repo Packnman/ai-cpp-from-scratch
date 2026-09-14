@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(AI_CPP_BUILD_CUDA_LIB "Build the legacy lib/ CUDA library" OFF)
+option(AI_CPP_BUILD_MODEL "Build the CUDA Agent Transformer and training tools" OFF)
 option(AI_CPP_ENABLE_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
 set(AI_CPP_CUDA_ARCHITECTURES "86" CACHE STRING "CUDA architectures")
 
@@ -45,7 +46,7 @@ if(BUILD_TESTING)
     endif()
 endif()
 
-if(AI_CPP_BUILD_CUDA_LIB)
+if(AI_CPP_BUILD_CUDA_LIB OR AI_CPP_BUILD_MODEL)
     enable_language(CUDA)
     find_package(CUDAToolkit 11.2 REQUIRED)
     set(CMAKE_CUDA_STANDARD 20)
@@ -67,4 +68,34 @@ if(AI_CPP_BUILD_CUDA_LIB)
     target_include_directories(ai_cpp PUBLIC lib/include)
     target_link_libraries(ai_cpp PUBLIC CUDA::cudart CUDA::cublas CUDA::curand)
     set_target_properties(ai_cpp PROPERTIES CUDA_ARCHITECTURES "${AI_CPP_CUDA_ARCHITECTURES}")
+endif()
+
+if(AI_CPP_BUILD_MODEL)
+    set(SPM_ENABLE_SHARED OFF CACHE BOOL "" FORCE)
+    set(SPM_ENABLE_TCMALLOC OFF CACHE BOOL "" FORCE)
+    set(SPM_BUILD_TEST OFF CACHE BOOL "" FORCE)
+    set(SPM_BUILD_TCMALLOC OFF CACHE BOOL "" FORCE)
+    add_subdirectory(third_party/sentencepiece EXCLUDE_FROM_ALL)
+    add_library(agent_model STATIC
+        model/src/agent_tokenizer.cpp
+        model/src/agent_dataset.cpp
+        model/src/agent_transformer.cpp
+        model/src/model_language_model.cpp
+        model/src/agent_training.cpp)
+    target_include_directories(agent_model PUBLIC include model/include PRIVATE third_party)
+    target_include_directories(agent_model SYSTEM PRIVATE
+        third_party/sentencepiece/src
+        third_party/sentencepiece/src/builtin_pb
+        third_party/sentencepiece/third_party/protobuf-lite)
+    target_link_libraries(agent_model PUBLIC ai_cpp agent_core sentencepiece_train-static)
+    target_compile_options(agent_model PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_definitions(agent_cli PRIVATE AI_CPP_BUILD_MODEL=1)
+    target_link_libraries(agent_cli PRIVATE agent_model)
+    add_executable(agent_model_cli train/agent_model_main.cpp)
+    target_link_libraries(agent_model_cli PRIVATE agent_model)
+    if(BUILD_TESTING)
+        add_executable(agent_model_check tests/agent_model_check.cpp)
+        target_link_libraries(agent_model_check PRIVATE agent_model)
+        add_test(NAME agent_model_check COMMAND agent_model_check)
+    endif()
 endif()

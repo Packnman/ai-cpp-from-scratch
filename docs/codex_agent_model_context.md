@@ -1,5 +1,11 @@
 # Project Context
 
+> 実装追補（2026-09-15）: model buildは`AI_CPP_BUILD_MODEL=ON`でのみ有効になる。
+> `ai_cpp_agent_model` v1は4層、embedding 256、4 heads、FFN 1024、context 1024、
+> dropout 0.1、float32、独立output projectionのPre-LN causal decoderで、7,624,192 parameter。
+> PAD/UNK/BOS/EOS=0/1/2/3、9 mode=4..12のbyte-fallback BPEを使う。
+> 通常CPU buildとrule backendは既定のまま維持し、旧bundleとの互換性は持たない。
+
 ## Goal
 
 小型Transformerを中心に、以下を同時に実現するAI Agentを構築する。

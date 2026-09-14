@@ -34,6 +34,65 @@
                 "kind": "build",
                 "isDefault": true
             }
+        },
+        {
+            "label": "CMake Configure Agent Model",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["-S", "${workspaceFolder}", "-B", "${workspaceFolder}/build/model",
+                "-G", "Ninja", "-DAI_CPP_BUILD_MODEL=ON", "-DBUILD_TESTING=ON"],
+            "problemMatcher": []
+        },
+        {
+            "label": "CMake Build Agent Model",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--build", "${workspaceFolder}/build/model", "-j2"],
+            "dependsOn": "CMake Configure Agent Model",
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "Agent Tokenizer",
+            "type": "shell",
+            "command": "${workspaceFolder}/build/model/agent_model_cli",
+            "args": ["tokenizer", "--train", "${workspaceFolder}/data/jawiki/train.jsonl",
+                "--output", "${workspaceFolder}/models/tokenizer.model", "--vocabulary", "8192"],
+            "dependsOn": "CMake Build Agent Model",
+            "problemMatcher": []
+        },
+        {
+            "label": "Agent Model Smoke",
+            "type": "shell",
+            "command": "${workspaceFolder}/build/model/agent_model_cli",
+            "args": ["pretrain", "--train", "${workspaceFolder}/tests/fixtures/agent/jawiki-train.jsonl",
+                "--validation", "${workspaceFolder}/tests/fixtures/agent/jawiki-validation.jsonl",
+                "--tokenizer", "${workspaceFolder}/models/tokenizer.model",
+                "--output", "${workspaceFolder}/models/smoke", "--steps", "1",
+                "--layers", "1", "--embedding", "16", "--heads", "2",
+                "--feed-forward", "32", "--context", "128"],
+            "problemMatcher": []
+        },
+        {
+            "label": "Agent Pretrain 15M",
+            "type": "shell",
+            "command": "${workspaceFolder}/build/model/agent_model_cli",
+            "args": ["pretrain", "--train", "${workspaceFolder}/data/jawiki/train.jsonl",
+                "--validation", "${workspaceFolder}/data/jawiki/validation.jsonl",
+                "--tokenizer", "${workspaceFolder}/models/tokenizer.model",
+                "--output", "${workspaceFolder}/models/agent-pretrain",
+                "--steps", "100000", "--token-budget", "15000000",
+                "--batch-size", "2", "--accumulation", "8"],
+            "problemMatcher": []
+        },
+        {
+            "label": "Agent Resume SFT",
+            "type": "shell",
+            "command": "${workspaceFolder}/build/model/agent_model_cli",
+            "args": ["resume", "--kind", "sft", "--train",
+                "${workspaceFolder}/data/agent-sft/train.jsonl", "--validation",
+                "${workspaceFolder}/data/agent-sft/validation.jsonl", "--model",
+                "${workspaceFolder}/models/agent-sft", "--steps", "1000"],
+            "problemMatcher": []
         }
     ]
 }

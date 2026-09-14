@@ -7,6 +7,14 @@
 
 namespace ai::agent {
 
+std::size_t ILanguageModel::token_count(std::string_view text) const {
+    std::size_t count = 0;
+    for (const unsigned char byte : text)
+        if ((byte & 0xc0U) != 0x80U)
+            ++count;
+    return count;
+}
+
 std::string to_string(RequestType v) {
     static constexpr const char *names[] = {
         "simple_conversation", "question_answer", "memory_recall",

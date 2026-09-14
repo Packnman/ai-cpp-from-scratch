@@ -159,6 +159,17 @@ void model_checks() {
     fail->answers = {"{}", "{}"};
     ModelReasoner r2(fail);
     throws([&] { r2.parse("x"); });
+    auto nested = std::make_shared<ScriptModel>();
+    nested->answers = {
+        R"({"raw":"x","intent":"chat","goal":"x","constraints":[{"text":7}]})",
+        R"({"raw":"x","intent":"chat","goal":"x","constraints":[{"text":"safe","critical":true}]})"};
+    ModelReasoner r3(nested);
+    CHECK(r3.parse("x").constraints.front().critical);
+    CHECK(nested->modes.size() == 2);
+    auto overflow = std::make_shared<ScriptModel>();
+    ModelReasoner r4(overflow);
+    throws([&] { r4.parse(std::string(1023, 'x')); });
+    CHECK(overflow->modes.empty());
 }
 void e2e(const std::filesystem::path &dir) {
     auto a = make_agent(dir, dir / "e2e.sqlite");

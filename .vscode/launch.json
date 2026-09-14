@@ -6,16 +6,26 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/agent-debug/agent_cli",
-            "args": [
-                "${workspaceFolder}",
-                "${workspaceFolder}/build/agent-debug/agent_memory.sqlite3"
-            ],
+            "args": ["--backend", "rule", "--file-root", "${workspaceFolder}",
+                "--memory-db", "${workspaceFolder}/build/agent-debug/agent_memory.sqlite3"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
             "preLaunchTask": "CMake Build Debug"
+        },
+        {
+            "name": "Debug model agent_cli",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/model/agent_cli",
+            "args": ["--backend", "model", "--model", "${workspaceFolder}/models/agent-sft",
+                "--file-root", "${workspaceFolder}", "--memory-db",
+                "${workspaceFolder}/build/model/agent_memory.sqlite3", "--seed", "42"],
+            "cwd": "${workspaceFolder}",
+            "MIMode": "gdb",
+            "preLaunchTask": "CMake Build Agent Model"
         }
     ]
 }
