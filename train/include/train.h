@@ -6,7 +6,7 @@
 
 struct ConfigTraining {
   int nEpochs = 10;
-  int nBatchSize = 64;
+  int nBatchSize = 4;
   float fLearningRate = 3.0e-4f;
   float fClipNorm = 1.0f;
   std::uint64_t nSeed = 42;
@@ -18,7 +18,7 @@ struct ConfigTraining {
   std::string strDataFormat = "conversation";
   std::string strTokenizerModel;
   std::uint64_t nTokenBudget = 0;
-  int nAccumulationSteps = 1;
+  int nAccumulationSteps = 2;
 };
 
 double ClipGradients(Model &mdlModel, float fMaximum);

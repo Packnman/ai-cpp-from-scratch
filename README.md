@@ -156,7 +156,7 @@ data/conversation/
 
 対話 ID 単位で seed42 の90／5／5%に分割します。出典・VERSION・revision・分割 ID は `metadata.json` に記録します。元データの利用条件は [公式 RealPersonaChat](https://github.com/nu-dialogue/real-persona-chat) を参照してください。
 
-既定の文字単位 tokenizer の語彙は新規学習時に train 本文から構築し、未知文字は UNK に変換します。通常文字は Unicode コードポイント1個につき1 token。PAD／UNK／対話開始・終了／話者 A・B／発話終了に専用 ID を使い、両話者の本文と区切りを教師にします。ペルソナや属性は入力しません。既定の文脈長128では129 token の窓を128 tokenずつ進め、1 token先を教師にし、末尾を右 PAD で補います。
+既定の文字単位 tokenizer の語彙は新規学習時に train 本文から構築し、未知文字は UNK に変換します。通常文字は Unicode コードポイント1個につき1 token。PAD／UNK／対話開始・終了／話者 A・B／発話終了に専用 ID を使い、両話者の本文と区切りを教師にします。ペルソナや属性は入力しません。既定の文脈長1024では1025 token の連続窓を1024 tokenずつ進め、1 token先を教師にします。batch内だけ右PADし、最長系列まで動的に詰めます。
 
 ## 新規学習
 
@@ -169,7 +169,7 @@ build/release/main_train data/conversation models/conversation
 | オプション | 既定値 | 意味 |
 | --- | ---: | --- |
 | `--epochs` | 10 | 学習 epoch 数（追加学習時は追加する回数） |
-| `--batch` | 64 | バッチサイズ |
+| `--batch` | 4 | micro-batchサイズ |
 | `--lr` | 0.0003 | Adam 学習率 |
 | `--clip` | 1.0 | 全体勾配 L2 norm の上限 |
 | `--seed` | 42 | 新規学習のモデル初期化・dropout・shuffle 用 seed |
@@ -178,7 +178,7 @@ build/release/main_train data/conversation models/conversation
 | `--data-format` | `conversation` | `conversation` または本文JSONLの `text` |
 | `--tokenizer-model` | なし | 新規モデルで使う外部BPE model |
 | `--token-budget` | 0 | trainの損失対象token上限。0はepoch基準 |
-| `--accumulate` | 1 | Adam更新前に平均するmicro-batch数 |
+| `--accumulate` | 2 | Adam更新前に平均するmicro-batch数 |
 
 モデルは FP32 の decoder-only Transformer です。学習可能な位置埋め込み、Pre-LayerNorm、因果 Attention、GELU、dropout を使用し、入出力の重みは共有しません。
 
@@ -188,7 +188,7 @@ build/release/main_train data/conversation models/conversation
 | `--embedding` | 256 |
 | `--heads` | 4 |
 | `--hidden` | 1024 |
-| `--context` | 128 |
+| `--context` | 1024 |
 | `--dropout` | 0.1 |
 
 明示的に設定する例です。
@@ -221,7 +221,7 @@ build/release/main_train data/conversation models/conversation-smoke \
 
 ### サブワード・文脈長512の新規モデル
 
-①の測定構成は次のコマンドで指定します。CLI の既定値（文字単位、文脈長128）は維持しています。tokenizer を切り替えるときは新規学習が必要です。新規学習も出力先を新規または空のディレクトリに限定します。
+既存512 bundleとの比較用構成は次のコマンドで明示できます。tokenizer を切り替えるときは新規学習が必要です。新規学習も出力先を新規または空のディレクトリに限定します。
 
 ```sh
 build/release/main_train data/conversation models/conversation-bpe-512 \
@@ -285,10 +285,19 @@ build/release/main_validation data/conversation models/conversation \
 
 ```sh
 build/release/main_validation chat models/conversation \
-    --temperature 0.8 --top-k 40 --max-tokens 128 --seed 42
+    --temperature 0.8 --top-k 40 --max-tokens 256 --seed 42
 ```
 
-上記は既定値です。利用者は `A>` に入力し、モデルは `B>` として返答します。直近の入力文脈を再計算し、発話終了・対話終了または指定 token 数で停止します。`--input-context` は0（既定：保存モデルの文脈長）または保存モデルの文脈長以下の正数、`--max-tokens` は出力長の正数です。履歴と出力の固定128 token 制限はありません。終了は EOF（Ctrl-D）です。KV cache は使用しません。生成時は元の学習データを必要としません。
+利用者は `A>` に入力し、モデルは `B>` として返答します。入力予算は
+`input-context - max-tokens`（1024モデルの既定は768 token）です。完全な会話ターンを
+構造化して保持し、60%を直近、40%を現在の質問とのBM25関連度に割り当てます。
+重複を除いて時系列順に戻し、余った予算は相互に移します。
+
+```sh
+build/release/main_validation document models/conversation_bpe_ctx1024 notes.txt
+```
+
+文書モードはUTF-8文書を一度読み、`Q>` / `A>` で複数質問を受けます。
 
 ## 保存ファイル・ログ
 

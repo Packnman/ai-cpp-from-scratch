@@ -427,15 +427,15 @@ void _Prop(
     )
     {
         trnModel.setTraining(isTraining);
-        // 学習データだけ毎回並べ替える。評価は元の順序で処理する。
-        std::vector<std::size_t> nOrder(c_datData.size());
-        std::iota(nOrder.begin(), nOrder.end(), 0);
-        if( isTraining )
-        {
-            std::shuffle(nOrder.begin(), nOrder.end(), rngRandom);
-        }
+        // Similar lengths share a dynamic-padded batch. Training shuffles both
+        // within buckets and batch order using the checkpointed RNG.
+        auto nOrder = c_datData.lengthBucketedOrder(
+            cfgTraining.nBatchSize, isTraining ? &rngRandom : nullptr );
         double dblLossSum = 0.0;
         std::size_t nValid = 0;
+        std::size_t nActualTokens = 0;
+        std::size_t nPaddingTokens = 0;
+        int nMaximumSequence = 0;
         int nPendingUpdates = 0;
         auto fnUpdate = [&]()
         {
@@ -491,6 +491,9 @@ void _Prop(
             // バッチごとの平均を有効トークン数で重み付けし、端数バッチも正しく集計する。
             dblLossSum += static_cast<double>(fLoss) * batBatch.nValid;
             nValid += batBatch.nValid;
+            nActualTokens += batBatch.nTokens;
+            nPaddingTokens += batBatch.nPadding;
+            nMaximumSequence = std::max( nMaximumSequence, batBatch.nSequence );
             if( isTraining ) nOptimizedTokens += batBatch.nValid;
             ++nBatches;
         }
@@ -508,9 +511,15 @@ void _Prop(
                           {"loss", dblLoss},
                           {"perplexity", std::exp(dblLoss)},
                           {"valid_tokens", nValid},
+                          {"actual_tokens", nActualTokens},
+                          {"padding_tokens", nPaddingTokens},
+                          {"padding_rate", nActualTokens + nPaddingTokens == 0 ? 0.0 :
+                              static_cast<double>(nPaddingTokens) /
+                              (nActualTokens + nPaddingTokens)},
+                          {"max_sequence_length", nMaximumSequence},
                           {"batches", nBatches},
                           {"seconds", dblSeconds},
-                          {"tokens_per_second", nValid / dblSeconds},
+                          {"tokens_per_second", nActualTokens / dblSeconds},
                           {"sampled_device_used_bytes", nPeakUsed},
                           {"pool_used_bytes", memoryStats.usedBytes},
                           {"pool_reserved_bytes", memoryStats.reservedBytes},

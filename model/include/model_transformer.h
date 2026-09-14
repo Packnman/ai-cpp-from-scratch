@@ -9,7 +9,7 @@ struct TransformerConfig
     int nEmbedding = 256;
     int nHeads = 4;
     int nHidden = 1024;
-    int nContext = 128;
+    int nContext = 1024;
     float fDropout = 0.1f;
     std::uint64_t nSeed = 42;
     void validate() const;

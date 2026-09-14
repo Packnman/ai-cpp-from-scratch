@@ -115,8 +115,9 @@ void g_data( const std::filesystem::path& c_pthRoot )
                "Partial batch and dialogue boundary" );
     ConversationDataset datShort( { { 3, { { 0, "" } } } }, tokTokenizer, 8 );
     const auto batShort = datShort.batch( { 0 }, 0, 8 );
-    g_require( batShort.nValid == 3 && batShort.nTargets[3] == 0 && batShort.nInputs[3] == TokenConversation::END && batShort.nInputs[4] == 0,
-               "Right padding" );
+    g_require( batShort.nSequence == 3 && batShort.nValid == 3 &&
+                   batShort.nPadding == 0 && batShort.nInputs.size() == 3,
+               "A single short sequence must not be padded to full context" );
     std::cout << "data/tokenizer checks passed\n";
 }
 
@@ -306,6 +307,18 @@ void g_model( const std::filesystem::path& c_pthRoot )
     auto bunLoaded = g_loadConversation( ( c_pthRoot / "model" ).string() );
     const auto fAfter = bunLoaded.spModel->forward( spmInputs )->_mData.toHost();
     g_require( fBefore == fAfter, "Saved/reloaded logits differ" );
+    for( int nContext : { 512, 1024 } )
+    {
+        TransformerConfig cfgBundle = cfgModel;
+        cfgBundle.nContext = nContext;
+        Transformer trnBundle( cfgBundle );
+        const auto pthBundle =
+            c_pthRoot / ( "model-ctx" + std::to_string( nContext ) );
+        g_saveConversation( trnBundle, tokTokenizer, pthBundle.string() );
+        const auto bunBundle = g_loadConversation( pthBundle.string() );
+        g_require( bunBundle.spModel->config().nContext == nContext,
+                   "512/1024 bundle context compatibility" );
+    }
     for( const auto& c_nmtParameter : bunLoaded.spModel->namedParameters() )
     {
         if( c_nmtParameter.strName == "output_weight" )

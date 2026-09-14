@@ -181,6 +181,7 @@ FetchContent_MakeAvailable(sentencepiece)
 # Vendored nlohmann/json 3.12.0 (MIT); no download is required at build time.
 target_sources(ai_cpp PRIVATE lib/src/cuda_function_IndexCrossEntropy.cu)
 add_library(conversation_data STATIC
+    model/src/context_builder.cpp
     model/src/tokenizer_conversation.cpp
     model/src/tokenizer_subword.cpp
     model/src/dataset_conversation.cpp
@@ -226,6 +227,9 @@ if(BUILD_TESTING)
     add_executable(chat_history_check tests/chat_history_check.cpp)
     target_link_libraries(chat_history_check PRIVATE conversation_validation)
     add_test(NAME chat_history_check COMMAND chat_history_check)
+    add_executable(context_builder_check tests/context_builder_check.cpp)
+    target_link_libraries(context_builder_check PRIVATE conversation_data)
+    add_test(NAME context_builder_check COMMAND context_builder_check)
     add_executable(response_training_check tests/response_training_check.cpp)
     target_link_libraries(response_training_check PRIVATE conversation_training conversation_validation)
     add_test(NAME response_training_check COMMAND response_training_check)

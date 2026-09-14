@@ -50,24 +50,24 @@ int main()
              "UTTERANCE_END must not print a reset notification" );
 
     histories.clear();
-    std::istringstream truncatedInput( "abc\nb\n" );
+    std::istringstream truncatedInput( "abc\n" );
     std::ostringstream truncatedOutput;
-    Chat( tokenizer, 4, truncatedInput, truncatedOutput,
-          [&]( const TokenIds& history )
-          {
-              histories.push_back( history );
-              return TokenIds{ TokenConversation::UTTERANCE_END };
-          } );
-    const int b = tokenizer.encode( "b" )[0];
-    const int c = tokenizer.encode( "c" )[0];
-    const TokenIds expectedPrefix = {
-        c, TokenConversation::UTTERANCE_END, TokenConversation::SPEAKER_B,
-        TokenConversation::UTTERANCE_END
-    };
-    require( histories.size() == 2 && histories[1].size() == 8 &&
-                 std::equal( expectedPrefix.begin(), expectedPrefix.end(), histories[1].begin() ) &&
-                 histories[1][5] == b,
-             "Context trimming must preserve the most recent configured tokens" );
+    bool overBudget = false;
+    try
+    {
+        Chat( tokenizer, 4, truncatedInput, truncatedOutput,
+              [&]( const TokenIds& history )
+              {
+                  histories.push_back( history );
+                  return TokenIds{ TokenConversation::UTTERANCE_END };
+              } );
+    }
+    catch( const std::invalid_argument& )
+    {
+        overBudget = true;
+    }
+    require( overBudget && histories.empty(),
+             "An over-budget current question must be rejected without token truncation" );
     histories.clear();
     std::istringstream deleteInput( "ab\x7f" "c\n" );
     std::ostringstream deleteOutput;
@@ -101,5 +101,20 @@ int main()
     expectedBackspace.push_back( TokenConversation::SPEAKER_B );
     require( histories.size() == 1 && histories[0] == expectedBackspace,
              "Backspace must remove one complete UTF-8 character" );
+
+    histories.clear();
+    std::istringstream documentInput( "a\nb\n" );
+    std::ostringstream documentOutput;
+    DocumentChat( tokenizer, "a.b.", 12, documentInput, documentOutput,
+                  [&]( const TokenIds& prompt )
+                  {
+                      histories.push_back( prompt );
+                      return TokenIds{ TokenConversation::UTTERANCE_END };
+                  } );
+    require( histories.size() == 2 && histories[0].size() <= 12 &&
+                 histories[1].size() <= 12,
+             "Every document question prompt must remain inside its budget" );
+    require( documentOutput.str().find( "Q> A> " ) != std::string::npos,
+             "Document mode must use Q> / A> prompts" );
     return 0;
 }

@@ -1,9 +1,11 @@
 #include "dataset_conversation.h"
+#include "context_builder.h"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <random>
+#include <numeric>
 #include <set>
 #include <stdexcept>
 
@@ -283,7 +285,7 @@ ConversationDataset::ConversationDataset( const std::vector<Conversation>& c_cnv
             continue;
         }
 
-        std::vector<TokenIds> nCompleteTurns;
+        std::vector<ConversationContextTurn> trnCompleteTurns;
         for( std::size_t nIndex = 1; nIndex < c_cnvDialogue.uttUtterances.size(); ++nIndex )
         {
             const auto& c_uttQuestion = c_cnvDialogue.uttUtterances[nIndex - 1];
@@ -292,44 +294,36 @@ ConversationDataset::ConversationDataset( const std::vector<Conversation>& c_cnv
             {
                 continue;
             }
-            const auto nQuestion = fnUtterance( c_uttQuestion );
-            const auto nResponse = fnUtterance( c_uttResponse );
-            const std::size_t nRequired = 1 + nQuestion.size() + nResponse.size();
-            if( nRequired > static_cast<std::size_t>( nContext ) + 1 )
+            TokenIds nResponse = c_tokTokenizer.encode( c_uttResponse.strText );
+            nResponse.push_back( TokenConversation::UTTERANCE_END );
+            const std::size_t nFullBudget = static_cast<std::size_t>( nContext ) + 1;
+            if( nResponse.size() >= nFullBudget )
             {
                 ++_nExcludedResponses;
             }
             else
             {
-                std::size_t nHistoryStart = nCompleteTurns.size();
-                std::size_t nSize = nRequired;
-                while( nHistoryStart > 0 &&
-                       nSize + nCompleteTurns[nHistoryStart - 1].size() <=
-                           static_cast<std::size_t>( nContext ) + 1 )
+                try
                 {
-                    --nHistoryStart;
-                    nSize += nCompleteTurns[nHistoryStart].size();
+                    auto ctxPrompt = g_buildConversationContext(
+                        c_tokTokenizer, trnCompleteTurns, c_uttQuestion.strText,
+                        nFullBudget - nResponse.size() );
+                    const std::size_t nResponseStart = ctxPrompt.nTokens.size();
+                    TokenIds nIds = std::move( ctxPrompt.nTokens );
+                    nIds.insert( nIds.end(), nResponse.begin(), nResponse.end() );
+                    TokenIds nTargets( nIds.size() - 1, TokenConversation::PAD );
+                    for( std::size_t nNext = nResponseStart; nNext < nIds.size(); ++nNext )
+                        nTargets[nNext - 1] = nIds[nNext];
+                    _nWindows.push_back( std::move( nIds ) );
+                    _nTargetWindows.push_back( std::move( nTargets ) );
                 }
-                TokenIds nIds = { TokenConversation::BEGIN };
-                for( std::size_t nTurn = nHistoryStart; nTurn < nCompleteTurns.size(); ++nTurn )
+                catch( const std::invalid_argument& )
                 {
-                    nIds.insert( nIds.end(), nCompleteTurns[nTurn].begin(),
-                                 nCompleteTurns[nTurn].end() );
+                    ++_nExcludedResponses;
                 }
-                nIds.insert( nIds.end(), nQuestion.begin(), nQuestion.end() );
-                const std::size_t nResponseStart = nIds.size() + 1;
-                nIds.insert( nIds.end(), nResponse.begin(), nResponse.end() );
-                TokenIds nTargets( nIds.size() - 1, TokenConversation::PAD );
-                for( std::size_t nNext = nResponseStart; nNext < nIds.size(); ++nNext )
-                {
-                    nTargets[nNext - 1] = nIds[nNext];
-                }
-                _nWindows.push_back( std::move( nIds ) );
-                _nTargetWindows.push_back( std::move( nTargets ) );
             }
-            TokenIds nTurn = nQuestion;
-            nTurn.insert( nTurn.end(), nResponse.begin(), nResponse.end() );
-            nCompleteTurns.push_back( std::move( nTurn ) );
+            trnCompleteTurns.push_back(
+                { c_uttQuestion.strText, c_uttResponse.strText } );
         }
     }
 }
@@ -364,6 +358,50 @@ std::size_t ConversationDataset::excludedResponses() const
     return _nExcludedResponses;
 }
 
+std::size_t ConversationDataset::sequenceLength( std::size_t nIndex ) const
+{
+    const auto& c_nWindow = _nWindows.at( nIndex );
+    return std::min( static_cast<std::size_t>( _nContext ), c_nWindow.size() - 1 );
+}
+
+std::vector<std::size_t> ConversationDataset::lengthBucketedOrder(
+    int nBatchSize, std::mt19937* lpRandom ) const
+{
+    if( nBatchSize <= 0 ) throw std::invalid_argument( "Batch size must be positive" );
+    std::vector<std::size_t> nOrder( size() );
+    std::iota( nOrder.begin(), nOrder.end(), 0 );
+    std::stable_sort( nOrder.begin(), nOrder.end(), [&]( std::size_t nA, std::size_t nB )
+    {
+        return sequenceLength( nA ) < sequenceLength( nB );
+    } );
+    const std::size_t nBucket = static_cast<std::size_t>( nBatchSize ) * 8;
+    if( lpRandom )
+    {
+        for( std::size_t nStart = 0; nStart < nOrder.size(); nStart += nBucket )
+            std::shuffle( nOrder.begin() + nStart,
+                          nOrder.begin() + std::min( nOrder.size(), nStart + nBucket ),
+                          *lpRandom );
+        std::vector<std::vector<std::size_t>> nBatches;
+        std::vector<std::size_t> nPartial;
+        for( std::size_t nStart = 0; nStart < nOrder.size(); nStart += nBatchSize )
+        {
+            std::vector<std::size_t> nBatch(
+                nOrder.begin() + nStart,
+                nOrder.begin() + std::min( nOrder.size(), nStart + nBatchSize ) );
+            if( nBatch.size() == static_cast<std::size_t>( nBatchSize ) )
+                nBatches.push_back( std::move( nBatch ) );
+            else
+                nPartial = std::move( nBatch );
+        }
+        std::shuffle( nBatches.begin(), nBatches.end(), *lpRandom );
+        nOrder.clear();
+        for( const auto& c_nBatch : nBatches )
+            nOrder.insert( nOrder.end(), c_nBatch.begin(), c_nBatch.end() );
+        nOrder.insert( nOrder.end(), nPartial.begin(), nPartial.end() );
+    }
+    return nOrder;
+}
+
 ConversationBatch ConversationDataset::batch( const std::vector<std::size_t>& c_nOrder,
                                               std::size_t nStart, int nBatchSize ) const
 {
@@ -373,17 +411,22 @@ ConversationBatch ConversationDataset::batch( const std::vector<std::size_t>& c_
     }
     const int nBatch = static_cast<int>(
         std::min( static_cast<std::size_t>( nBatchSize ), c_nOrder.size() - nStart ) );
+    int nSequence = 0;
+    for( int nColumn = 0; nColumn < nBatch; ++nColumn )
+        nSequence = std::max( nSequence, static_cast<int>(
+            sequenceLength( c_nOrder[nStart + nColumn] ) ) );
     ConversationBatch batResult{
-        _nContext, nBatch, 0,
-        TokenIds( static_cast<std::size_t>( _nContext ) * nBatch, TokenConversation::PAD ),
-        TokenIds( static_cast<std::size_t>( _nContext ) * nBatch, TokenConversation::PAD ) };
+        nSequence, nBatch, 0, 0, 0,
+        TokenIds( static_cast<std::size_t>( nSequence ) * nBatch, TokenConversation::PAD ),
+        TokenIds( static_cast<std::size_t>( nSequence ) * nBatch, TokenConversation::PAD ) };
     for( int nColumn = 0; nColumn < nBatch; ++nColumn )
     {
         const auto nWindowIndex = c_nOrder[nStart + nColumn];
         const auto& c_nWindow = _nWindows.at( nWindowIndex );
         const auto& c_nTargetWindow = _nTargetWindows.at( nWindowIndex );
-        for( std::size_t nToken = 0; nToken < c_nWindow.size() &&
-             nToken < static_cast<std::size_t>( _nContext ); ++nToken )
+        const std::size_t nLength = sequenceLength( nWindowIndex );
+        batResult.nTokens += nLength;
+        for( std::size_t nToken = 0; nToken < nLength; ++nToken )
         {
             batResult.nInputs[nToken * nBatch + nColumn] = c_nWindow[nToken];
             if( !c_nTargetWindow.empty() && nToken < c_nTargetWindow.size() )
@@ -398,5 +441,6 @@ ConversationBatch ConversationDataset::batch( const std::vector<std::size_t>& c_
             }
         }
     }
+    batResult.nPadding = static_cast<std::size_t>( nSequence ) * nBatch - batResult.nTokens;
     return batResult;
 }

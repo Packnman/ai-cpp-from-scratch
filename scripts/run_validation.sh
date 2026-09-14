@@ -12,8 +12,9 @@ export AI_CPP_CUDA_MEMORY_POOL="${MEMORY_POOL}"
 BUILD_JOBS="${BUILD_JOBS:-2}"
 RUN_BUILD="${RUN_BUILD:-1}"       # 1: 実行前にビルド、0: ビルド済みを使用
 DRY_RUN="${DRY_RUN:-0}"           # 1: コマンド表示のみ（ビルド・評価しない）
-MODE="${MODE:-chat}"         # evaluate: loss/perplexity 評価、chat: 対話生成
-MODEL_DIR="${MODEL_DIR:-models/conversation_bpe_finetuned}"
+MODE="${MODE:-chat}"         # evaluate, chat, document
+MODEL_DIR="${MODEL_DIR:-models/conversation_bpe_ctx1024}"
+DOCUMENT_FILE="${DOCUMENT_FILE:-}"
 
 # evaluate 専用
 DATA_DIR="${DATA_DIR:-data/conversation}"
@@ -41,8 +42,17 @@ case "${MODE}" in
             --temperature "${TEMPERATURE}" --top-k "${TOP_K}"
             --max-tokens "${MAX_TOKENS}" --input-context "${INPUT_CONTEXT}" --seed "${SEED}")
         ;;
+    document)
+        if [[ -z "${DOCUMENT_FILE}" ]]; then
+            echo "DOCUMENT_FILE is required when MODE=document." >&2
+            exit 1
+        fi
+        args=("${BUILD_DIR}/main_validation" document "${MODEL_DIR}" "${DOCUMENT_FILE}"
+            --temperature "${TEMPERATURE}" --top-k "${TOP_K}"
+            --max-tokens "${MAX_TOKENS}" --input-context "${INPUT_CONTEXT}" --seed "${SEED}")
+        ;;
     *)
-        echo "MODE must be evaluate or chat: ${MODE}" >&2
+        echo "MODE must be evaluate, chat, or document: ${MODE}" >&2
         exit 1
         ;;
 esac

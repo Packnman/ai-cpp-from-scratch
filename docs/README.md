@@ -12,6 +12,7 @@
 | --- | --- | --- |
 | 学習・追加学習・再開 | `train/include/train.h` | `train/src/train.cpp`、`train/main_train.cpp` |
 | 評価・対話生成 | `validation/include/validation.h` | `validation/src/validation.cpp`、`validation/main_validation.cpp` |
+| context構築 | [`model/include/context_builder.h`](model/context_builder.md) | `model/src/context_builder.cpp`、`tests/context_builder_check.cpp` |
 | Transformer | `model/include/model_transformer.h` | `model/src/model_transformer.cpp` |
 | tokenizer・会話bundle | `model/include/tokenizer_conversation.h` | `model/src/tokenizer_conversation.cpp`、`model/src/tokenizer_subword.cpp` |
 | Adam・状態保存 | `lib/include/optimizer_adam.h` | `lib/src/optimizer_adam.cpp` |

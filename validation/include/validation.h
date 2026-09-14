@@ -1,5 +1,6 @@
 #pragma once
 
+#include "context_builder.h"
 #include "conversation_runtime.h"
 #include <functional>
 #include <istream>
@@ -9,7 +10,7 @@ struct ConfigGeneration
 {
     float fTemperature = 0.8f;
     int nTopK = 40;
-    int nMaxTokens = 128;
+    int nMaxTokens = 256;
     int nContext = 0; // 0: saved model context; positive: input window <= saved context.
 };
 
@@ -27,6 +28,11 @@ using ConversationGenerator = std::function<TokenIds( const TokenIds& )>;
 void Chat( const TokenConversation& c_tokTokenizer, int nContext,
            std::istream& stmInput, std::ostream& stmOutput,
            const ConversationGenerator& c_fnGenerate );
+
+void DocumentChat( const TokenConversation& c_tokTokenizer,
+                   const std::string& c_strDocument, int nInputBudget,
+                   std::istream& stmInput, std::ostream& stmOutput,
+                   const ConversationGenerator& c_fnGenerate );
 
 // Evaluate a saved bundle without optimizer updates or model writes.
 double

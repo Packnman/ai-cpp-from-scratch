@@ -127,37 +127,55 @@ void Chat( const TokenConversation& c_tokTokenizer, int nContext,
            const ConversationGenerator& c_fnGenerate )
 {
     if( nContext <= 0 || !c_fnGenerate )
-    {
         throw std::invalid_argument( "Chat context and generator must be valid" );
-    }
-    TokenIds nHistory = { TokenConversation::BEGIN };
+    std::vector<ConversationContextTurn> trnHistory;
     std::string strInput;
     stmOutput << "A> " << std::flush;
     while( std::getline( stmInput, strInput ) )
     {
         strInput = ApplyBackspaces( strInput );
-        nHistory.push_back( TokenConversation::SPEAKER_A );
-        const auto nText = c_tokTokenizer.encode( strInput );
-        nHistory.insert( nHistory.end(), nText.begin(), nText.end() );
-        nHistory.push_back( TokenConversation::UTTERANCE_END );
-        nHistory.push_back( TokenConversation::SPEAKER_B );
-        const auto nResponse = c_fnGenerate( nHistory );
-        stmOutput << "B> " << c_tokTokenizer.decode( nResponse ) << '\n';
-        nHistory.insert( nHistory.end(), nResponse.begin(), nResponse.end() );
+        const auto ctxPrompt = g_buildConversationContext(
+            c_tokTokenizer, trnHistory, strInput, nContext );
+        const auto nResponse = c_fnGenerate( ctxPrompt.nTokens );
+        const std::string strResponse = c_tokTokenizer.decode( nResponse );
+        stmOutput << "B> " << strResponse << '\n';
         if( !nResponse.empty() && nResponse.back() == TokenConversation::END )
         {
             stmOutput << "[system] 会話終端を検出したため、履歴をリセットしました。\n";
-            nHistory = { TokenConversation::BEGIN };
+            trnHistory.clear();
         }
-        else if( nResponse.empty() || nResponse.back() != TokenConversation::UTTERANCE_END )
+        else
         {
-            nHistory.push_back( TokenConversation::UTTERANCE_END );
-        }
-        if( nHistory.size() > static_cast<std::size_t>( nContext ) )
-        {
-            nHistory.erase( nHistory.begin(), nHistory.end() - nContext );
+            trnHistory.push_back( { strInput, strResponse } );
         }
         stmOutput << "A> " << std::flush;
+    }
+}
+
+void DocumentChat( const TokenConversation& c_tokTokenizer,
+                   const std::string& c_strDocument, int nInputBudget,
+                   std::istream& stmInput, std::ostream& stmOutput,
+                   const ConversationGenerator& c_fnGenerate )
+{
+    if( nInputBudget <= 0 || !c_fnGenerate )
+        throw std::invalid_argument( "Document context and generator must be valid" );
+    (void)g_splitDocumentSentences( c_strDocument );
+    std::vector<ConversationContextTurn> trnHistory;
+    std::string strQuestion;
+    stmOutput << "Q> " << std::flush;
+    while( std::getline( stmInput, strQuestion ) )
+    {
+        strQuestion = ApplyBackspaces( strQuestion );
+        const auto ctxPrompt = g_buildDocumentContext(
+            c_tokTokenizer, c_strDocument, trnHistory, strQuestion, nInputBudget );
+        const auto nResponse = c_fnGenerate( ctxPrompt.nTokens );
+        const std::string strResponse = c_tokTokenizer.decode( nResponse );
+        stmOutput << "A> " << strResponse << '\n';
+        if( !nResponse.empty() && nResponse.back() == TokenConversation::END )
+            trnHistory.clear();
+        else
+            trnHistory.push_back( { strQuestion, strResponse } );
+        stmOutput << "Q> " << std::flush;
     }
 }
 

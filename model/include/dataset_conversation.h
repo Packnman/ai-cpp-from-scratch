@@ -2,6 +2,7 @@
 
 #include "tokenizer_conversation.h"
 #include <cstdint>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,8 @@ struct ConversationBatch
     int nSequence;
     int nBatch;
     std::size_t nValid;
+    std::size_t nTokens;
+    std::size_t nPadding;
     TokenIds nInputs;
     TokenIds nTargets;
 };
@@ -58,8 +61,9 @@ public:
                          const TokenConversation& c_tokTokenizer, int nContext = 128 );
     std::size_t size() const;
     std::size_t excludedResponses() const;
-    ConversationBatch batch( const std::vector<std::size_t>& c_nOrder, std::size_t nStart,
-                             int nBatchSize ) const;
+    std::size_t sequenceLength(std::size_t nIndex) const;
+    std::vector<std::size_t> lengthBucketedOrder(int nBatchSize, std::mt19937* lpRandom = nullptr) const;
+    ConversationBatch batch(const std::vector<std::size_t>& c_nOrder, std::size_t nStart, int nBatchSize) const;
 
 private:
     int _nContext;

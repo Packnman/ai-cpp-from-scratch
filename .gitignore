@@ -64,7 +64,14 @@ Thumbs.db
 # data/outputs
 # ==============================
 data/
+/experiments/jawiki-pretrain-sample/
 /models/
 *.bin
 docs/*
 !docs/*.md
+!docs/model/
+docs/model/*
+!docs/model/context_builder.md
+!docs/model/dataset_conversation.md
+!docs/model/conversation_runtime.md
+!docs/model/model_transformer.md

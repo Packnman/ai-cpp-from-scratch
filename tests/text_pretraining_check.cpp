@@ -95,7 +95,12 @@ int main()
             }
             if( value.value( "split", "" ) == "train" )
             {
-                sawTrain = value.at( "optimized_tokens" ).get<std::uint64_t>() >= 5;
+                const auto actual = value.at( "actual_tokens" ).get<std::uint64_t>();
+                const auto padding = value.at( "padding_tokens" ).get<std::uint64_t>();
+                sawTrain = value.at( "optimized_tokens" ).get<std::uint64_t>() >= 5 &&
+                           actual > 0 && value.at( "max_sequence_length" ) <= 8 &&
+                           value.at( "padding_rate" ).get<double>() ==
+                               static_cast<double>( padding ) / ( actual + padding );
             }
         }
         require( sawStart && sawTrain,
