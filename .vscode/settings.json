@@ -1,0 +1,18 @@
+{
+    "nsight.cuda.languageSupport.provider": "cpptools",
+    "cmake.sourceDirectory": "${workspaceFolder}",
+    "cmake.buildDirectory": "${workspaceFolder}/build/agent-debug",
+    "cmake.generator": "Ninja",
+    "cmake.configureOnOpen": true,
+    "cmake.buildBeforeRun": true,
+    "cmake.configureSettings": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTING": true,
+        "AI_CPP_BUILD_CUDA_LIB": false
+    },
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/agent-debug/compile_commands.json",
+    "C_Cpp.default.cppStandard": "c++20",
+    "C_Cpp.default.cStandard": "c17",
+    "C_Cpp.errorSquiggles": "enabled"
+}

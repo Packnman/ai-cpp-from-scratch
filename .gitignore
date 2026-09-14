@@ -38,9 +38,10 @@ compile_commands.json
 *.ncu-rep
 
 # ==============================
-# VSCode
+# VSCode project configuration
 # ==============================
-.vscode/
+!.vscode/
+!.vscode/*.json
 
 # ==============================
 # Codex

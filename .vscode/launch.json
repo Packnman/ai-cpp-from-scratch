@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug agent_cli",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/agent-debug/agent_cli",
+            "args": [
+                "${workspaceFolder}",
+                "${workspaceFolder}/build/agent-debug/agent_memory.sqlite3"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "preLaunchTask": "CMake Build Debug"
+        }
+    ]
+}

@@ -1,0 +1,39 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "CMake Configure Debug",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-S",
+                "${workspaceFolder}",
+                "-B",
+                "${workspaceFolder}/build/agent-debug",
+                "-G",
+                "Ninja",
+                "-DCMAKE_BUILD_TYPE=Debug",
+                "-DBUILD_TESTING=ON",
+                "-DAI_CPP_BUILD_CUDA_LIB=OFF"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "CMake Build Debug",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "${workspaceFolder}/build/agent-debug"
+            ],
+            "dependsOn": "CMake Configure Debug",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}
