@@ -47,4 +47,17 @@ std::string ContextBuilder::build(const ContextInput &in) const {
             out += item;
     return out;
 }
+ContextInput structured_prompt_input(ModelMode, std::string_view payload,
+                                     std::string_view schema, bool repair) {
+    ContextInput context;
+    context.current_input = std::string(payload);
+    context.goal = repair ? "Repair invalid JSON once and return JSON only"
+                          : "Return an answer matching the requested mode";
+    context.current_task = "Schema: " + std::string(schema);
+    return context;
+}
+std::string build_model_prompt(const ContextInput &input, std::size_t budget,
+                               ContextBuilder::Counter counter) {
+    return ContextBuilder(budget, std::move(counter)).build(input);
+}
 } // namespace ai::agent

@@ -20,7 +20,7 @@ class SqliteMemory final : public IMemoryManager {
     private:
         void migrate();
         void store_unchecked(const MemoryCandidate &);
-        sqlite3 *_db{};
+        sqlite3 *_db{}; // 記憶を保存するSQLite接続
 };
 
 class MemoryRetrieveTool final : public ITool {
@@ -30,7 +30,7 @@ class MemoryRetrieveTool final : public ITool {
         ToolResult execute(const nlohmann::json &) override;
 
     private:
-        std::shared_ptr<IMemoryManager> _memory;
+        std::shared_ptr<IMemoryManager> _memory; // 検索対象の記憶管理器
 };
 
 } // namespace ai::agent

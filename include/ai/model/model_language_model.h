@@ -11,17 +11,17 @@
 namespace ai::model {
 
 struct GenerationConfig {
-        float temperature = 0.8F;
-        float top_p = 0.9F;
-        std::uint64_t seed = 42;
-        int max_tokens = 256;
-        bool greedy = false;
+        float temperature = 0.8F; // サンプリング分布の温度
+        float top_p = 0.9F; // nucleus samplingの累積確率閾値
+        std::uint64_t seed = 42; // 生成に用いる乱数シード
+        int max_tokens = 256; // 生成する最大トークン数
+        bool greedy = false; // 常に最高確率のトークンを選ぶか
         void validate() const;
 };
 
 struct AgentBundle {
-        std::unique_ptr<AgentTransformer> model;
-        AgentTokenizer tokenizer;
+        std::unique_ptr<AgentTransformer> model; // 学習済みTransformerモデル
+        AgentTokenizer tokenizer; // モデルと組み合わせるトークナイザー
 };
 
 void save_bundle(AgentTransformer &model, const AgentTokenizer &tokenizer,
@@ -45,9 +45,9 @@ class ModelLanguageModel final : public ai::agent::ILanguageModel {
 
     private:
         static AgentMode convert(ai::agent::ModelMode mode);
-        AgentBundle _bundle;
-        GenerationConfig _sampling;
-        std::uint64_t _request_counter = 0;
+        AgentBundle _bundle; // 推論に用いるモデルとトークナイザー
+        GenerationConfig _sampling; // 応答生成時のサンプリング設定
+        std::uint64_t _request_counter = 0; // シードをずらすための処理要求数
 };
 
 } // namespace ai::model

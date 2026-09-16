@@ -38,8 +38,10 @@ struct ScriptModel final : ILanguageModel {
         }
 };
 std::shared_ptr<Agent> make_agent(const std::filesystem::path &root,
-                                  const std::filesystem::path &db) {
-    auto reasoner = std::make_shared<RuleReasoner>();
+                                  const std::filesystem::path &db,
+                                  std::shared_ptr<IReasoner> reasoner = {}) {
+    if (!reasoner)
+        reasoner = std::make_shared<RuleReasoner>();
     auto memory = std::make_shared<SqliteMemory>(db);
     auto tools = std::make_shared<ToolRegistry>();
     tools->add("calculator.calculate", std::make_shared<CalculatorTool>());
@@ -171,6 +173,21 @@ void model_checks() {
     throws([&] { r4.parse(std::string(1023, 'x')); });
     CHECK(overflow->modes.empty());
 }
+void hybrid_e2e(const std::filesystem::path &dir) {
+    auto lm = std::make_shared<ScriptModel>();
+    lm->answers = {"モデル会話応答"};
+    auto a = make_agent(dir, dir / "hybrid.sqlite",
+                        std::make_shared<HybridReasoner>(lm));
+    CHECK(a->process("こんにちは").text == "モデル会話応答");
+    CHECK(lm->modes == std::vector<ModelMode>{ModelMode::Chat});
+    CHECK(a->process("/calc 8*7").text == "56.0");
+    std::ofstream(dir / "hybrid.txt") << "hybrid read";
+    CHECK(a->process("/read hybrid.txt").text == "hybrid read");
+    CHECK(a->process("/remember project hybrid記憶").success);
+    CHECK(a->process("/recall hybrid記憶").text.find("hybrid記憶") !=
+          std::string::npos);
+    CHECK(lm->modes == std::vector<ModelMode>{ModelMode::Chat});
+}
 void e2e(const std::filesystem::path &dir) {
     auto a = make_agent(dir, dir / "e2e.sqlite");
     auto chat = a->process("こんにちは");
@@ -201,6 +218,7 @@ int main() {
         context_checks();
         model_checks();
         e2e(dir);
+        hybrid_e2e(dir);
         std::filesystem::remove_all(dir);
         std::cout << "agent_check: " << checks << " checks passed\n";
         return 0;

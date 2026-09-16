@@ -43,7 +43,7 @@ class ToolRegistry {
                            const nlohmann::json &arguments) const;
 
     private:
-        std::map<std::string, std::shared_ptr<ITool>, std::less<>> _tools;
+        std::map<std::string, std::shared_ptr<ITool>, std::less<>> _tools; // 操作名からツールへの対応表
 };
 
 class IExecutor {
@@ -123,7 +123,7 @@ class DefaultInputParser final : public IInputParser {
         ParsedInput parse(std::string_view input) override;
 
     private:
-        std::shared_ptr<IReasoner> _reasoner;
+        std::shared_ptr<IReasoner> _reasoner; // 入力解析に用いる推論器
 };
 
 class DefaultRouter final : public IRouter {
@@ -140,7 +140,7 @@ class DefaultPlanner final : public IPlanner {
                     const EvaluationResult &) override;
 
     private:
-        std::shared_ptr<IReasoner> _reasoner;
+        std::shared_ptr<IReasoner> _reasoner; // 計画生成に用いる推論器
 };
 class DefaultExecutor final : public IExecutor {
     public:
@@ -150,7 +150,7 @@ class DefaultExecutor final : public IExecutor {
                            const std::vector<ToolResult> &) override;
 
     private:
-        std::shared_ptr<ToolRegistry> _tools;
+        std::shared_ptr<ToolRegistry> _tools; // 実行可能なツール群
 };
 class DefaultEvaluator final : public IEvaluator {
     public:
@@ -159,7 +159,7 @@ class DefaultEvaluator final : public IEvaluator {
         EvaluationResult evaluate(const Task &, const ToolResult &) override;
 
     private:
-        std::shared_ptr<IReasoner> _reasoner;
+        std::shared_ptr<IReasoner> _reasoner; // 結果評価に用いる推論器
 };
 class DefaultAggregator final : public IAggregator {
     public:

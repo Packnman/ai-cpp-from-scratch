@@ -17,9 +17,10 @@ int main(int argc, char **argv) {
         for (int index = 1; index < argc; index += 2) {
             const std::string name = argv[index];
             if (name == "--help") {
-                std::cout << "agent_cli [--backend rule|model] [--model PATH] "
-                             "[--file-root PATH] [--memory-db PATH] [--seed N] "
-                             "[--temperature F] [--top-p F]\n";
+                std::cout
+                    << "agent_cli [--backend rule|hybrid|model] [--model PATH] "
+                       "[--file-root PATH] [--memory-db PATH] [--seed N] "
+                       "[--temperature F] [--top-p F]\n";
                 return 0;
             }
             if (!name.starts_with("--") || index + 1 >= argc)
@@ -39,7 +40,7 @@ int main(int argc, char **argv) {
         std::shared_ptr<IReasoner> reasoner;
         if (backend == "rule") {
             reasoner = std::make_shared<RuleReasoner>();
-        } else if (backend == "model") {
+        } else if (backend == "model" || backend == "hybrid") {
 #ifdef AI_CPP_BUILD_MODEL
             const auto model_path = value("--model", "");
             if (model_path.empty())
@@ -48,15 +49,22 @@ int main(int argc, char **argv) {
             generation.seed = std::stoull(value("--seed", "42"));
             generation.temperature = std::stof(value("--temperature", "0.8"));
             generation.top_p = std::stof(value("--top-p", "0.9"));
-            reasoner = std::make_shared<ModelReasoner>(
+            auto language_model =
                 std::make_shared<ai::model::ModelLanguageModel>(model_path,
-                                                                generation));
+                                                                generation);
+            reasoner =
+                backend == "hybrid"
+                    ? std::shared_ptr<IReasoner>(
+                          std::make_shared<HybridReasoner>(language_model))
+                    : std::shared_ptr<IReasoner>(
+                          std::make_shared<ModelReasoner>(language_model));
 #else
             throw std::invalid_argument(
                 "model backend requires -DAI_CPP_BUILD_MODEL=ON");
 #endif
         } else {
-            throw std::invalid_argument("--backend must be rule or model");
+            throw std::invalid_argument(
+                "--backend must be rule, hybrid, or model");
         }
         auto memory = std::make_shared<SqliteMemory>(db);
         auto tools = std::make_shared<ToolRegistry>();

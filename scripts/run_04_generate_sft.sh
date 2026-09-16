@@ -13,7 +13,9 @@ if [ -e "$AI_CPP_SFT_DATA_DIR/train.jsonl" ] ||
 fi
 "$agent_model_cli" generate-sft \
     --conversation-train "$AI_CPP_CONVERSATION_DIR/train.jsonl" \
-    --output "$AI_CPP_SFT_DATA_DIR/train.jsonl" --seed "$AI_CPP_SEED"
+    --output "$AI_CPP_SFT_DATA_DIR/train.jsonl" --seed "$AI_CPP_SEED" \
+    --profile "$AI_CPP_SFT_PROFILE" --split train
 "$agent_model_cli" generate-sft \
     --conversation-train "$AI_CPP_CONVERSATION_DIR/validation.jsonl" \
-    --output "$AI_CPP_SFT_DATA_DIR/validation.jsonl" --seed "$AI_CPP_SEED"
+    --output "$AI_CPP_SFT_DATA_DIR/validation.jsonl" --seed "$AI_CPP_SEED" \
+    --profile "$AI_CPP_SFT_PROFILE" --split validation

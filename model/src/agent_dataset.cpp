@@ -1,4 +1,5 @@
 #include "ai/model/agent_dataset.h"
+#include "ai/agent/context_builder.h"
 
 #include <algorithm>
 #include <array>
@@ -45,7 +46,10 @@ AgentDataset AgentDataset::jawiki(const std::filesystem::path &train_jsonl,
            (token_limit == 0 || accepted < token_limit)) {
         const auto json = nlohmann::json::parse(line);
         const auto id = json.at("id").dump();
-        auto ids = tokenizer.encode(json.at("text").get<std::string>());
+        const auto text = json.at("text").get<std::string>();
+        auto ids = tokenizer.encode(text);
+        const auto content_tokens = ids.size();
+        const auto accepted_before_document = accepted;
         ids.insert(ids.begin(), AgentTokenizer::bos_id);
         ids.push_back(AgentTokenizer::eos_id);
         for (std::size_t begin = 0; begin + 1 < ids.size();) {
@@ -68,6 +72,10 @@ AgentDataset AgentDataset::jawiki(const std::filesystem::path &train_jsonl,
             if (token_limit && accepted >= token_limit)
                 break;
         }
+        const auto accepted_targets = accepted - accepted_before_document;
+        const auto accepted_content = std::min(content_tokens, accepted_targets);
+        dataset._input_bytes += content_tokens
+            ? text.size() * accepted_content / content_tokens : 0;
     }
     if (dataset._windows.empty())
         throw std::invalid_argument("Jawiki split has no trainable tokens");
@@ -87,8 +95,18 @@ AgentDataset AgentDataset::sft(const std::filesystem::path &train_jsonl,
     while (std::getline(input, line)) {
         const auto json = nlohmann::json::parse(line);
         const auto mode = parse_mode(json.at("mode").get<std::string>());
+        const auto profile = json.value("sft_profile", "legacy");
+        const auto split = json.value("split", "");
+        if (dataset._sft_profile.empty()) {
+            dataset._sft_profile = profile;
+            dataset._split = split;
+            dataset._generation_seed = json.value("generation_seed", 0ULL);
+        } else if (dataset._sft_profile != profile || dataset._split != split)
+            throw std::invalid_argument("mixed SFT profile or split");
         auto prompt = tokenizer.encode(json.at("prompt").get<std::string>());
-        auto output = tokenizer.encode(json.at("output").get<std::string>());
+        const auto output_text = json.at("output").get<std::string>();
+        auto output = tokenizer.encode(output_text);
+        dataset._input_bytes += output_text.size();
         std::vector<std::int32_t> ids = {AgentTokenizer::bos_id,
                                          tokenizer.mode_id(mode)};
         ids.insert(ids.end(), prompt.begin(), prompt.end());
@@ -112,11 +130,28 @@ AgentDataset AgentDataset::sft(const std::filesystem::path &train_jsonl,
     if (dataset._windows.empty())
         throw std::invalid_argument("SFT split is empty");
     std::array<bool, 9> covered{};
+    static const std::array<const char *, 9> names = {
+        "CHAT",         "PARSE",        "PLAN",  "EVALUATE", "SUMMARIZE",
+        "MEMORY_WRITE", "MEMORY_QUERY", "FINAL", "TOOL"};
     for (const auto &window : dataset._windows)
         covered[static_cast<std::size_t>(window.mode) - 4] = true;
-    if (!std::all_of(covered.begin(), covered.end(),
-                     [](bool value) { return value; }))
-        throw std::invalid_argument("SFT split must cover all nine modes");
+    for (std::size_t i = 0; i < covered.size(); ++i)
+        if (covered[i])
+            dataset._trained_modes.push_back(names[i]);
+    if (dataset._sft_profile == "chat" &&
+        (dataset._trained_modes != std::vector<std::string>{"CHAT"}))
+        throw std::invalid_argument("chat SFT must contain CHAT only");
+    const std::array<bool, 9> agent_required = {true, true,  true, true, true,
+                                                true, false, true, false};
+    if (dataset._sft_profile == "agent")
+        for (std::size_t i = 0; i < covered.size(); ++i)
+            if (covered[i] != agent_required[i])
+                throw std::invalid_argument(
+                    "agent SFT has missing or unused modes");
+    if (dataset._sft_profile == "legacy" &&
+        !std::all_of(covered.begin(), covered.end(), [](bool v) { return v; }))
+        throw std::invalid_argument(
+            "legacy SFT split must cover all nine modes");
     return dataset;
 }
 
@@ -126,13 +161,15 @@ std::vector<std::size_t> AgentDataset::order(std::uint64_t seed,
     for (std::size_t index = 0; index < _windows.size(); ++index)
         by_mode[static_cast<std::size_t>(_windows[index].mode) - 4].push_back(
             index);
-    const bool is_sft =
-        std::all_of(by_mode.begin(), by_mode.end(),
-                    [](const auto &items) { return !items.empty(); });
+    const bool is_sft = _sft_profile == "agent" || _sft_profile == "legacy";
     std::mt19937 random(static_cast<std::mt19937::result_type>(seed + epoch));
     if (is_sft) {
-        static constexpr std::array<std::size_t, 9> weights = {
+        static constexpr std::array<std::size_t, 9> agent_weights = {
+            20, 20, 20, 10, 10, 10, 0, 10, 0};
+        static constexpr std::array<std::size_t, 9> legacy_weights = {
             20, 15, 15, 10, 10, 10, 5, 10, 5};
+        const auto &weights =
+            _sft_profile == "agent" ? agent_weights : legacy_weights;
         std::vector<std::size_t> result;
         result.reserve(100);
         for (std::size_t mode = 0; mode < weights.size(); ++mode) {
@@ -189,64 +226,181 @@ std::string AgentDataset::fingerprint() const {
 
 void generate_sft_corpus(const std::filesystem::path &conversation_train,
                          const std::filesystem::path &output,
-                         std::uint64_t seed) {
+                         std::uint64_t seed, std::string_view profile,
+                         std::string_view split) {
+    if (profile != "chat" && profile != "agent")
+        throw std::invalid_argument("--profile must be chat or agent");
+    if (split != "train" && split != "validation")
+        throw std::invalid_argument("--split must be train or validation");
     std::ifstream conversations(conversation_train);
     if (!conversations)
-        throw std::runtime_error("cannot read conversation train split");
+        throw std::runtime_error("cannot read conversation split");
     std::ofstream corpus(output, std::ios::trunc);
     if (!corpus)
         throw std::runtime_error("cannot write SFT corpus");
-    std::string line;
     std::size_t id = 0;
+    const auto emit = [&](std::string_view mode, const std::string &prompt,
+                          const std::string &answer, std::string example_id) {
+        corpus << nlohmann::json{{"id", std::move(example_id)},
+                                 {"mode", mode},
+                                 {"prompt", prompt},
+                                 {"output", answer},
+                                 {"sft_profile", profile},
+                                 {"split", split},
+                                 {"generation_seed", seed},
+                                 {"generator", "local-template-v2"}}
+                      .dump()
+               << '\n';
+    };
+    std::string line;
     while (std::getline(conversations, line)) {
         const auto json = nlohmann::json::parse(line);
         const auto &utterances = json.at("utterances");
-        for (std::size_t i = 1; i < utterances.size(); ++i)
-            if (utterances[i - 1].at("speaker") == 0 &&
-                utterances[i].at("speaker") == 1)
-                corpus << nlohmann::json{{"id", "chat-" + std::to_string(id++)},
-                                         {"mode", "CHAT"},
-                                         {"prompt",
-                                          utterances[i - 1].at("text")},
-                                         {"output", utterances[i].at("text")}}
-                              .dump()
-                       << '\n';
+        for (std::size_t i = 1; i < utterances.size(); ++i) {
+            if (utterances[i - 1].at("speaker") != 0 ||
+                utterances[i].at("speaker") != 1)
+                continue;
+            const auto raw = utterances[i - 1].at("text").get<std::string>();
+            ai::agent::ContextInput context;
+            context.current_input = raw;
+            context.goal = raw;
+            context.current_task = "Natural Japanese conversation";
+            emit("CHAT", ai::agent::build_model_prompt(context),
+                 utterances[i].at("text"),
+                 std::string(split) + "-chat-" + std::to_string(id++));
+        }
     }
-    std::mt19937 random(static_cast<std::mt19937::result_type>(seed));
-    const auto nonce = std::to_string(random());
-    const std::vector<nlohmann::json> structured = {
-        {{"mode", "PARSE"},
-         {"prompt", "赤い箱を安全に運んで"},
-         {"output",
-          R"({"raw":"赤い箱を安全に運んで","intent":"robot","goal":"箱を運ぶ","constraints":[{"text":"安全","critical":true}]})"}},
-        {{"mode", "PLAN"},
-         {"prompt", "資料を読んで要約する"},
-         {"output",
-          R"({"goal":"要約","tasks":[{"id":"read","type":"tool","operation":"file.read","arguments":{"path":"資料.txt"},"depends_on":[]},{"id":"summary","type":"reasoning","operation":"summarize","arguments":{},"depends_on":["read"]}]})"}},
-        {{"mode", "EVALUATE"},
-         {"prompt", "tool succeeded"},
-         {"output", R"({"status":"success","reason":"結果を取得した"})"}},
-        {{"mode", "SUMMARIZE"},
-         {"prompt", "会話を圧縮"},
-         {"output", "設計方針と未解決事項を保持する。"}},
-        {{"mode", "MEMORY_WRITE"},
-         {"prompt", "C++20を使う"},
-         {"output",
-          R"({"memories":[{"type":"project","content":"C++20を使う","importance":1.0,"confidence":1.0}]})"}},
-        {{"mode", "MEMORY_QUERY"},
-         {"prompt", "言語規格"},
-         {"output", R"({"query":"C++ 言語規格","limit":8})"}},
-        {{"mode", "FINAL"},
-         {"prompt", "完了"},
-         {"output", "処理が完了しました。"}},
-        {{"mode", "TOOL"},
-         {"prompt", "2+3を計算"},
-         {"output",
-          R"({"operation":"calculator.calculate","arguments":{"expression":"2+3"}})"}}};
-    for (const auto &example : structured) {
-        auto value = example;
-        value["id"] = "generated-" + nonce + "-" + std::to_string(id++);
-        corpus << value.dump() << '\n';
+    if (profile == "chat")
+        return;
+    const std::size_t count = split == "train" ? 2000 : 200;
+    const std::string tag = split == "train" ? "訓練対象" : "検証項目";
+    const std::array<std::string, 4> nouns =
+        split == "train" ? std::array<std::string, 4>{"設計書", "青い箱",
+                                                      "計算式", "会議メモ"}
+                         : std::array<std::string, 4>{"仕様票", "緑の容器",
+                                                      "数式", "審査記録"};
+    constexpr std::string_view parse_schema =
+        R"({"required":["raw","intent","goal","constraints"]})";
+    constexpr std::string_view plan_schema = R"({"required":["goal","tasks"]})";
+    constexpr std::string_view eval_schema =
+        R"({"required":["status","reason"]})";
+    constexpr std::string_view memory_schema = R"({"required":["memories"]})";
+    for (std::size_t i = 0; i < count; ++i) {
+        const auto serial = std::string(split) + "-" + std::to_string(seed) +
+                            "-" + std::to_string(i);
+        const auto noun = nouns[i % nouns.size()];
+        const auto intent = std::array<const char *, 5>{
+            "calculate", "read", "recall", "remember", "chat"}[i % 5];
+        const std::array<std::string, 4> train_phrases = {
+            "を処理して", "を安全に確認して", "の対応を計画して", "を扱って"};
+        const std::array<std::string, 4> validation_phrases = {
+            "について調べてください", "の検証をお願いします", "を確認願います",
+            "について報告してください"};
+        const auto &phrases =
+            split == "train" ? train_phrases : validation_phrases;
+        std::string raw = noun + serial + phrases[i % phrases.size()];
+        nlohmann::json arguments = nlohmann::json::object();
+        if (std::string_view(intent) == "calculate")
+            arguments = {{"expression", std::to_string(i + 2) + "+3"}};
+        if (std::string_view(intent) == "read")
+            arguments = {{"path", noun + serial + ".txt"}};
+        if (std::string_view(intent) == "recall")
+            arguments = {{"query", noun + serial}, {"limit", 8}};
+        if (std::string_view(intent) == "remember")
+            arguments = {{"type", "project"},
+                         {"content", noun + serial + "を採用"}};
+        nlohmann::json parsed = {
+            {"raw", raw},
+            {"intent", intent},
+            {"goal", noun + "を処理する"},
+            {"constraints",
+             nlohmann::json::array({{{"text", "安全に処理する" + serial},
+                                     {"critical", i % 2 == 0}}})},
+            {"arguments", arguments}};
+        auto pc = ai::agent::structured_prompt_input(
+            ai::agent::ModelMode::Parse, raw, parse_schema);
+        emit("PARSE", ai::agent::build_model_prompt(pc), parsed.dump(),
+             "parse-" + serial);
+
+        const auto operation = std::array<const char *, 4>{
+            "calculator.calculate", "file.read", "memory.retrieve",
+            "rule-based reasoning"}[i % 4];
+        nlohmann::json task_args =
+            i % 4 == 0
+                ? nlohmann::json{{"expression", std::to_string(i + 1) + "*2"}}
+            : i % 4 == 1 ? nlohmann::json{{"path", noun + serial + ".txt"}}
+            : i % 4 == 2
+                ? nlohmann::json{{"query", noun + serial}, {"limit", 8}}
+                : nlohmann::json::object();
+        nlohmann::json plan_payload = {{"input", raw}, {"memories", i % 3}};
+        if (i % 5 == 0) {
+            plan_payload["failed_result"] = tag + serial + "の空結果";
+            plan_payload["reason"] = "別経路で再計画";
+        }
+        nlohmann::json planned = {
+            {"goal", noun + "を完了する"},
+            {"tasks", nlohmann::json::array(
+                          {{{"id", "task-" + serial},
+                            {"type", i % 4 == 3 ? "reasoning" : "tool"},
+                            {"operation", operation},
+                            {"arguments", task_args},
+                            {"depends_on", nlohmann::json::array()}}})}};
+        auto plc = ai::agent::structured_prompt_input(
+            ai::agent::ModelMode::Plan, plan_payload.dump(), plan_schema);
+        emit("PLAN", ai::agent::build_model_prompt(plc), planned.dump(),
+             "plan-" + serial);
+
+        const auto eval_status = std::array<const char *, 4>{
+            "success", "retry", "replan", "failed"}[i % 4];
+        nlohmann::json eval_payload = {
+            {"task", "task-" + serial},
+            {"status", static_cast<int>(i % 4)},
+            {"value", i % 4 == 0 ? nlohmann::json{{"result", serial}}
+                                 : nlohmann::json::object()},
+            {"error", i % 4 == 0 ? "" : tag + serial + "の失敗"}};
+        auto ec = ai::agent::structured_prompt_input(
+            ai::agent::ModelMode::Evaluate, eval_payload.dump(), eval_schema);
+        emit("EVALUATE", ai::agent::build_model_prompt(ec),
+             nlohmann::json{{"status", eval_status},
+                            {"reason", tag + serial + "を評価"}}
+                 .dump(),
+             "evaluate-" + serial);
+
+        ai::agent::ContextInput summary;
+        summary.current_input = "Summarize the conversation";
+        summary.goal = "Preserve decisions, open questions, and current intent";
+        summary.current_task = "Conversation summary";
+        summary.recent = {{tag + serial + "について相談", noun + "を確認"}};
+        summary.summary = noun + "の以前の方針";
+        emit("SUMMARIZE", ai::agent::build_model_prompt(summary),
+             noun + serial + "の決定と未解決事項を保持する。",
+             "summarize-" + serial);
+
+        nlohmann::json memory_payload = {
+            {"input", raw}, {"response", noun + serial + "を記憶します"}};
+        nlohmann::json memories =
+            i % 3 == 0 ? nlohmann::json::array()
+                       : nlohmann::json::array(
+                             {{{"type", i % 2 ? "project" : "semantic"},
+                               {"content", noun + serial + "を採用"},
+                               {"importance", 0.8},
+                               {"confidence", 0.9}}});
+        auto mc = ai::agent::structured_prompt_input(
+            ai::agent::ModelMode::MemoryWrite, memory_payload.dump(),
+            memory_schema);
+        emit("MEMORY_WRITE", ai::agent::build_model_prompt(mc),
+             nlohmann::json{{"memories", memories}}.dump(), "memory-" + serial);
+
+        ai::agent::ContextInput final;
+        final.current_input = raw;
+        final.goal = noun + "を処理する";
+        final.current_task =
+            "Produce the final response from: " +
+            nlohmann::json{
+                {"results", nlohmann::json::array({{{"value", serial}}})}}
+                .dump();
+        emit("FINAL", ai::agent::build_model_prompt(final),
+             noun + serial + "の処理が完了しました。", "final-" + serial);
     }
 }
 } // namespace ai::model

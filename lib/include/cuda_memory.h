@@ -11,6 +11,10 @@ struct Statistics {
     bool pooled = false;
     std::uint64_t usedBytes = 0;
     std::uint64_t reservedBytes = 0;
+    std::uint64_t peakUsedBytes = 0;
+    std::uint64_t peakReservedBytes = 0;
+    std::uint64_t deviceFreeBytes = 0;
+    std::uint64_t deviceTotalBytes = 0;
 };
 class Buffer {
 public:

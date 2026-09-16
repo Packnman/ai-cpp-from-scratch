@@ -208,10 +208,7 @@ nlohmann::json ModelReasoner::structured(ModelMode mode,
                                          std::string_view prompt,
                                          std::string_view schema_text) {
     const auto schema = nlohmann::json::parse(schema_text);
-    ContextInput context;
-    context.current_input = std::string(prompt);
-    context.goal = "Return an answer matching the requested mode";
-    context.current_task = "Schema: " + std::string(schema_text);
+    auto context = structured_prompt_input(mode, prompt, schema_text);
     std::string answer = _model->complete(mode, build_prompt(context));
     for (int attempt = 0; attempt < 2; ++attempt) {
         try {
@@ -272,20 +269,17 @@ nlohmann::json ModelReasoner::structured(ModelMode mode,
                     std::string("model returned invalid structured JSON after "
                                 "one repair: ") +
                     e.what());
-            ContextInput repair;
-            repair.current_input = answer;
-            repair.goal = "Repair invalid JSON once and return JSON only";
-            repair.current_task = "Schema: " + std::string(schema_text);
+            auto repair =
+                structured_prompt_input(mode, answer, schema_text, true);
             answer = _model->complete(mode, build_prompt(repair));
         }
     }
     throw std::runtime_error("unreachable");
 }
 std::string ModelReasoner::build_prompt(const ContextInput &input) const {
-    ContextBuilder builder(1022, [this](std::string_view text) {
+    return build_model_prompt(input, 1022, [this](std::string_view text) {
         return _model->token_count(text);
     });
-    return builder.build(input);
 }
 ParsedInput ModelReasoner::parse(std::string_view s) {
     auto j =
@@ -375,5 +369,23 @@ std::string ModelReasoner::final_response(const ParsedInput &p,
     context.current_task = "Produce the final response from: " + a.dump();
     context.constraints = p.constraints;
     return _model->complete(ModelMode::Final, build_prompt(context));
+}
+std::string HybridReasoner::chat(const ParsedInput &p,
+                                 const std::vector<MemoryRecord> &memories,
+                                 const std::vector<ConversationTurn> &recent,
+                                 std::string_view summary) {
+    ContextInput context;
+    context.current_input = p.raw;
+    context.goal = p.goal;
+    context.current_task = "Natural Japanese conversation";
+    context.constraints = p.constraints;
+    context.memories = memories;
+    context.recent = recent;
+    context.summary = std::string(summary);
+    return _model->complete(
+        ModelMode::Chat,
+        build_model_prompt(context, 1022, [this](std::string_view text) {
+            return _model->token_count(text);
+        }));
 }
 } // namespace ai::agent

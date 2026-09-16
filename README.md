@@ -54,7 +54,7 @@ ctest --test-dir build/model --output-on-failure
 
 ```sh
 ./build/model/agent_cli --backend rule --file-root . --memory-db agent.sqlite3
-./build/model/agent_cli --backend model --model models/agent-sft \
+./build/model/agent_cli --backend hybrid --model models/agent_v2_chat_sft \
   --file-root . --memory-db agent.sqlite3 --seed 42 --temperature 0.8 --top-p 0.9
 ```
 
@@ -65,7 +65,7 @@ ctest --test-dir build/model --output-on-failure
 3 code point未満はparameter bindingされた完全一致・部分一致検索へ切り替わります。WAL、transaction、5秒busy timeout、
 schema version 1 migrationを使用します。
 
-`ModelReasoner`は注入した`ILanguageModel`を使い、設計正本にある9個のspecial modeを切り替えます。
+`HybridReasoner`は通常会話だけを学習モデルへ渡し、解析・計画・評価・tool・memory・最終整形をruleへ委譲します。`ModelReasoner`は9 modeのID互換を維持し、実行時に使う7 modeを学習します。
 構造化出力は必須fieldとnested schemaを検査し、不正時は修正を一度だけ要求します。
 各modeは同じ小型decoder-only Transformerへmulti-task SFTします。新bundleは`ai_cpp_agent_model` version 1で、
 旧model bundleとの互換性はありません。
@@ -84,18 +84,19 @@ $M pretrain --train data/jawiki/train.jsonl --validation data/jawiki/validation.
   --tokenizer models/tokenizer.model --output models/agent-pretrain \
   --steps 100000 --token-budget 15000000 --batch-size 2 --accumulation 8
 $M generate-sft --conversation-train data/conversation/train.jsonl \
-  --output data/agent-sft/train.jsonl --seed 42
-$M sft --train data/agent-sft/train.jsonl --validation data/agent-sft/validation.jsonl \
-  --source models/agent-pretrain --output models/agent-sft --steps 5000
-$M resume --kind sft --train data/agent-sft/train.jsonl \
-  --validation data/agent-sft/validation.jsonl --model models/agent-sft --steps 1000
-$M validate --kind sft --data data/agent-sft/validation.jsonl \
-  --model models/agent-sft --batch-size 2
+  --output data/realpersona-chat-sft/train.jsonl --seed 42 --profile chat --split train
+$M sft --train data/agent-v2-sft/train.jsonl --validation data/agent-v2-sft/validation.jsonl \
+  --source models/agent-pretrain --output models/agent_v2_sft --steps 50000 --accumulation 4
+$M resume --kind sft --train data/agent-v2-sft/train.jsonl \
+  --validation data/agent-v2-sft/validation.jsonl --model models/agent_v2_sft --steps 1000
+$M validate --kind sft --data data/agent-v2-sft/validation.jsonl \
+  --model models/agent_v2_sft --batch-size 2
 ```
 
-SFTではmode tokenより前のprompt targetをPADにしてlossから除外します。manifestには構造化modeを
-80%とする固定mix weights、checkpointにはweight/Adam fingerprint、step、shuffle RNG、
+SFTではmode tokenより前のprompt targetをPADにしてlossから除外します。agent profileはCHAT、PARSE、PLANを各20%、EVALUATE、SUMMARIZE、MEMORY_WRITE、FINALを各10%でsampleします。MEMORY_QUERYとTOOLはID互換だけを維持します。manifestにはtrained_modes、sft_profile、生成seed、split fingerprintを記録し、checkpointにはweight/Adam fingerprint、step、shuffle RNG、
 dropout counter、data/tokenizer fingerprintを保存します。`latest.json`はatomic renameで更新します。
+
+`generate-sft`は`--profile chat|agent`と`--split train|validation`を必須の運用単位として扱います。agent profileは各構造化modeにつきtrain 2,000件、validation 200件をsplit固有のtemplateと語彙からローカル生成します。`validate --kind sft`はlossに加えて500件を自己回帰生成し、JSON 100%かつintent・tool名・arguments等の意味一致95%以上をmodel backend昇格条件として判定します。
 
 ### 段階実行スクリプト
 
@@ -116,7 +117,7 @@ WSL2でメモリ使用量を抑えて順番に実行する場合は、次のス�
 保存済みcheckpointへpretrainを追加する場合は `run_03_resume_pretrain.sh`、SFTを追加する場合は
 `run_05_resume_sft.sh` を使います。
 既定tokenizerは検証済みの `models/agent_v1_smoke/tokenizer.model` を再利用します。pathやstep数は
-`AI_CPP_TOKENIZER`、`AI_CPP_PRETRAIN_MODEL`、`AI_CPP_SFT_MODEL`、
+`AI_CPP_TOKENIZER`、`AI_CPP_PRETRAIN_MODEL`、`AI_CPP_SFT_PROFILE`、`AI_CPP_SFT_MODEL`、
 `AI_CPP_PRETRAIN_TOKENS`、`AI_CPP_VALIDATION_TOKENS`、`AI_CPP_SFT_STEPS` などの
-環境変数で変更できます。既定ではJawiki indexもtrain 15M tokens、validation 26万tokensまでに
+環境変数で変更できます。既定の`AI_CPP_SFT_PROFILE=chat`は旧`agent_v1_sft`を上書きせず`agent_v2_chat_sft`へ保存し、`run_07_agent.sh`をhybridで起動します。第2段階は`AI_CPP_SFT_PROFILE=agent`で別の`agent_v2_sft`へ50,000 steps学習します。既定ではJawiki indexもtrain 15M tokens、validation 26万tokensまでに
 制限し、resume時にも同じfingerprintになるよう同じ制限を適用します。

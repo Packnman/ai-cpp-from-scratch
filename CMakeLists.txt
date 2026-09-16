@@ -81,6 +81,7 @@ if(AI_CPP_BUILD_MODEL)
         model/src/agent_dataset.cpp
         model/src/agent_transformer.cpp
         model/src/model_language_model.cpp
+        model/src/jawiki_sharding.cpp
         model/src/agent_training.cpp)
     target_include_directories(agent_model PUBLIC include model/include PRIVATE third_party)
     target_include_directories(agent_model SYSTEM PRIVATE

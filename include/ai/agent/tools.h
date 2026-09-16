@@ -12,6 +12,6 @@ class FileReadTool final : public ITool {
         ToolResult execute(const nlohmann::json &) override;
 
     private:
-        std::filesystem::path _root;
+        std::filesystem::path _root; // 読み取りを許可するルートディレクトリ
 };
 } // namespace ai::agent

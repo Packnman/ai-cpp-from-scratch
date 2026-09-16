@@ -136,11 +136,17 @@ Statistics statistics() {
     auto pool = currentPool(false);
     check(cudaDeviceSynchronize(), "pool statistics synchronize");
     Statistics result;
+    std::size_t freeBytes=0,totalBytes=0;
+    check(cudaMemGetInfo(&freeBytes,&totalBytes), "device memory statistics");
+    result.deviceFreeBytes=freeBytes;
+    result.deviceTotalBytes=totalBytes;
     if(!pool) return result;
     result.pooled = pool->handle != nullptr;
     if(result.pooled) {
         check(cudaMemPoolGetAttribute(pool->handle, cudaMemPoolAttrUsedMemCurrent, &result.usedBytes), "pool used bytes");
         check(cudaMemPoolGetAttribute(pool->handle, cudaMemPoolAttrReservedMemCurrent, &result.reservedBytes), "pool reserved bytes");
+        check(cudaMemPoolGetAttribute(pool->handle, cudaMemPoolAttrUsedMemHigh, &result.peakUsedBytes), "pool peak used bytes");
+        check(cudaMemPoolGetAttribute(pool->handle, cudaMemPoolAttrReservedMemHigh, &result.peakReservedBytes), "pool peak reserved bytes");
     }
     return result;
 }
