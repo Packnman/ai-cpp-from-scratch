@@ -55,6 +55,15 @@ ToolResult ToolRegistry::execute(std::string_view name,
 }
 
 ParsedInput DefaultInputParser::parse(std::string_view input) {
+    constexpr std::string_view prefix = "/compare ";
+    if (input.starts_with(prefix)) {
+        ParsedInput parsed;
+        parsed.raw = std::string(input);
+        parsed.intent = "comparison";
+        parsed.goal = "提供された根拠と制約だけで候補を比較する";
+        parsed.arguments = nlohmann::json::parse(input.substr(prefix.size()));
+        return parsed;
+    }
     return _reasoner->parse(input);
 }
 
@@ -66,6 +75,8 @@ RequestType DefaultRouter::route(const ParsedInput &in) {
         return RequestType::MemoryRecall;
     if (in.intent == "robot")
         return RequestType::RobotTask;
+    if (in.intent == "comparison")
+        return RequestType::ComplexReasoning;
     if (in.intent == "complex")
         return RequestType::ComplexReasoning;
     if (in.intent == "question")
@@ -74,26 +85,44 @@ RequestType DefaultRouter::route(const ParsedInput &in) {
 }
 Plan DefaultPlanner::create(const ParsedInput &p,
                             const std::vector<MemoryRecord> &m) {
+    if (p.intent == "comparison")
+        return {p.goal,
+                {{"discussion-compare",
+                  TaskType::Reasoning,
+                  "discussion.compare",
+                  p.arguments,
+                  {}}}};
     return _reasoner->plan(p, m);
 }
 Plan DefaultPlanner::replan(const ParsedInput &p, const Plan &plan,
                             const ToolResult &r, const EvaluationResult &e) {
     return _reasoner->replan(p, plan, r, e);
 }
-ToolResult DefaultExecutor::execute(const Task &task,
-                                    const std::vector<ToolResult> &) {
+ToolResult
+DefaultExecutor::execute(const Task &task,
+                         const std::vector<ToolResult> &previous_results) {
     ToolResult result;
     if (task.type == TaskType::Tool)
         result = _tools->execute(task.operation, task.arguments);
-    else {
+    else if (task.operation == "memory acknowledgement") {
         result.status = ToolStatus::Success;
-        result.value = {{"result", task.operation}};
+        result.value = {{"acknowledged", true}};
+    } else if (_reasoning)
+        result = _reasoning->execute(task, previous_results);
+    else {
+        result.status = ToolStatus::PermanentError;
+        result.error = "no reasoning executor for operation: " + task.operation;
     }
     result.task_id = task.id;
     return result;
 }
 EvaluationResult DefaultEvaluator::evaluate(const Task &t,
                                             const ToolResult &r) {
+    if (t.operation == "discussion.compare") {
+        if (r.status == ToolStatus::Success)
+            return {EvaluationStatus::Success, "deterministically validated"};
+        return {EvaluationStatus::Failed, r.error};
+    }
     return _reasoner->evaluate(t, r);
 }
 
@@ -101,23 +130,17 @@ nlohmann::json
 DefaultAggregator::aggregate(const std::vector<ToolResult> &results) {
     nlohmann::json values = nlohmann::json::array();
     std::set<std::string> seen;
-    std::map<std::string, nlohmann::json> scalar;
     std::vector<std::string> contradictions;
     for (const auto &result : results) {
         const std::string dump = result.value.dump();
         if (!seen.insert(dump).second)
             continue;
-        if (result.value.is_object()) {
-            for (auto it = result.value.begin(); it != result.value.end();
-                 ++it) {
-                if (!it.value().is_primitive())
-                    continue;
-                auto old = scalar.find(it.key());
-                if (old != scalar.end() && old->second != it.value())
-                    contradictions.push_back(it.key());
-                scalar[it.key()] = it.value();
-            }
-        }
+        if (result.value.is_object() &&
+            result.value.contains("semantic_conflicts") &&
+            result.value["semantic_conflicts"].is_array())
+            for (const auto &conflict : result.value["semantic_conflicts"])
+                if (conflict.is_string())
+                    contradictions.push_back(conflict.get<std::string>());
         values.push_back(
             {{"task_id", result.task_id}, {"value", result.value}});
     }

@@ -1,7 +1,9 @@
 #include "ai/agent/agent.h"
+#include "ai/agent/discussion.h"
 #include "ai/agent/memory.h"
 #include "ai/agent/reasoner.h"
 #include "ai/agent/tools.h"
+#include "ai/ner/extractor.h"
 #ifdef AI_CPP_BUILD_MODEL
 #include "ai/model/model_language_model.h"
 #endif
@@ -20,7 +22,9 @@ int main(int argc, char **argv) {
                 std::cout
                     << "agent_cli [--backend rule|hybrid|model] [--model PATH] "
                        "[--file-root PATH] [--memory-db PATH] [--seed N] "
-                       "[--temperature F] [--top-p F]\n";
+                       "[--temperature F] [--top-p F] [--ner "
+                       "off|rule|model|hybrid] (limited comparison: /compare "
+                       "JSON) [--ner-bundle PATH]\n";
                 return 0;
             }
             if (!name.starts_with("--") || index + 1 >= argc)
@@ -66,7 +70,29 @@ int main(int argc, char **argv) {
             throw std::invalid_argument(
                 "--backend must be rule, hybrid, or model");
         }
+        std::shared_ptr<ai::ner::IEntityExtractor> entity_extractor;
+        const auto ner_mode = value("--ner", "off");
+        const auto ner_bundle = value("--ner-bundle", "");
+        if (ner_mode == "rule")
+            entity_extractor = std::make_shared<ai::ner::RuleEntityExtractor>();
+        else if (ner_mode == "model") {
+            if (ner_bundle.empty())
+                throw std::invalid_argument(
+                    "--ner-bundle is required for model NER");
+            entity_extractor =
+                std::make_shared<ai::ner::ModelEntityExtractor>(ner_bundle);
+        } else if (ner_mode == "hybrid") {
+            if (ner_bundle.empty())
+                throw std::invalid_argument(
+                    "--ner-bundle is required for hybrid NER");
+            entity_extractor = std::make_shared<ai::ner::HybridEntityExtractor>(
+                std::make_shared<ai::ner::RuleEntityExtractor>(),
+                std::make_shared<ai::ner::ModelEntityExtractor>(ner_bundle));
+        } else if (ner_mode != "off")
+            throw std::invalid_argument(
+                "--ner must be off, rule, model, or hybrid");
         auto memory = std::make_shared<SqliteMemory>(db);
+        auto discussion = std::make_shared<DiscussionEngine>();
         auto tools = std::make_shared<ToolRegistry>();
         tools->add("calculator.calculate", std::make_shared<CalculatorTool>());
         tools->add("file.read", std::make_shared<FileReadTool>(root));
@@ -75,9 +101,10 @@ int main(int argc, char **argv) {
         Agent agent(std::make_shared<DefaultInputParser>(reasoner),
                     std::make_shared<DefaultRouter>(),
                     std::make_shared<DefaultPlanner>(reasoner),
-                    std::make_shared<DefaultExecutor>(tools),
+                    std::make_shared<DefaultExecutor>(tools, discussion),
                     std::make_shared<DefaultEvaluator>(reasoner),
-                    std::make_shared<DefaultAggregator>(), memory, reasoner);
+                    std::make_shared<DefaultAggregator>(), memory, reasoner,
+                    entity_extractor);
         std::cout << "ai_cpp Agent " << backend << " backend (/quit to exit)\n";
         std::string line;
         while (std::cout << "> " && std::getline(std::cin, line)) {

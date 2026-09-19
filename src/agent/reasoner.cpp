@@ -1,6 +1,7 @@
 #include "ai/agent/reasoner.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <sstream>
 #include <stdexcept>
@@ -42,7 +43,129 @@ Plan plan_from_json(const nlohmann::json &j) {
         throw std::runtime_error(e);
     return p;
 }
+
+constexpr std::array<std::string_view, 6> summary_sections = {
+    "[FACTS]",          "[DECISIONS]",    "[CONSTRAINTS]",
+    "[OPEN_QUESTIONS]", "[ACTIVE_TASKS]", "[CORRECTIONS]"};
+
+bool valid_utf8(std::string_view text) {
+    for (std::size_t i = 0; i < text.size();) {
+        const auto c = static_cast<unsigned char>(text[i]);
+        std::size_t continuation = 0;
+        if (c <= 0x7f)
+            continuation = 0;
+        else if (c >= 0xc2 && c <= 0xdf)
+            continuation = 1;
+        else if (c >= 0xe0 && c <= 0xef)
+            continuation = 2;
+        else if (c >= 0xf0 && c <= 0xf4)
+            continuation = 3;
+        else
+            return false;
+        if (i + continuation >= text.size())
+            return false;
+        if (continuation) {
+            const auto next = static_cast<unsigned char>(text[i + 1]);
+            if ((c == 0xe0 && next < 0xa0) || (c == 0xed && next > 0x9f) ||
+                (c == 0xf0 && next < 0x90) || (c == 0xf4 && next > 0x8f))
+                return false;
+        }
+        for (std::size_t j = 1; j <= continuation; ++j)
+            if ((static_cast<unsigned char>(text[i + j]) & 0xc0) != 0x80)
+                return false;
+        i += continuation + 1;
+    }
+    return true;
+}
+
+nlohmann::json
+entity_candidates_json(const std::vector<ai::ner::EntityMention> &mentions) {
+    nlohmann::json result = nlohmann::json::array();
+    for (const auto &mention : mentions)
+        result.push_back({{"type", ai::ner::to_string(mention.type)},
+                          {"start", mention.start},
+                          {"end", mention.end},
+                          {"surface", mention.surface},
+                          {"normalized", mention.normalized},
+                          {"status", "candidate_not_fact"}});
+    return result;
+}
+
+std::string summary_payload(const std::vector<ConversationTurn> &turns,
+                            std::string_view previous) {
+    nlohmann::json history = nlohmann::json::array();
+    for (const auto &turn : turns)
+        history.push_back({{"user", turn.user},
+                           {"assistant", turn.assistant},
+                           {"entity_candidates",
+                            entity_candidates_json(turn.entity_candidates)}});
+    return nlohmann::json{{"previous_summary", previous},
+                          {"conversation_prefix", history}}
+        .dump();
+}
+
+std::string model_summary(ILanguageModel &model,
+                          const std::vector<ConversationTurn> &turns,
+                          std::string_view previous) {
+    const auto payload = summary_payload(turns, previous);
+    const auto prompt = [&](std::string_view input, bool repair) {
+        ContextInput context;
+        context.current_input = std::string(input);
+        context.goal =
+            repair ? "Repair once. Return only the six required sections."
+                   : "Update the previous summary. Preserve numbers, negation, "
+                     "corrections, decisions, constraints, open questions and "
+                     "tasks. "
+                     "Replace old values only after an explicit correction.";
+        context.current_task =
+            "Structured conversation summary; target 192 tokens, maximum 256. "
+            "Use [FACTS], [DECISIONS], [CONSTRAINTS], [OPEN_QUESTIONS], "
+            "[ACTIVE_TASKS], [CORRECTIONS] in this order; empty is '- なし'.";
+        return build_model_prompt(context,
+                                  mode_prompt_tokens(ModelMode::Summarize),
+                                  [&model](std::string_view text) {
+                                      return model.token_count(text);
+                                  });
+    };
+    auto answer = model.complete(ModelMode::Summarize, prompt(payload, false));
+    if (validate_structured_summary(answer, model.token_count(answer)))
+        return answer;
+    const auto repair_input = nlohmann::json{
+        {"source", nlohmann::json::parse(payload)},
+        {"invalid_summary",
+         answer}}.dump();
+    answer = model.complete(ModelMode::Summarize, prompt(repair_input, true));
+    if (!validate_structured_summary(answer, model.token_count(answer)))
+        throw std::runtime_error("invalid structured summary after one repair");
+    return answer;
+}
 } // namespace
+
+bool validate_structured_summary(std::string_view summary,
+                                 std::size_t token_count) {
+    if (!valid_utf8(summary) ||
+        token_count > mode_output_tokens(ModelMode::Summarize))
+        return false;
+    std::size_t cursor = 0;
+    for (std::size_t i = 0; i < summary_sections.size(); ++i) {
+        const auto marker = summary_sections[i];
+        if (summary.substr(cursor, marker.size()) != marker)
+            return false;
+        if (summary.find(marker, cursor + marker.size()) !=
+            std::string_view::npos)
+            return false;
+        const auto body = cursor + marker.size();
+        const auto next = i + 1 == summary_sections.size()
+                              ? summary.size()
+                              : summary.find(summary_sections[i + 1], body);
+        if (next == std::string_view::npos ||
+            summary.substr(body, next - body).find_first_not_of(" \r\n\t") ==
+                std::string_view::npos)
+            return false;
+        cursor = next;
+    }
+    return cursor == summary.size();
+}
 
 ParsedInput RuleReasoner::parse(std::string_view input) {
     if (input.empty())
@@ -51,7 +174,11 @@ ParsedInput RuleReasoner::parse(std::string_view input) {
     p.raw = std::string(input);
     p.goal = p.raw;
     p.intent = "chat";
-    if (starts(input, "/calc ")) {
+    if (starts(input, "/compare ")) {
+        p.intent = "comparison";
+        p.goal = "提供された根拠と制約だけで候補を比較する";
+        p.arguments = nlohmann::json::parse(after(input, "/compare"));
+    } else if (starts(input, "/calc ")) {
         p.intent = "calculate";
         p.goal = "式を安全に計算する";
         p.arguments = {{"expression", after(input, "/calc")}};
@@ -109,7 +236,11 @@ Plan RuleReasoner::plan(const ParsedInput &p,
     Plan plan{p.goal, {}};
     Task t;
     t.id = "task-1";
-    if (p.intent == "calculate") {
+    if (p.intent == "comparison") {
+        t.type = TaskType::Reasoning;
+        t.operation = "discussion.compare";
+        t.arguments = p.arguments;
+    } else if (p.intent == "calculate") {
         t.type = TaskType::Tool;
         t.operation = "calculator.calculate";
         t.arguments = p.arguments;
@@ -155,15 +286,22 @@ EvaluationResult RuleReasoner::evaluate(const Task &, const ToolResult &r) {
 }
 std::string RuleReasoner::summarize(const std::vector<ConversationTurn> &turns,
                                     std::string_view previous) {
-    std::string s(previous);
+    std::string facts;
+    if (!previous.empty())
+        facts = "- 以前の構造化要約を更新\n";
     for (const auto &t : turns) {
-        if (!s.empty())
-            s += '\n';
-        s += "User: " + t.user + " / Agent: " + t.assistant;
+        const auto line =
+            "- User: " + t.user + " / Agent: " + t.assistant + "\n";
+        if (ContextBuilder::utf8_codepoints(facts + line) > 120)
+            break;
+        facts += line;
     }
-    if (s.size() > 8192)
-        s.erase(0, s.size() - 8192);
-    return s;
+    if (facts.empty())
+        facts = "- なし\n";
+    return "[FACTS]\n" + facts +
+           "[DECISIONS]\n- なし\n[CONSTRAINTS]\n- なし\n"
+           "[OPEN_QUESTIONS]\n- なし\n[ACTIVE_TASKS]\n- なし\n"
+           "[CORRECTIONS]\n- なし";
 }
 std::vector<MemoryCandidate>
 RuleReasoner::memory_candidates(const ParsedInput &p, std::string_view) {
@@ -183,6 +321,16 @@ std::string RuleReasoner::final_response(const ParsedInput &p,
                                          const nlohmann::json &aggregate) {
     if (p.intent == "remember")
         return "記憶しました。";
+    if (p.intent == "comparison") {
+        const auto &value = aggregate.at("results").front().at("value");
+        std::string out = value.at("conclusion").get<std::string>();
+        if (value.contains("evidence_ids") && !value.at("evidence_ids").empty())
+            out += " 根拠: " + value.at("evidence_ids").dump();
+        if (value.contains("open_questions") &&
+            !value.at("open_questions").empty())
+            out += " 未確認: " + value.at("open_questions").dump();
+        return out;
+    }
     const auto &rs = aggregate.at("results");
     if (rs.empty())
         return "結果はありません。";
@@ -209,7 +357,7 @@ nlohmann::json ModelReasoner::structured(ModelMode mode,
                                          std::string_view schema_text) {
     const auto schema = nlohmann::json::parse(schema_text);
     auto context = structured_prompt_input(mode, prompt, schema_text);
-    std::string answer = _model->complete(mode, build_prompt(context));
+    std::string answer = _model->complete(mode, build_prompt(mode, context));
     for (int attempt = 0; attempt < 2; ++attempt) {
         try {
             auto j = nlohmann::json::parse(answer);
@@ -271,15 +419,16 @@ nlohmann::json ModelReasoner::structured(ModelMode mode,
                     e.what());
             auto repair =
                 structured_prompt_input(mode, answer, schema_text, true);
-            answer = _model->complete(mode, build_prompt(repair));
+            answer = _model->complete(mode, build_prompt(mode, repair));
         }
     }
     throw std::runtime_error("unreachable");
 }
-std::string ModelReasoner::build_prompt(const ContextInput &input) const {
-    return build_model_prompt(input, 1022, [this](std::string_view text) {
-        return _model->token_count(text);
-    });
+std::string ModelReasoner::build_prompt(ModelMode mode,
+                                        const ContextInput &input) const {
+    return build_model_prompt(
+        input, mode_prompt_tokens(mode),
+        [this](std::string_view text) { return _model->token_count(text); });
 }
 ParsedInput ModelReasoner::parse(std::string_view s) {
     auto j =
@@ -326,20 +475,20 @@ EvaluationResult ModelReasoner::evaluate(const Task &t, const ToolResult &r) {
 }
 std::string ModelReasoner::summarize(const std::vector<ConversationTurn> &t,
                                      std::string_view old) {
-    ContextInput context;
-    context.current_input = "Summarize the conversation";
-    context.goal = "Preserve decisions, open questions, and current intent";
-    context.current_task = "Conversation summary";
-    context.recent = t;
-    context.summary = std::string(old);
-    return _model->complete(ModelMode::Summarize, build_prompt(context));
+    return model_summary(*_model, t, old);
 }
 std::vector<MemoryCandidate>
 ModelReasoner::memory_candidates(const ParsedInput &p,
                                  std::string_view response) {
     auto j = structured(
         ModelMode::MemoryWrite,
-        nlohmann::json{{"input", p.raw}, {"response", response}}.dump(),
+        nlohmann::json{
+            {"input", p.raw},
+            {"response", response},
+            {"entity_candidates", entity_candidates_json(p.entity_candidates)},
+            {"instruction", "Candidates are evidence only; resolve negation, "
+                            "proposal and correction before writing memory."}}
+            .dump(),
         R"({"required":["memories"]})");
     std::vector<MemoryCandidate> out;
     for (const auto &m : j.at("memories"))
@@ -355,20 +504,32 @@ std::string ModelReasoner::chat(const ParsedInput &p,
     context.current_input = p.raw;
     context.goal = p.goal;
     context.current_task = "Natural Japanese conversation";
+    context.require_summary = true;
+    context.recent_limit = 2;
     context.constraints = p.constraints;
+    context.entity_candidates = p.entity_candidates;
     context.memories = memories;
     context.recent = recent;
     context.summary = std::string(summary);
-    return _model->complete(ModelMode::Chat, build_prompt(context));
+    return _model->complete(ModelMode::Chat,
+                            build_prompt(ModelMode::Chat, context));
 }
 std::string ModelReasoner::final_response(const ParsedInput &p,
                                           const nlohmann::json &a) {
+    if (p.intent == "comparison")
+        return RuleReasoner{}.final_response(p, a);
     ContextInput context;
     context.current_input = p.raw;
     context.goal = p.goal;
     context.current_task = "Produce the final response from: " + a.dump();
     context.constraints = p.constraints;
-    return _model->complete(ModelMode::Final, build_prompt(context));
+    context.entity_candidates = p.entity_candidates;
+    return _model->complete(ModelMode::Final,
+                            build_prompt(ModelMode::Final, context));
+}
+std::string HybridReasoner::summarize(const std::vector<ConversationTurn> &t,
+                                      std::string_view old) {
+    return model_summary(*_model, t, old);
 }
 std::string HybridReasoner::chat(const ParsedInput &p,
                                  const std::vector<MemoryRecord> &memories,
@@ -378,14 +539,18 @@ std::string HybridReasoner::chat(const ParsedInput &p,
     context.current_input = p.raw;
     context.goal = p.goal;
     context.current_task = "Natural Japanese conversation";
+    context.require_summary = true;
+    context.recent_limit = 2;
     context.constraints = p.constraints;
+    context.entity_candidates = p.entity_candidates;
     context.memories = memories;
     context.recent = recent;
     context.summary = std::string(summary);
     return _model->complete(
         ModelMode::Chat,
-        build_model_prompt(context, 1022, [this](std::string_view text) {
-            return _model->token_count(text);
-        }));
+        build_model_prompt(context, mode_prompt_tokens(ModelMode::Chat),
+                           [this](std::string_view text) {
+                               return _model->token_count(text);
+                           }));
 }
 } // namespace ai::agent

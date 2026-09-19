@@ -43,12 +43,20 @@ class ToolRegistry {
                            const nlohmann::json &arguments) const;
 
     private:
-        std::map<std::string, std::shared_ptr<ITool>, std::less<>> _tools; // 操作名からツールへの対応表
+        std::map<std::string, std::shared_ptr<ITool>, std::less<>>
+            _tools; // 操作名からツールへの対応表
 };
 
 class IExecutor {
     public:
         virtual ~IExecutor() = default;
+        virtual ToolResult execute(const Task &,
+                                   const std::vector<ToolResult> &) = 0;
+};
+
+class IReasoningTaskExecutor {
+    public:
+        virtual ~IReasoningTaskExecutor() = default;
         virtual ToolResult execute(const Task &,
                                    const std::vector<ToolResult> &) = 0;
 };
@@ -87,6 +95,16 @@ enum class ModelMode {
     Tool
 };
 
+// The model has a 1024-token context. BOS and the mode token consume two
+// positions; one policy keeps prompt and generation limits in sync.
+constexpr std::size_t mode_output_tokens(ModelMode mode) noexcept {
+    return mode == ModelMode::Evaluate || mode == ModelMode::MemoryQuery ? 128
+                                                                         : 256;
+}
+constexpr std::size_t mode_prompt_tokens(ModelMode mode) noexcept {
+    return 1024 - 2 - mode_output_tokens(mode);
+}
+
 class ILanguageModel {
     public:
         virtual ~ILanguageModel() = default;
@@ -114,6 +132,13 @@ class IReasoner {
                                  std::string_view summary) = 0;
         virtual std::string final_response(const ParsedInput &,
                                            const nlohmann::json &) = 0;
+        virtual std::size_t token_count(std::string_view text) const {
+            std::size_t count = 0;
+            for (unsigned char c : text)
+                if ((c & 0xc0) != 0x80)
+                    ++count;
+            return count;
+        }
 };
 
 class DefaultInputParser final : public IInputParser {
@@ -144,13 +169,16 @@ class DefaultPlanner final : public IPlanner {
 };
 class DefaultExecutor final : public IExecutor {
     public:
-        explicit DefaultExecutor(std::shared_ptr<ToolRegistry> tools)
-            : _tools(std::move(tools)) {}
+        explicit DefaultExecutor(
+            std::shared_ptr<ToolRegistry> tools,
+            std::shared_ptr<IReasoningTaskExecutor> reasoning = {})
+            : _tools(std::move(tools)), _reasoning(std::move(reasoning)) {}
         ToolResult execute(const Task &,
                            const std::vector<ToolResult> &) override;
 
     private:
         std::shared_ptr<ToolRegistry> _tools; // 実行可能なツール群
+        std::shared_ptr<IReasoningTaskExecutor> _reasoning;
 };
 class DefaultEvaluator final : public IEvaluator {
     public:

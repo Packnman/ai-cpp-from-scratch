@@ -1,5 +1,6 @@
 #include "ai/agent/context_builder.h"
 
+#include <algorithm>
 #include <stdexcept>
 
 namespace ai::agent {
@@ -27,17 +28,34 @@ std::string ContextBuilder::build(const ContextInput &in) const {
         if (c.critical)
             critical += (critical.empty() ? "" : "\n") + c.text;
     fixed += section("Critical Constraints", critical);
+    if (in.require_summary)
+        fixed += section("Conversation Summary",
+                         in.summary.empty() ? "- なし" : in.summary);
     if (_counter(fixed) > _budget)
         throw std::length_error("required context exceeds budget");
     std::vector<std::string> optional;
-    for (auto it = in.recent.rbegin(); it != in.recent.rend(); ++it)
+    if (!in.entity_candidates.empty()) {
+        std::string evidence =
+            "抽出候補であり確定事実ではない。否定・提案・訂正は別途判断する。\n";
+        for (const auto &mention : in.entity_candidates) {
+            evidence += "- " + ai::ner::to_string(mention.type) + " [" +
+                        std::to_string(mention.start) + "," +
+                        std::to_string(mention.end) + "): " + mention.surface;
+            if (mention.normalized) evidence += " => " + *mention.normalized;
+            evidence += " (" + ai::ner::to_string(mention.source) + ")\n";
+        }
+        optional.push_back(section("Grounded Entity Candidates", evidence));
+    }
+    const auto recent_begin =
+        in.recent.end() - std::min(in.recent.size(), in.recent_limit);
+    for (auto it = recent_begin; it != in.recent.end(); ++it)
         optional.push_back(
             section("Recent Conversation",
                     "User: " + it->user + "\nAgent: " + it->assistant));
     for (const auto &m : in.memories)
         optional.push_back(section("Retrieved Memory",
                                    "[" + to_string(m.type) + "] " + m.content));
-    if (!in.summary.empty())
+    if (!in.require_summary && !in.summary.empty())
         optional.push_back(section("Conversation Summary", in.summary));
     for (const auto &r : in.previous_results)
         optional.push_back(section("Previous Result", r.value.dump()));

@@ -60,6 +60,10 @@ Thumbs.db
 *.tmp
 *.temp
 *~
+__pycache__/
+*.py[cod]
+/tmp/
+/output/
 
 # ==============================
 # data/outputs
@@ -70,9 +74,19 @@ data/
 *.bin
 docs/*
 !docs/*.md
+!docs/agent/
+!docs/agent/**
+!docs/design_subsystem/
+!docs/design_subsystem/**
+!docs/design_system/
+!docs/design_system/**
+!docs/lib/
+!docs/lib/**
 !docs/model/
-docs/model/*
-!docs/model/context_builder.md
-!docs/model/dataset_conversation.md
-!docs/model/conversation_runtime.md
-!docs/model/model_transformer.md
+!docs/model/**
+!docs/ner/
+!docs/ner/**
+!docs/train/
+!docs/train/**
+!docs/validation/
+!docs/validation/**

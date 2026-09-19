@@ -4,6 +4,9 @@
 
 namespace ai::agent {
 
+bool validate_structured_summary(std::string_view summary,
+                                 std::size_t token_count);
+
 class RuleReasoner final : public IReasoner {
     public:
         ParsedInput parse(std::string_view) override;
@@ -42,9 +45,12 @@ class ModelReasoner final : public IReasoner {
                          std::string_view) override;
         std::string final_response(const ParsedInput &,
                                    const nlohmann::json &) override;
+        std::size_t token_count(std::string_view text) const override {
+            return _model->token_count(text);
+        }
 
     private:
-        std::string build_prompt(const ContextInput &) const;
+        std::string build_prompt(ModelMode, const ContextInput &) const;
         nlohmann::json structured(ModelMode, std::string_view,
                                   std::string_view schema);
         std::shared_ptr<ILanguageModel> _model; // 構造化推論に用いる言語モデル
@@ -69,9 +75,7 @@ class HybridReasoner final : public IReasoner {
             return _rule.evaluate(t, r);
         }
         std::string summarize(const std::vector<ConversationTurn> &t,
-                              std::string_view old) override {
-            return _rule.summarize(t, old);
-        }
+                              std::string_view old) override;
         std::vector<MemoryCandidate>
         memory_candidates(const ParsedInput &p, std::string_view r) override {
             return _rule.memory_candidates(p, r);
@@ -82,6 +86,9 @@ class HybridReasoner final : public IReasoner {
         std::string final_response(const ParsedInput &p,
                                    const nlohmann::json &a) override {
             return _rule.final_response(p, a);
+        }
+        std::size_t token_count(std::string_view text) const override {
+            return _model->token_count(text);
         }
 
     private:
