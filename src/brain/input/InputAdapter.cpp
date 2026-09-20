@@ -29,7 +29,12 @@ std::size_t InputAdapter::queue_index(InputSource s) noexcept {
 }
 InputStatus InputAdapter::validate(const ExternalMessage &m,
                                    TimePoint now) const {
-    if (m.schemaVersion != _config.schemaVersion || !m.sequence ||
+    const auto source = static_cast<unsigned>(m.source);
+    const auto type = static_cast<unsigned>(m.type);
+    if (source > static_cast<unsigned>(InputSource::ExternalAI) ||
+        type > static_cast<unsigned>(BrainInputType::ExternalAIResult) ||
+        m.timestamp == TimePoint{} ||
+        m.schemaVersion != _config.schemaVersion || !m.sequence ||
         std::holds_alternative<std::monostate>(m.payload))
         return InputStatus::Invalid;
     const auto age = m.source == InputSource::Safety ? _config.safetyMaxAge
