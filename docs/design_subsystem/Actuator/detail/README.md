@@ -32,8 +32,14 @@ Actuator System は Control System から受信した Drive Command を安全に
 | Control Mode | Position / Velocity / Torque / Current / Stop / Disable | [詳細](./detail_control_modes.md) |
 | Safety Sequence | Position Limit / SafeStop / EmergencyStop / Recovery | [詳細](./detail_safety_sequences.md) |
 | Communication | Command / State Format / Timeout / Retry / Checksum | [詳細](./detail_communication.md) |
+| Simulation Backend | Component model、Driver切替、Plant境界、Fault Injection | [詳細](./simulation_backend.md) |
 | State Estimation | Velocity / Torque / Current / Temperature / Fusion | [詳細](./detail_state_estimation.md) |
 
+## 2.3 採用市販Motor / Component Baseline
+| 詳細設計 | 内容 | 文書 |
+| :- | :- | :- |
+| Commercial Motor Selection | Portescap 22ECT35 / 48 / 60、筋肉Group別本数、重量、Power Budget | [詳細](./detail_commercial_motor_selection.md) |
+Prototype 1ではφ22 mm Portescap 22ECT Familyを標準Motor Familyとする。
 # 3. システム構成
 
 ```mermaid
@@ -320,11 +326,13 @@ Phase 11 Position / Velocity / Torque / Current Control
 
 | 部位 | 方式 | 詳細 |
 | :- | :- | :- |
-| Shoulder | Torso-mounted Motor + Tendon/Cable + Scapula/Humerus Coupling | [詳細](./detail_upper_limb_mechanism.md) |
-| Elbow | Local Rotary Motor | [上肢詳細](./detail_upper_limb_mechanism.md) |
-| Waist | Dual Linear Actuator + Load-bearing Spine + Lock | [詳細](./detail_waist_linear_mechanism.md) |
-| Hip | Active Pitch / Roll Motor | [詳細](./detail_lower_limb_hybrid_mechanism.md) |
-| Knee | Electromagnetic Brake-Controlled Joint | [詳細](./detail_brake_controlled_joint.md) |
+| Neck | Sternocleidomastoid + Splenius capitis muscle-like actuators | [詳細](./detail_neck_mechanism.md) |
+| Shoulder / Scapular girdle | Free-joint concept + muscle-like actuators: Deltoid / Pectoralis major / Serratus anterior / Trapezius / Latissimus dorsi | [詳細](./detail_upper_limb_mechanism.md) |
+| Elbow | Biceps brachii muscle-like actuator for flexion; extension side TBD | [上肢詳細](./detail_upper_limb_mechanism.md) |
+| Waist | Dual Electric Linear Cylinder + Load-bearing Spine + Lock | [詳細](./detail_waist_linear_mechanism.md) |
+| Hip / Thigh | Gluteus maximus / Rectus femoris / Biceps femoris / Adductor magnus muscle-like actuators | [詳細](./detail_lower_limb_hybrid_mechanism.md) |
+| Knee | Passive Joint + Optional Electromagnetic Lock | [詳細](./detail_brake_controlled_joint.md) |
 | Ankle | Passive Spring-Damper Joint | [詳細](./detail_passive_elastic_joint.md) |
+| Muscle Actuator Common | Multi-motor bundle / transmission / line-of-action rules | [詳細](./detail_muscle_like_actuator.md) |
 
-この構成により、Actuator SystemはMotor Jointだけでなく、Active / Brake-Controlled / Passive Elastic / Linear / Tendon Driveを共通管理する。
+この構成により、Actuator SystemはMuscle-Like Multi-Motor / Linear Cylinder / Brake-Controlled / Passive Elastic / Tendon-Cable Transmissionを共通管理する。

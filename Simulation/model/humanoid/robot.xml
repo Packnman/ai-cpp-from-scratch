@@ -1,0 +1,12 @@
+<mujoco model="simplified_humanoid_tbd">
+  <compiler angle="radian" meshdir="assets/mesh" texturedir="assets/texture"/>
+  <option timestep="0.001" integrator="implicitfast" gravity="0 0 -9.81"/>
+  <default>
+    <joint limited="true" damping="0.05"/>
+    <geom friction="0.9 0.02 0.001" condim="3"/>
+  </default>
+  <include file="body.xml"/>
+  <include file="actuators.xml"/>
+  <include file="sensors.xml"/>
+  <include file="contact.xml"/>
+</mujoco>

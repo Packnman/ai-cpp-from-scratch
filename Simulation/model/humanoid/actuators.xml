@@ -1,0 +1,9 @@
+<mujocoinclude>
+  <!-- Actuator Component dynamics stay in ai::actuator. These motors are
+       optional direct-effort hooks for model debugging only. -->
+  <actuator>
+    <motor name="debug_waist" joint="waist_pitch" gear="1"/>
+    <motor name="debug_left_elbow" joint="left_elbow" gear="1"/>
+    <motor name="debug_right_elbow" joint="right_elbow" gear="1"/>
+  </actuator>
+</mujocoinclude>

@@ -1,0 +1,27 @@
+<mujoco model="single_joint_elbow">
+  <compiler angle="radian"/>
+  <option timestep="0.001" integrator="implicitfast" gravity="0 0 -9.81"/>
+  <default>
+    <joint limited="true" damping="0.02"/>
+    <geom friction="0.8 0.01 0.001" condim="3"/>
+  </default>
+  <worldbody>
+    <light pos="0 0 3" dir="0 0 -1"/>
+    <geom name="floor" type="plane" size="3 3 0.1" rgba="0.7 0.7 0.7 1"/>
+    <body name="base" pos="0 0 1.2">
+      <geom name="upper_arm_geom" type="capsule" fromto="-0.3 0 0 0 0 0"
+            size="0.04" mass="0.6" rgba="0.3 0.4 0.8 1"/>
+      <body name="forearm" pos="0 0 0">
+        <joint name="elbow" type="hinge" axis="0 1 0"
+               range="-1.5 1.5"/>
+        <geom name="forearm_geom" type="capsule" fromto="0 0 0 0.4 0 0"
+              size="0.035" mass="1.0" rgba="0.8 0.4 0.3 1"/>
+        <site name="biceps_insertion" pos="0.05 0 0" size="0.008"/>
+      </body>
+    </body>
+  </worldbody>
+  <sensor>
+    <jointpos name="elbow_position" joint="elbow"/>
+    <jointvel name="elbow_velocity" joint="elbow"/>
+  </sensor>
+</mujoco>

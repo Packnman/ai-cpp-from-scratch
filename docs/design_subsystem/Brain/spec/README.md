@@ -12,12 +12,12 @@ Brain System は、外界およびロボット自身の状態を認識し、Goal
 
 | 文書名 | 内容 |
 | :- | :- |
-| [Brain System 要求仕様書](../requirement/README.md) | Brain System が満たすべき要求 |
-| [システム要求仕様書](../../../design_system/requirement/README.md) | ロボットシステム全体の要求 |
-| [システム設計仕様書](../../../design_system/spec/README.md) | システム全体構成と Brain System の位置付け |
-| [Control System 要求仕様書](../../Control/requirement/README.md) | Action 実行および制御に関する要求 |
-| [Safety System 要求仕様書](../../Safety/requirement/README.md) | 安全監視および停止に関する要求 |
-| [Communication System 要求仕様書](../../Communication/requirement/README.md) | 内部通信および外部通信に関する要求 |
+| Brain System 要求仕様書 | Brain System が満たすべき要求 |
+| システム要求仕様書 | ロボットシステム全体の要求 |
+| システム設計仕様書 | システム全体構成と Brain System の位置付け |
+| Control System 要求仕様書 | Action 実行および制御に関する要求 |
+| Safety System 要求仕様書 | 安全監視および停止に関する要求 |
+| Communication System 要求仕様書 | 内部通信および外部通信に関する要求 |
 
 # 3. 設計方針
 
@@ -151,9 +151,9 @@ flowchart TB
 | BRN-MOD-011 | External AI Adapter | 外部AIとの処理要求・結果受信 |
 | BRN-MOD-012 | Log / Trace Manager | 判断過程・状態・結果の記録 |
 
-## 5.1 Input Adapter
+# 6. Input Adapter
 
-### 5.1.1 入力元
+## 6.1 入力元
 
 Brain System は以下から入力を受け付ける。
 
@@ -166,7 +166,7 @@ Brain System は以下から入力を受け付ける。
 | Communication System | Network State |
 | External AI | Recognition / Planning / Knowledge Result |
 
-### 5.1.2 共通入力属性
+## 6.2 共通入力属性
 
 入力データには可能な範囲で以下を保持する。
 
@@ -178,13 +178,13 @@ Brain System は以下から入力を受け付ける。
 | Status | 入力状態 |
 | Payload | 入力内容 |
 
-## 5.2 Pre-process
+# 7. Pre-process
 
-### 5.2.1 目的
+## 7.1 目的
 
 Pre-process は、生の入力を Planning が利用可能な意味情報へ変換する。
 
-### 5.2.2 機能
+## 7.2 機能
 
 | ID | 機能 | 出力 |
 | :- | :- | :- |
@@ -195,7 +195,7 @@ Pre-process は、生の入力を Planning が利用可能な意味情報へ変�
 | BRN-PRE-005 | Context Recognition | Intent、Target、Condition、Constraint |
 | BRN-PRE-006 | Internal State Recognition | Robot State |
 
-### 5.2.3 Pre-process 出力
+## 7.3 Pre-process 出力
 
 Pre-process は以下の情報を生成する。
 
@@ -218,7 +218,7 @@ flowchart LR
     Pre --> K
 ```
 
-### 5.2.4 情報の共通属性
+## 7.4 情報の共通属性
 
 各内部情報は必要に応じて以下を持つ。
 
@@ -235,13 +235,13 @@ flowchart LR
 
 Position、Priority、Target 等は共通Fieldとせず Attributes 側で扱う。
 
-## 5.3 World State Manager
+# 8. World State Manager
 
-### 5.3.1 目的
+## 8.1 目的
 
 現在の世界およびロボット自身の状態を、Planning が利用可能な統合状態として管理する。
 
-### 5.3.2 管理対象
+## 8.2 管理対象
 
 - Perception
 - Robot State
@@ -249,7 +249,7 @@ Position、Priority、Target 等は共通Fieldとせず Attributes 側で扱う�
 - Communication State
 - Safety State
 
-### 5.3.3 World State
+## 8.3 World State
 
 ```text
 WorldState
@@ -260,7 +260,7 @@ WorldState
 └── SafetyState
 ```
 
-### 5.3.4 更新
+## 8.4 更新
 
 World State は新しい認識結果を受信するたびに更新する。
 
@@ -268,13 +268,13 @@ World State は新しい認識結果を受信するたびに更新する。
 
 信頼度が低い情報は確定状態として扱わず、必要に応じて再認識対象とする。
 
-## 5.4 Goal Manager
+# 9. Goal Manager
 
-### 5.4.1 目的
+## 9.1 目的
 
 現在の Goal を生成、保持、更新し、その状態を管理する。
 
-### 5.4.2 Goal 構造
+## 9.2 Goal 構造
 
 ```text
 Goal
@@ -288,7 +288,7 @@ Goal
 └── Timestamp
 ```
 
-### 5.4.3 Goal Status
+## 9.3 Goal Status
 
 | 状態 | 内容 |
 | :- | :- |
@@ -298,7 +298,7 @@ Goal
 | Failed | 失敗 |
 | Cancelled | 取消 |
 
-### 5.4.4 Goal生成元
+## 9.4 Goal生成元
 
 - Human instruction
 - Robot State
@@ -306,13 +306,13 @@ Goal
 - Scheduled task
 - Existing Goal の下位Goal
 
-## 5.5 Condition Manager
+# 10. Condition Manager
 
-### 5.5.1 目的
+## 10.1 目的
 
 現在成立している状態を Condition として管理する。
 
-### 5.5.2 Condition例
+## 10.2 Condition例
 
 ```text
 object_visible(ball_01) = true
@@ -321,7 +321,7 @@ robot_stable = true
 network_available = false
 ```
 
-### 5.5.3 利用
+## 10.3 利用
 
 Condition は以下で利用する。
 
@@ -331,13 +331,13 @@ Condition は以下で利用する。
 - Policy 選択
 - Safety判断補助
 
-## 5.6 Constraint Manager
+# 11. Constraint Manager
 
-### 5.6.1 目的
+## 11.1 目的
 
 Brain System の行動計画に適用する制約を管理する。
 
-### 5.6.2 Constraint 構造
+## 11.2 Constraint 構造
 
 ```text
 Constraint
@@ -350,13 +350,13 @@ Constraint
 └── Timestamp
 ```
 
-### 5.6.3 Critical
+## 11.3 Critical
 
 `Critical == true` の Constraint は必須制約とし、違反する Action Plan を採用しない。
 
 `Critical == false` の Constraint は Planning における評価項目として扱う。
 
-### 5.6.4 Constraint生成元
+## 11.4 Constraint生成元
 
 - Safety System
 - Human instruction
@@ -365,9 +365,9 @@ Constraint
 - Internal rule
 - Policy
 
-## 5.7 Memory Manager
+# 12. Memory Manager
 
-### 5.7.1 構成
+## 12.1 構成
 
 ```mermaid
 flowchart LR
@@ -382,7 +382,7 @@ flowchart LR
     LTM --> STM
 ```
 
-### 5.7.2 Short-Term Memory
+## 12.2 Short-Term Memory
 
 以下を保持する。
 
@@ -395,7 +395,7 @@ flowchart LR
 - Recent Action Results
 - Recent Errors
 
-### 5.7.3 Long-Term Memory
+## 12.3 Long-Term Memory
 
 以下を保存対象とする。
 
@@ -409,7 +409,7 @@ flowchart LR
 - Environment-specific Knowledge
 - Learned Policy
 
-### 5.7.4 Memory操作
+## 12.4 Memory操作
 
 Memory Manager は以下を提供する。
 
@@ -420,20 +420,20 @@ Memory Manager は以下を提供する。
 - Summarize
 - Promote STM to LTM
 
-## 5.8 Policy Manager
+# 13. Policy Manager
 
-### 5.8.1 目的
+## 13.1 目的
 
 Planning で利用する方策または行動知識を管理する。
 
-### 5.8.2 Policy種別
+## 13.2 Policy種別
 
 - Predefined Policy
 - Learned Policy
 - Experience-derived Policy
 - Domain-specific Policy
 
-### 5.8.3 Policy構造
+## 13.3 Policy構造
 
 ```text
 Policy
@@ -447,9 +447,9 @@ Policy
 └── Version
 ```
 
-## 5.9 Planning
+# 14. Planning
 
-### 5.9.1 入力
+## 14.1 入力
 
 ```mermaid
 flowchart LR
@@ -474,7 +474,7 @@ flowchart LR
     A --> Planner
 ```
 
-### 5.9.2 処理
+## 14.2 処理
 
 Planner は以下の順で処理する。
 
@@ -489,7 +489,7 @@ Planner は以下の順で処理する。
 9. Action Plan を生成
 10. Execution Manager へ渡す
 
-### 5.9.3 Action
+## 14.3 Action
 
 ```text
 Action
@@ -505,7 +505,7 @@ Action
 └── Resource
 ```
 
-### 5.9.4 Action Plan
+## 14.4 Action Plan
 
 ```text
 ActionPlan
@@ -518,7 +518,7 @@ ActionPlan
 └── Version
 ```
 
-### 5.9.5 Action関係
+## 14.5 Action関係
 
 Action 間では以下を表現可能とする。
 
@@ -527,7 +527,7 @@ Action 間では以下を表現可能とする。
 - Conditional
 - Dependency
 
-## 5.10 Re-planning
+# 15. Re-planning
 
 以下の場合に再計画を実行する。
 
@@ -555,13 +555,13 @@ flowchart TD
     Replan --> Exec
 ```
 
-## 5.11 Execution Manager
+# 16. Execution Manager
 
-### 5.11.1 目的
+## 16.1 目的
 
 Action Plan を Control System へ順次出力し、その実行状態を管理する。
 
-### 5.11.2 Action State
+## 16.2 Action State
 
 ```mermaid
 stateDiagram-v2
@@ -577,7 +577,7 @@ stateDiagram-v2
     Cancelled --> [*]
 ```
 
-### 5.11.3 Control System出力
+## 16.3 Control System出力
 
 Execution Manager は少なくとも以下を出力する。
 
@@ -591,7 +591,7 @@ ActionCommand
 └── Priority
 ```
 
-### 5.11.4 Action Result
+## 16.4 Action Result
 
 Control System から以下を受信する。
 
@@ -605,13 +605,13 @@ ActionResult
 └── ObservedState
 ```
 
-## 5.12 Post-process
+# 17. Post-process
 
-### 5.12.1 目的
+## 17.1 目的
 
 Action 実行後に結果を整理し、Memory、Policy、Goal、World State を更新する。
 
-### 5.12.2 処理内容
+## 17.2 処理内容
 
 - Action Result評価
 - Goal達成判定
@@ -624,9 +624,9 @@ Action 実行後に結果を整理し、Memory、Policy、Goal、World State を
 - Policy候補生成
 - 学習用データ生成
 
-### 5.12.3 会話処理
+# 18. 会話処理
 
-#### 5.12.3.1 処理フロー
+## 18.1 処理フロー
 
 ```mermaid
 flowchart LR
@@ -644,7 +644,7 @@ flowchart LR
     Memory --> Response
 ```
 
-### 5.12.4 会話出力
+## 18.2 会話出力
 
 会話出力は以下を区別する。
 
@@ -654,13 +654,13 @@ flowchart LR
 - Warning
 - Error Notification
 
-## 5.13 External AI Adapter
+# 19. External AI Adapter
 
-### 5.13.1 目的
+## 19.1 目的
 
 高負荷認識、Large Model、専門知識処理、Heavy Planning 等を外部計算資源へ委譲する。
 
-### 5.13.2 処理
+## 19.2 処理
 
 ```mermaid
 sequenceDiagram
@@ -676,7 +676,7 @@ sequenceDiagram
     end
 ```
 
-### 5.13.3 外部AI結果
+## 19.3 外部AI結果
 
 外部AI結果は以下を満たすまで内部状態へ確定反映しない。
 
@@ -686,7 +686,7 @@ sequenceDiagram
 - Safety Constraint確認
 - 必要に応じたConfidence評価
 
-### 5.13.4 通信断時設計
+# 20. 通信断時設計
 
 ```mermaid
 stateDiagram-v2
@@ -706,9 +706,9 @@ Degraded 状態では以下を継続する。
 
 外部AI依存処理については停止、代替または簡略化する。
 
-### 5.13.5 Safety System連携
+# 21. Safety System連携
 
-#### 5.13.5.1 Safety入力
+## 21.1 Safety入力
 
 Brain System は以下を受信する。
 
@@ -718,7 +718,7 @@ Brain System は以下を受信する。
 - EmergencyStop
 - Recovery State
 
-#### 5.13.5.2 優先順位
+## 21.2 優先順位
 
 ```text
 EmergencyStop
@@ -730,7 +730,7 @@ Critical Constraint
 Normal Planning
 ```
 
-#### 5.13.5.3 動作
+## 21.3 動作
 
 EmergencyStop 中は新規 Action を開始しない。
 
@@ -738,9 +738,9 @@ SafeStop 中は通常 Plan の継続を停止する。
 
 Critical Constraint 変更時は現在の Plan を再評価する。
 
-### 5.13.6 Error Handling
+# 22. Error Handling
 
-#### 5.13.6.1 Error情報
+## 22.1 Error情報
 
 ```text
 BrainError
@@ -753,7 +753,7 @@ BrainError
 └── Recovery
 ```
 
-#### 5.13.6.2 Recovery
+## 22.2 Recovery
 
 Error Levelに応じて以下を実行する。
 
@@ -765,7 +765,7 @@ Error Levelに応じて以下を実行する。
 - Degraded Operation
 - SafeStop Request
 
-## 5.14 Log / Trace
+# 23. Log / Trace
 
 以下を記録可能とする。
 
@@ -788,7 +788,7 @@ Error Levelに応じて以下を実行する。
 
 すべての主要ログには Timestamp を付与する。
 
-# 6. 処理優先度
+# 24. 処理優先度
 
 Brain System の処理優先順位を以下とする。
 
@@ -803,7 +803,7 @@ Brain System の処理優先順位を以下とする。
 9. 学習用処理
 10. 非重要ログ・整理処理
 
-# 7. リソース管理
+# 25. リソース管理
 
 Brain System は以下を監視する。
 
@@ -824,7 +824,7 @@ Brain System は以下を監視する。
 
 Safety関連処理は縮退対象外とする。
 
-# 8. 拡張性設計
+# 26. 拡張性設計
 
 以下を交換または追加可能な構成とする。
 
@@ -841,7 +841,7 @@ Safety関連処理は縮退対象外とする。
 
 各機能は共通Interfaceを介して接続する。
 
-# 9. 要求トレーサビリティ
+# 27. 要求トレーサビリティ
 
 | Brain要求 | 設計項目 |
 | :- | :- |
@@ -873,11 +873,11 @@ Safety関連処理は縮退対象外とする。
 | REQ-BRN-TST-* | Test Interface |
 | REQ-BRN-QUAL-* | Version / Module管理 |
 
-# 10. 詳細設計対象
+# 28. 詳細設計対象
 
 以下は詳細設計で定義する。
 
-## 10.1 Pre-process
+## 28.1 Pre-process
 
 - Spatial Perception Algorithm
 - Object Detection Model
@@ -886,7 +886,7 @@ Safety関連処理は縮退対象外とする。
 - Context Recognition
 - Confidence算出
 
-## 10.2 Internal Representation
+## 28.2 Internal Representation
 
 - Token ID体系
 - Data Structure
@@ -895,7 +895,7 @@ Safety関連処理は縮退対象外とする。
 - Attributes構造
 - Timestamp管理
 
-## 10.3 Planning
+## 28.3 Planning
 
 - Transformer構造
 - Attention構造
@@ -907,7 +907,7 @@ Safety関連処理は縮退対象外とする。
 - Plan生成アルゴリズム
 - Re-planningアルゴリズム
 
-## 10.4 Memory
+## 28.4 Memory
 
 - Short-Term Memory構造
 - Long-Term Memory構造
@@ -917,7 +917,7 @@ Safety関連処理は縮退対象外とする。
 - Summary方式
 - Forgetting Policy
 
-## 10.5 Execution
+## 28.5 Execution
 
 - Action Interface
 - Action State Machine
@@ -926,7 +926,7 @@ Safety関連処理は縮退対象外とする。
 - Timeout
 - Cancel処理
 
-## 10.6 External AI
+## 28.6 External AI
 
 - Request形式
 - Response形式
@@ -936,7 +936,7 @@ Safety関連処理は縮退対象外とする。
 - Authentication
 - Connection管理
 
-# 11. 未確定事項
+# 29. 未確定事項
 
 - ローカルAIモデル構成
 - 外部AIとの処理分担

@@ -10,11 +10,11 @@ Control System は Brain System から受信した Action Command を、物理�
 
 | 文書名 | 内容 |
 | :- | :- |
-| [Control System 要求仕様書](../requirement/README.md) | Control System が満たすべき要求 |
-| [Brain System 設計仕様書](../../Brain/spec/README.md) | Action Command |
-| [Actuator System 設計仕様書](../../Actuator/spec/README.md) | Drive Command / Actuator State |
-| [Safety System 要求仕様書](../../Safety/requirement/README.md) | 制限・停止要求 |
-| [Sensor System 要求仕様書](../../Sensor/requirement/README.md) | Feedback情報 |
+| Control System 要求仕様書 | Control System が満たすべき要求 |
+| Brain System 設計仕様書 | Action Command |
+| Actuator System 設計仕様書 | Drive Command / Actuator State |
+| Safety System 要求仕様書 | 制限・停止要求 |
+| Sensor System 要求仕様書 | Feedback情報 |
 
 # 3. 設計方針
 
@@ -376,3 +376,60 @@ Controller Interface
 - Joint Control方式
 - State Estimator
 - SafeStop方式
+# 26. Prototype 1 Hybrid Control Baseline
+## 26.1 Actuation構成反映
+Control Systemは以下のHybrid Actuationを前提とする。
+```text
+Neck
+  → Sternocleidomastoid / Splenius capitis muscle-like actuators
+Shoulder / Scapular Girdle
+  → Deltoid / Pectoralis major / Serratus anterior / Trapezius / Latissimus dorsi
+Elbow
+  → Biceps brachii muscle-like actuator
+Waist
+  → Dual electric linear cylinders
+Hip / Thigh
+  → Gluteus maximus / Rectus femoris / Biceps femoris / Adductor magnus
+Knee
+  → Passive joint + Optional Electromagnetic Lock
+Ankle
+  → Passive Spring-Damper
+Hand
+  → TBD
+```
+Control Systemは全関節を同一のPosition Servoとして扱わず、Active Muscle-Like / Linear / Brake-Controlled / Passive Elasticを区別する。
+## 26.2 Control Abstraction
+Joint Controllerは以下のActuation Classを扱う。
+```text
+ActuationClass
+├── MuscleLike
+├── LinearCylinder
+├── BrakeControlled
+├── PassiveElastic
+└── TBD
+```
+MuscleLike ActuatorではJoint角度Targetから直接Motor角度へ変換せず、Muscle Group Force / Displacement / Velocityへ配分する。
+## 26.3 Lower Body Hybrid Control
+Locomotion / Postureは以下を前提とする。
+- Hip / ThighはMuscle-Like Actuatorで能動制御
+- KneeはPassive Dynamics + Discrete Lock State
+- AnkleはPassive Spring-Damper
+- Foot Placement / LIPM / Capture Point / MPC系を候補とする
+- Knee Lockを含む場合はHybrid MPC / Hybrid State Machineを適用候補とする
+## 26.4 Upper Body Control
+ShoulderはScapula / Clavicle / Humerus coupled mechanismとして扱う。
+Manipulation ControllerはEnd-Effector TargetからShoulder/Scapular Muscle Group Targetへ変換する。
+Elbow FlexionはBiceps brachii Actuatorを使用する。
+Elbow ExtensionおよびHand MechanismはTBDとする。
+## 26.5 Power Coordination
+Power Systemから受信するPower Grant / Current LimitをControl Constraintとして扱う。
+Power Limited時は以下の順でMotionを調整する。
+```text
+Non-critical neck / upper body
+→ Upper body task acceleration
+→ Waist non-essential motion
+→ Lower body non-stance motion
+```
+Posture / fall preventionを最優先とする。
+## 26.6 詳細設計参照
+詳細は `detail/README.md` および各CTRL-MOD詳細設計を参照する。

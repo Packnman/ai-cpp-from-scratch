@@ -11,6 +11,12 @@ option(AI_CPP_BUILD_MODEL "Build the CUDA Agent Transformer and training tools" 
 option(AI_CPP_ENABLE_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
 option(AI_CPP_ENABLE_QWEN_INTEGRATION_TESTS
        "Build tests that require a running Qwen OpenAI-compatible server" OFF)
+option(AI_CPP_BUILD_SIMULATION "Build the MuJoCo plant simulation" OFF)
+option(AI_CPP_FETCH_MUJOCO "Fetch pinned MuJoCo when no package is installed" ON)
+option(AI_CPP_ENABLE_MUJOCO_VIEWER "Build the GLFW MuJoCo viewer" OFF)
+option(AI_CPP_FETCH_GLFW "Fetch pinned GLFW when viewer dependency is absent" ON)
+set(AI_CPP_MUJOCO_VERSION "3.13.0" CACHE STRING "Pinned MuJoCo version")
+set(AI_CPP_GLFW_VERSION "3.4" CACHE STRING "Pinned GLFW version")
 set(AI_CPP_CUDA_ARCHITECTURES "86" CACHE STRING "CUDA architectures")
 
 find_package(Threads REQUIRED)
@@ -32,6 +38,35 @@ add_library(brain_core STATIC
 target_include_directories(brain_core PUBLIC include third_party third_party/sqlite)
 target_link_libraries(brain_core PUBLIC brain_common Threads::Threads)
 target_compile_options(brain_core PRIVATE -Wall -Wextra -Wpedantic)
+
+add_library(actuator_sim STATIC
+    src/actuator/manager/ActuatorManager.cpp
+    src/actuator/component/sim/SimComponents.cpp
+    src/actuator/driver/sim/SimActuatorDriver.cpp)
+target_include_directories(actuator_sim PUBLIC include)
+target_compile_options(actuator_sim PRIVATE -Wall -Wextra -Wpedantic)
+
+if(AI_CPP_BUILD_SIMULATION)
+    find_package(mujoco ${AI_CPP_MUJOCO_VERSION} EXACT CONFIG QUIET)
+    if(NOT mujoco_FOUND)
+        if(NOT AI_CPP_FETCH_MUJOCO)
+            message(FATAL_ERROR
+                "MuJoCo ${AI_CPP_MUJOCO_VERSION} was not found; install it or enable AI_CPP_FETCH_MUJOCO")
+        endif()
+        include(FetchContent)
+        set(MUJOCO_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+        set(MUJOCO_BUILD_SIMULATE OFF CACHE BOOL "" FORCE)
+        set(MUJOCO_BUILD_STUDIO OFF CACHE BOOL "" FORCE)
+        set(MUJOCO_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+        set(MUJOCO_TEST_PYTHON_UTIL OFF CACHE BOOL "" FORCE)
+        FetchContent_Declare(mujoco
+            GIT_REPOSITORY https://github.com/google-deepmind/mujoco.git
+            GIT_TAG ${AI_CPP_MUJOCO_VERSION}
+            GIT_SHALLOW TRUE)
+        FetchContent_MakeAvailable(mujoco)
+    endif()
+    add_subdirectory(Simulation)
+endif()
 
 add_library(ner_core STATIC src/ner/entity.cpp src/ner/rule_extractor.cpp src/ner/model_extractor.cpp)
 target_include_directories(ner_core PUBLIC include third_party)
@@ -56,12 +91,19 @@ add_executable(discussion_cli train/discussion_main.cpp)
 target_link_libraries(discussion_cli PRIVATE agent_core)
 
 if(AI_CPP_ENABLE_SANITIZERS)
-    foreach(target brain_common brain_core agent_core agent_cli)
+    foreach(target brain_common brain_core actuator_sim agent_core agent_cli)
         target_compile_options(${target} PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
         target_link_options(${target} PUBLIC -fsanitize=address,undefined)
     endforeach()
 endif()
 if(BUILD_TESTING)
+    add_executable(actuator_sim_component_check
+        tests/actuator/actuator_sim_component_check.cpp)
+    target_link_libraries(actuator_sim_component_check PRIVATE actuator_sim)
+    add_test(NAME actuator_sim_component_check
+        COMMAND actuator_sim_component_check)
+    set_tests_properties(actuator_sim_component_check PROPERTIES
+        LABELS "actuator;simulation;unit")
     add_executable(brain_common_check tests/brain/brain_common_check.cpp)
     target_link_libraries(brain_common_check PRIVATE brain_common)
     add_test(NAME brain_common_check COMMAND brain_common_check)

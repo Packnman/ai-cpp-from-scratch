@@ -10,12 +10,12 @@ Safety System は Brain System から独立して動作可能とし、AIまた�
 
 | 文書名 | 内容 |
 | :- | :- |
-| [Safety System 要求仕様書](../requirement/README.md) | Safety要求 |
-| [Brain System 設計仕様書](../../Brain/spec/README.md) | Constraint / Stop連携 |
-| [Control System 設計仕様書](../../Control/spec/README.md) | SafeStop / Limit |
-| [Actuator System 設計仕様書](../../Actuator/spec/README.md) | EmergencyStop |
-| [Power System 設計仕様書](../../Power/spec/README.md) | Power Cut |
-| [Sensor System 設計仕様書](../../Sensor/spec/README.md) | Safety監視入力 |
+| Safety System 要求仕様書 | Safety要求 |
+| Brain System 設計仕様書 | Constraint / Stop連携 |
+| Control System 設計仕様書 | SafeStop / Limit |
+| Actuator System 設計仕様書 | EmergencyStop |
+| Power System 設計仕様書 | Power Cut |
+| Sensor System 設計仕様書 | Safety監視入力 |
 
 # 3. 設計方針
 

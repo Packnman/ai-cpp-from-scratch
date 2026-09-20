@@ -14,7 +14,10 @@
                 "Ninja",
                 "-DCMAKE_BUILD_TYPE=Debug",
                 "-DBUILD_TESTING=ON",
-                "-DAI_CPP_BUILD_CUDA_LIB=OFF"
+                "-DAI_CPP_BUILD_CUDA_LIB=OFF",
+                "-DAI_CPP_BUILD_SIMULATION=ON",
+                "-DAI_CPP_FETCH_MUJOCO=ON",
+                "-DAI_CPP_ENABLE_MUJOCO_VIEWER=OFF"
             ],
             "problemMatcher": []
         },

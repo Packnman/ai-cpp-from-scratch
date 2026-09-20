@@ -7,6 +7,16 @@
 
 - `run.sh`: CPU既定構成をbuildし、rule backendの `agent_cli` を起動する。
 
+## Robot Simulation
+
+- `simulation/run.sh test`: MuJoCo/Actuatorの単体・結合テスト
+- `simulation/run.sh sanitizer`: ASan/UBSan付きテスト
+- `simulation/run.sh headless`: humanoid modelのheadless実行
+- `simulation/run.sh smoke`: 全4段階MJCF modelのload/step確認
+- `simulation/run.sh viewer`: GLFW viewerのbuildと起動
+
+詳細と環境変数は [simulation/README.md](simulation/README.md) を参照する。
+
 ## Brainテスト
 
 - `brain/run_tests.sh spec`: 仕様書単位の12テストとBrain結合テスト

@@ -57,3 +57,21 @@ IActuatorDriver
 Brake Driverは `lock()` / `release()` を明示的に扱う。
 Linear Driverは Position/Velocity に加え Stroke / Force Limitを扱う。
 Tendon Driverは Motor positionだけでなくCable tension / pretensionを状態として扱う。
+
+# 10. Simulation Driver
+
+共通 `IActuatorDriver` はconfigure / enable / disable / command / stop / readState / resetFaultを持ち、Physical Driverとの交換境界とする。
+Simulation専用機能は派生 `ISimActuatorDriver` に分離する。
+
+```cpp
+class ISimActuatorDriver : public IActuatorDriver
+{
+public:
+    virtual void advance(double dtSeconds, const PlantFeedback&) = 0;
+    virtual PlantOutput plantOutput() const = 0;
+    virtual void injectFault(const SimFaultInjection&) = 0;
+};
+```
+
+`createActuatorDriver()` は `BackendType::Simulation` では `SimActuatorDriver` を返す。
+`BackendType::Physical` では外部からPhysical Factoryを注入し、上位ManagerへSimulation分岐を持ち込まない。

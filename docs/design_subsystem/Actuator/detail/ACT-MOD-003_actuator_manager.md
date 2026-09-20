@@ -78,3 +78,16 @@ ActuatorEntry
 
 Passive Elastic JointはDrive Commandを持たなくても、Descriptor / State / Faultの管理対象とする。
 Brake-Controlled Jointは角度制御ではなくLock / Release Commandを扱う。
+
+# 9. Simulation Backend統合
+
+実装の `ActuatorManager` は `ActuatorDescriptor` と `std::unique_ptr<IActuatorDriver>` を同一Registryで所有する。
+ManagerはSimulation固有型を参照せず、以下を共通処理する。
+
+- ID重複拒否
+- enable / disable / stop
+- `DriveCommand` のDriver転送
+- `ActuatorState` の取得
+
+Simulation時はFactoryが `SimActuatorDriver`、実機時は注入されたPhysical Driver Factoryが実機Driverを生成する。
+決定論的なSimulation時間発展とPlant接続は `ISimActuatorDriver` 以下に限定し、Registryの処理は共通とする。

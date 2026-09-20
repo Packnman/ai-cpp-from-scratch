@@ -8,10 +8,10 @@
 
 | 文書名 | 内容 |
 | :- | :- |
-| [Human Interface System 要求仕様書](../requirement/README.md) | HMI要求 |
-| [Brain System 設計仕様書](../../Brain/spec/README.md) | Voice / Text入力、応答 |
-| [Safety System 要求仕様書](../../Safety/requirement/README.md) | EmergencyStop |
-| [Communication System 設計仕様書](../../Communication/spec/README.md) | Remote UI通信 |
+| Human Interface System 要求仕様書 | HMI要求 |
+| Brain System 設計仕様書 | Voice / Text入力、応答 |
+| Safety System 要求仕様書 | EmergencyStop |
+| Communication System 設計仕様書 | Remote UI通信 |
 
 # 3. 設計方針
 

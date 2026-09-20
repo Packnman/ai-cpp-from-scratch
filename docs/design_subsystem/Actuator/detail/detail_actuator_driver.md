@@ -45,3 +45,12 @@ Driver固有Fault Codeを共通FaultTypeへ変換する。
 
 # 8. Mock Driver
 実機なしでposition response / velocity response / current rise / temperature rise / timeout / driver faultを模擬する。
+# 9. Prototype 1 Motor / Driver Standard
+- Motor Family: Portescap 22ECT35 / 22ECT48 / 22ECT60
+- Nominal actuator bus: 24 V
+- Feedback: Hall Sensor
+- Current-controlled BLDC Driver
+- Per-motor current limit
+- Group power limit
+- Thermal derating
+DriverはMotor model / winding別parameterをConfigurationで保持する。

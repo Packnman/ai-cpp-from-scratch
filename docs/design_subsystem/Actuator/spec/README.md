@@ -41,21 +41,19 @@ Actuator System は高レベルの動作計画を行わない。
 
 ```mermaid
 flowchart LR
-    Brain[Brain System]
-    Control[Control System]
-    Actuator[Actuator System]
-    Physical[Physical Actuator]
-    Safety[Safety System]
-    Power[Power System]
-
-    Brain -->|Action| Control
-    Control -->|Drive Command| Actuator
-    Actuator -->|Electrical / Mechanical Output| Physical
-    Physical -->|State / Feedback| Actuator
-    Actuator -->|Actuator State| Control
-
-    Safety -.->|Limit / Stop| Actuator
-    Power -->|Power Supply| Actuator
+    Brain[Brain System]
+    Control[Control System]
+    Actuator[Actuator System]
+    Physical[Physical Actuator]
+    Safety[Safety System]
+    Power[Power System]
+    Brain -->|Action| Control
+    Control -->|Drive Command| Actuator
+    Actuator -->|Electrical / Mechanical Output| Physical
+    Physical -->|State / Feedback| Actuator
+    Actuator -->|Actuator State| Control
+    Safety -.->|Limit / Stop| Actuator
+    Power -->|Power Supply| Actuator
 ```
 
 ## 3.3 安全優先
@@ -66,11 +64,11 @@ Actuator System は通常の Control Command より Safety Command を優先す�
 
 ```text
 Emergency Stop
-    >
+    >
 Safe Stop
-    >
+    >
 Safety Limit
-    >
+    >
 Control Command
 ```
 
@@ -89,49 +87,43 @@ Actuator System は以下のモジュールから構成する。
 | ACT-MOD-007 | Fault Monitor | 過電流、過熱、通信異常等の検出 |
 | ACT-MOD-008 | Power Interface | Power System 状態の取得 |
 | ACT-MOD-009 | Log / Trace | 指令、状態、Error の記録 |
-
 ```mermaid
+
 flowchart TB
-    Control[Control System]
-    Safety[Safety System]
-    Power[Power System]
+    Control[Control System]
+    Safety[Safety System]
+    Power[Power System]
+    subgraph ACT["Actuator System"]
+        Receiver[Command Receiver]
+        Validator[Command Validator]
+        Manager[Actuator Manager]
+        Limiter[Safety Limiter]
+        Drive[Drive Interface]
+        Monitor[State Monitor]
+        Fault[Fault Monitor]
+        Pwr[Power Interface]
+        Log[Log / Trace]
+    end
 
-    subgraph ACT["Actuator System"]
-        Receiver[Command Receiver]
-        Validator[Command Validator]
-        Manager[Actuator Manager]
-        Limiter[Safety Limiter]
-        Drive[Drive Interface]
-        Monitor[State Monitor]
-        Fault[Fault Monitor]
-        Pwr[Power Interface]
-        Log[Log / Trace]
-    end
-
-    Physical[Physical Actuator]
-
-    Control --> Receiver
-    Safety --> Receiver
-    Receiver --> Validator
-    Validator --> Manager
-    Manager --> Limiter
-    Limiter --> Drive
-    Drive --> Physical
-
-    Physical --> Monitor
-    Monitor --> Manager
-    Monitor --> Fault
-
-    Power --> Pwr
-    Pwr --> Fault
-
-    Fault --> Manager
-    Manager --> Control
-    Fault --> Safety
-
-    Receiver --> Log
-    Monitor --> Log
-    Fault --> Log
+    Physical[Physical Actuator]
+    Control --> Receiver
+    Safety --> Receiver
+    Receiver --> Validator
+    Validator --> Manager
+    Manager --> Limiter
+    Limiter --> Drive
+    Drive --> Physical
+    Physical --> Monitor
+    Monitor --> Manager
+    Monitor --> Fault
+    Power --> Pwr
+    Pwr --> Fault
+    Fault --> Manager
+    Manager --> Control
+    Fault --> Safety
+    Receiver --> Log
+    Monitor --> Log
+    Fault --> Log
 ```
 
 # 5. Actuator 管理
@@ -152,19 +144,22 @@ neck_yaw
 
 ## 5.2 Actuator 種別
 
-少なくとも以下を扱えること。
+Actuator System は、モータ駆動関節だけでなく、直動、制動、受動弾性、腱・ワイヤ伝達を含む以下の Actuation Type を扱う。
 
-| Type | 内容 |
-| :- | :- |
-| Joint Motor | 関節駆動 |
-| Hand | 多指ハンド |
-| Gripper | 把持機構 |
-| Leg | 脚部駆動系 |
-| Head | 頭部機構 |
-| Neck | 頸部機構 |
-| Other | 拡張アクチュエータ |
+| Type | 内容 | 代表用途 |
+| :- | :- | :- |
+| Muscle-Like Multi-Motor Actuator | 小型BLDCを複数連動し、人体筋肉の起始・停止方向を模倣して力を生成 | 首、肩・肩甲帯、肘、股関節・大腿部 |
+| Linear Actuator | 直動アクチュエータ | 腰 Pitch / Roll |
+| Brake-Controlled Joint | 駆動源を持たず Lock / Release を制御する関節 | 膝、腰 Spine Lock |
+| Passive Elastic Joint | Spring / Damper を用いる受動関節 | 足首 |
+| Tendon / Cable Transmission | 筋肉模倣Actuatorの力を腱・ワイヤで伝達 | 肩甲骨・上腕骨連動、必要に応じ各関節 |
+| Hand | 多指ハンド | 手指 |
+| Gripper | 把持機構 | グリッパ |
+| Other | 拡張アクチュエータ | 将来拡張 |
 
-## 5.3 Actuator Descriptor
+Actuator の追加時に上位 System の処理を変更しないため、Actuation Type ごとの差異は Descriptor および Driver Interface で吸収する。
+
+## 5.3 Actuator Descriptor**
 
 Actuator ごとに以下の設定情報を保持可能とする。
 
@@ -172,6 +167,8 @@ Actuator ごとに以下の設定情報を保持可能とする。
 ActuatorDescriptor
 ├── Actuator ID
 ├── Type
+├── Actuation Type
+├── Transmission Type
 ├── Position Limit
 ├── Velocity Limit
 ├── Torque Limit
@@ -179,6 +176,10 @@ ActuatorDescriptor
 ├── Temperature Limit
 ├── Control Mode
 ├── Communication Interface
+├── Brake / Lock Capability
+├── Passive Stiffness / Damping
+├── Stroke / Linear Force Limit
+├── Tendon / Cable Parameters
 └── Version
 ```
 
@@ -209,6 +210,10 @@ DriveCommand
 - Current
 - Stop
 - Disable
+- Lock
+- Release
+
+`Lock / Release` は Brake-Controlled Joint 等で使用する。Passive Elastic Joint は能動 Control Mode を持たず、状態監視対象として管理してよい。
 
 すべての Actuator が全 Control Mode を実装する必要はなく、対応可否は Actuator Descriptor で定義する。
 
@@ -240,6 +245,10 @@ ActuatorState
 ├── Torque
 ├── Current
 ├── Temperature
+├── Brake / Lock State
+├── Spring Deflection
+├── Linear Stroke / Force
+├── Tendon Tension
 ├── Status
 ├── Error
 └── Timestamp
@@ -259,36 +268,30 @@ ActuatorState
 | Stopping | 停止処理中 |
 | Fault | 異常 |
 | EmergencyStop | 非常停止 |
-
 ## 7.3 状態遷移
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Disabled
-    Disabled --> Standby
-    Standby --> Ready
-    Ready --> Running
-    Running --> Ready
-
-    Running --> Limited
-    Limited --> Running
-    Limited --> Ready
-
-    Running --> Stopping
-    Stopping --> Ready
-
-    Ready --> Fault
-    Running --> Fault
-    Limited --> Fault
-
-    Fault --> Disabled
-
-    Disabled --> EmergencyStop
-    Standby --> EmergencyStop
-    Ready --> EmergencyStop
-    Running --> EmergencyStop
-    Limited --> EmergencyStop
-    Fault --> EmergencyStop
+    [\*] --> Disabled
+    Disabled --> Standby
+    Standby --> Ready
+    Ready --> Running
+    Running --> Ready
+    Running --> Limited
+    Limited --> Running
+    Limited --> Ready
+    Running --> Stopping
+    Stopping --> Ready
+    Ready --> Fault
+    Running --> Fault
+    Limited --> Fault
+    Fault --> Disabled
+    Disabled --> EmergencyStop
+    Standby --> EmergencyStop
+    Ready --> EmergencyStop
+    Running --> EmergencyStop
+    Limited --> EmergencyStop
+    Fault --> EmergencyStop
 ```
 
 # 8. 状態取得
@@ -345,11 +348,11 @@ Temperature に応じて以下を行う。
 
 ```text
 Normal
-   ↓
+   ↓
 Warning
-   ↓
+   ↓
 Output Limited
-   ↓
+   ↓
 Stop
 ```
 
@@ -375,13 +378,12 @@ Emergency Stop 受信時は通常指令処理を中断する。
 
 ```mermaid
 flowchart TD
-    EStop[Emergency Stop]
-    Block[Block Normal Command]
-    DriveOff[Stop Dangerous Drive Output]
-    State[Set EmergencyStop State]
-    Notify[Notify Control / Safety]
-
-    EStop --> Block --> DriveOff --> State --> Notify
+    EStop[Emergency Stop]
+    Block[Block Normal Command]
+    DriveOff[Stop Dangerous Drive Output]
+    State[Set EmergencyStop State]
+    Notify[Notify Control / Safety]
+    EStop --> Block --> DriveOff --> State --> Notify
 ```
 
 Emergency Stop 復帰後も自動で Running へ戻らず、上位からの明示的な復帰処理を必要とする。
@@ -397,6 +399,10 @@ Safe Stop は以下を考慮する。
 - 把持物落下防止
 - 急激なトルク解除防止
 - 動作速度低下後の停止
+- 支持脚膝 Brake の適切な Lock
+- 腰 Spine Lock の適切な Lock
+- 足首 Passive Elastic Joint の反力を考慮した停止
+- Tendon / Cable tension の危険な急解放防止
 
 具体的な Safe Stop Sequence は機体構成ごとの詳細設計で定義する。
 
@@ -434,9 +440,8 @@ Safe Stop は以下を考慮する。
 
 ```text
 Commanded Position = 30 deg
-Encoder Position   = 30 deg
-Mechanical Limit   = 20 deg
-
+Encoder Position   = 30 deg
+Mechanical Limit   = 20 deg
 → inconsistent
 ```
 
@@ -448,19 +453,18 @@ Command 送信後、Actuator が一定時間応答しない場合は Command Res
 
 ```mermaid
 sequenceDiagram
-    participant C as Control System
-    participant A as Actuator System
-    participant M as Motor Driver
-
-    C->>A: DriveCommand
-    A->>M: Drive
-    alt Response received
-        M-->>A: State
-        A-->>C: ActuatorState
-    else Timeout
-        A->>A: Fault Detection
-        A-->>C: Error
-    end
+    participant C as Control System
+    participant A as Actuator System
+    participant M as Motor Driver
+    C->>A: DriveCommand
+    A->>M: Drive
+    alt Response received
+        M-->>A: State
+        A-->>C: ActuatorState
+    else Timeout
+        A->>A: Fault Detection
+        A-->>C: Error
+    end
 ```
 
 # 15. Control System インタフェース
@@ -575,6 +579,7 @@ Actuator Interface
 ├── disable()
 ├── command()
 ├── stop()
+├── lock() / release()
 ├── getState()
 ├── resetFault()
 └── getDescriptor()
@@ -598,6 +603,10 @@ Actuator Interface
 - Communication Timeout
 - Power Fault
 - State Monitor
+- Brake Lock / Release
+- Linear Actuator Stroke / Force
+- Passive Spring / Damper State
+- Tendon / Cable Tension
 
 実アクチュエータなしでも Driver 応答を模擬可能な構成とする。
 
@@ -684,9 +693,62 @@ Actuator Interface
 - Temperature Filter
 - Sensor Fusion
 
-# 25. 未確定事項
+# 25. 採用する機構アーキテクチャ
 
-- モータ種類
+本設計では初期人型ロボットの機構方針として以下を採用する。
+
+## 25.1 上肢
+
+```text
+胸 / 背中 Motor
+    ↓ Tendon / Cable
+肩甲骨 + 上腕骨連動機構
+    ↓
+肘 Local Motor
+```
+
+肩部へ多数の Motor を集中配置せず、Motor質量をTorso側へ寄せる。肩甲骨の回旋・前後移動と上腕骨運動を連動させ、少ない駆動源で広い作業域を得る。
+
+## 25.2 腰
+
+```text
+Left Rib Attachment      Right Rib Attachment
+        \                  /
+         Linear Actuator x2
+               \        /
+          Load-bearing Spine
+            + Spine Lock
+                 |
+               Pelvis
+```
+
+左右 Linear Actuator の同相・差動変位により主に Waist Pitch / Roll を生成する。中央 Spine は上半身の圧縮荷重・主要 Load Path を受け、Linear Actuator に不要な横荷重を与えない。Spine Lock は静止保持時の消費電力低減および安全保持に利用する。Yaw は初期構成では能動駆動対象外とし、必要に応じ Passive / Lock 機構として拡張する。
+
+## 25.3 下肢
+
+```text
+Hip / Thigh      : Muscle-like multi-motor actuators
+                   Gluteus maximus / Rectus femoris /
+                   Biceps femoris / Adductor magnus
+Knee             : Passive joint + optional electromagnetic lock
+Ankle            : Passive Spring-Damper Joint
+```
+
+股関節・大腿部は人体筋肉の走行を参考に配置した複数の小型BLDC Actuator群で連続運動を生成する。膝は Motor で角度を能動生成せず、遊脚時は受動運動を許容し、必要に応じ支持脚時等でElectromagnetic Lockを使用する。膝角度SensorはLock timingの制御および状態監視に使用する。
+
+足首は Motor を持たず、Spring-Damper により着地衝撃・高周波振動を吸収し、受動的な地面追従性を得る。
+
+## 25.4 設計思想
+
+- 動作エネルギーを供給する箇所には Active Actuator を使用する。
+- 姿勢保持を主目的とする箇所には Brake / Lock を使用する。
+- 衝撃吸収・エネルギー蓄積・地面追従には Passive Elastic Element を使用する。
+- 重い Motor は可能な限り Torso / Pelvis 側へ集中し、末端慣性を低減する。
+- Active DOF を減らした結果必要となる状態推定・Hybrid Control は Control System 側で扱う。
+
+# 26. 未確定事項
+
+- Motor FamilyはPortescap 22ECT35 / 22ECT48 / 22ECT60をBaseline採用済み。巻線・個別型式suffixは詳細選定TBD。
 - Motor Driver
 - Gear Ratio
 - Encoder種類
@@ -700,5 +762,80 @@ Actuator Interface
 - Communication Protocol
 - Command Timeout
 - SafeStop方式
+- Knee Brake 種類、保持Torque、Release時間
+- Spine Lock 種類、保持Torque、Release時間
+- Waist Linear Actuator 種類、Stroke、最大推力、最大速度
+- Waist Linear Actuator 取付位置・実効Moment Arm
+- Ankle Spring Constant / Damping Coefficient / Mechanical Limit
+- Tendon / Cable 材質、Pretension、最大張力、Routing
+- Shoulder linkage / differential geometry
 - Brake方式
 - Power Cut方式
+
+# 27. 市販Motor Baseline
+## 27.1 標準Family
+筋肉模倣Active ActuatorのPrototype 1標準MotorはPortescap 22ECT Ultra ECシリーズとする。
+| Class | Model | Diameter | Length | Max continuous mechanical power @25°C | Weight |
+| :- | :- | --: | --: | --: | --: |
+| S | 22ECT35 | 22 mm | 35 mm | 34 W | 67 g |
+| M | 22ECT48 | 22 mm | 48 mm | 54 W | 98 g |
+| L | 22ECT60 | 22 mm | 60 mm | 86 W | 123 g |
+24 V windingを基本候補とする。
+## 27.2 筋肉Groupへの割当
+```text
+Neck:
+  Sternocleidomastoid : 22ECT35 ×1 / side
+  Splenius capitis    : 22ECT35 ×1 / side
+Upper body:
+  Biceps brachii      : 22ECT35 ×2 / side
+  Deltoid             : 22ECT35 ×3 / side
+  Serratus anterior   : 22ECT35 ×2 / side
+  Trapezius           : 22ECT35 ×2 / side
+  Pectoralis major    : 22ECT48 ×2 / side
+  Latissimus dorsi    : 22ECT48 ×2 / side
+Lower body:
+  Gluteus maximus     : 22ECT60 ×3 / side
+  Rectus femoris      : 22ECT48 ×2 / side
+  Biceps femoris      : 22ECT48 ×2 / side
+  Adductor magnus     : 22ECT48 ×2 / side
+Waist:
+  Dual linear cylinder: 22ECT60 ×1 / cylinder (provisional)
+```
+合計50 MotorをBaselineとする。
+## 27.3 Motor重量
+Bare Motor合計は約4.42 kgとする。
+Transmission、Driver、Harness、Bearing、Coolingは別途Mass Budgetへ計上する。
+## 27.4 出力管理
+Installed maximum continuous mechanical ratingの単純合算値は約2.52 kWである。
+ただし全Motor同時最大運転を許容する意味ではない。
+Control / Power SystemはGlobal Power Budgetを管理し、以下を制御する。
+- Motor group simultaneous duty
+- Current limit
+- Thermal derating
+- Battery state derating
+- Safety level derating
+## 27.5 Mission Power Target
+30 kg Robotの初期Mission Target:
+```text
+Battery nominal energy : 約1.2 kWh
+Usable ratio           : 0.8
+Usable energy          : 約0.96 kWh
+Nominal operation      : 平均 <= 190 W
+Intense operation      : 平均 <= 1.2 kW
+Short peak target      : <= 2.0 kW級
+```
+Nominal operationで5 h以上、Intense operationで45 min以上を目標とする。
+## 27.6 詳細
+Motor本数、Screw Lead、Stroke、Cable Routing、Moment Armの詳細は `../05_actuator_detail/detail_commercial_motor_selection.md` を参照する。
+# 28. 未確定事項（更新）
+- Shoulder / Hip各ActuatorのMoment Arm
+- Ball Screw / Lead Screw選定
+- Actuator Stroke
+- Tendon / Cable材質およびPretension
+- Knee Electromagnetic Lock型番
+- Ankle Spring / Damper定数
+- Waist Cylinder最終推力 / Stroke / Speed
+- Motor Driver型番
+- Cooling方式
+- Elbow extension側のActuator要否
+- Hand機構

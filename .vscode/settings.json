@@ -7,11 +7,20 @@
     "cmake.buildBeforeRun": true,
     "cmake.configureSettings": {
         "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": true,
         "BUILD_TESTING": true,
-        "AI_CPP_BUILD_CUDA_LIB": false
+        "AI_CPP_BUILD_CUDA_LIB": false,
+        "AI_CPP_BUILD_SIMULATION": true,
+        "AI_CPP_FETCH_MUJOCO": true,
+        "AI_CPP_ENABLE_MUJOCO_VIEWER": false
     },
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
     "C_Cpp.default.compileCommands": "${workspaceFolder}/build/agent-debug/compile_commands.json",
+    "C_Cpp.default.includePath": [
+        "${workspaceFolder}/include",
+        "${workspaceFolder}/Simulation/include",
+        "${workspaceFolder}/build/agent-debug/_deps/mujoco-src/include"
+    ],
     "C_Cpp.default.cppStandard": "c++20",
     "C_Cpp.default.cStandard": "c17",
     "C_Cpp.errorSquiggles": "enabled"

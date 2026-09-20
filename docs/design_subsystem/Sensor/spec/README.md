@@ -8,11 +8,11 @@
 
 | 文書名 | 内容 |
 | :- | :- |
-| [Sensor System 要求仕様書](../requirement/README.md) | Sensor要求 |
-| [Brain System 設計仕様書](../../Brain/spec/README.md) | Perception入力 |
-| [Control System 設計仕様書](../../Control/spec/README.md) | Feedback入力 |
-| [Safety System 設計仕様書](../../Safety/spec/README.md) | Safety監視入力 |
-| [Power System 設計仕様書](../../Power/spec/README.md) | Voltage / Current / Temperature |
+| Sensor System 要求仕様書 | Sensor要求 |
+| Brain System 設計仕様書 | Perception入力 |
+| Control System 設計仕様書 | Feedback入力 |
+| Safety System 設計仕様書 | Safety監視入力 |
+| Power System 設計仕様書 | Voltage / Current / Temperature |
 
 # 3. 設計方針
 

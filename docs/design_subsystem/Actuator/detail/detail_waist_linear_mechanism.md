@@ -75,3 +75,22 @@ Spine Lockは上半身保持電力低減を目的とするが、Lock機構だけ
 - screw type
 - reduction ratio
 - lock mechanism
+# 10. 採用Motor Baseline
+左右2本のLinear Cylinderを使用する。
+各Cylinderの初期Motor候補:
+```text
+Portescap 22ECT60 ×1
+24 V
+86 W max continuous mechanical rating @25°C
+```
+最終確定には以下を算定する。
+```text
+Required waist torque
+Effective moment arm
+Cylinder force
+Stroke
+Linear velocity
+Screw efficiency
+Thermal duty
+```
+必要推力を満たせない場合はMotor複数化またはScrew Lead変更を優先し、安易なMotor大型化は避ける。

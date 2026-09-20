@@ -12,12 +12,12 @@ Communication System は、ロボット内部サブシステム間および外�
 
 | 文書名 | 内容 |
 | :- | :- |
-| [Communication System 要求仕様書](../requirement/README.md) | Communication System が満たすべき要求 |
-| [システム要求仕様書](../../../design_system/requirement/README.md) | ロボットシステム全体の要求 |
-| [システム設計仕様書](../../../design_system/spec/README.md) | システム全体構成 |
-| [Brain System 設計仕様書](../../Brain/spec/README.md) | Brainとの通信要求 |
-| [Control System 設計仕様書](../../Control/spec/README.md) | Controlとの通信要求 |
-| [Safety System 設計仕様書](../../Safety/spec/README.md) | Safety通信および優先通信要求 |
+| Communication System 要求仕様書 | Communication System が満たすべき要求 |
+| システム要求仕様書 | ロボットシステム全体の要求 |
+| システム設計仕様書 | システム全体構成 |
+| Brain System 設計仕様書 | Brainとの通信要求 |
+| Control System 設計仕様書 | Controlとの通信要求 |
+| Safety System 設計仕様書 | Safety通信および優先通信要求 |
 
 # 3. 設計方針
 
