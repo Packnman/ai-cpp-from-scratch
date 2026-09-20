@@ -29,9 +29,9 @@ python3 scripts/convert_summary_sft.py jmultiwoz \
   --revision COMMIT_OR_DATASET_REVISION --split train
 
 python3 scripts/convert_summary_sft.py mix \
-  --base data/agent-v2-sft/train.base.jsonl \
+  --base data/agent-v3-base-sft/train.base.jsonl \
   --jmultiwoz /tmp/jmultiwoz-train.jsonl \
-  --output data/agent-v2-sft/train.jsonl --seed 42
+  --output data/agent-v3-base-sft/train.jsonl --seed 42
 ```
 
 `mix` は既存 SUMMARIZE 件数を保ち、JMultiWOZ 70%、決定的合成データ30%を選びます。
@@ -48,7 +48,7 @@ python3 scripts/convert_summary_sft.py livedoor \
   --revision ARCHIVE_CHECKSUM --split train --mix-percent 5
 
 python3 scripts/convert_summary_sft.py mix \
-  --base data/agent-v2-sft/train.base.jsonl \
+  --base data/agent-v3-base-sft/train.base.jsonl \
   --jmultiwoz /tmp/jmultiwoz-train.jsonl --livedoor /tmp/livedoor-5.jsonl \
   --livedoor-percent 5 --output /tmp/agent-livedoor-5.jsonl
 ```

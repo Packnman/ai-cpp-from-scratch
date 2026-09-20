@@ -62,7 +62,7 @@ ctest --test-dir build/model --output-on-failure
 
 ```sh
 ./build/model/agent_cli --backend rule --file-root . --memory-db agent.sqlite3
-./build/model/agent_cli --backend hybrid --model models/agent_v2_chat_sft \
+./build/model/agent_cli --backend hybrid --model models/agent_v3_chat_sft \
   --file-root . --memory-db agent.sqlite3 --seed 42 --temperature 0.8 --top-p 0.9
 ```
 
@@ -87,18 +87,23 @@ memoryへ載せません。
 
 ```sh
 M=./build/model/agent_model_cli
-$M tokenizer --train data/jawiki/train.jsonl --output models/tokenizer.model --vocabulary 8192
-$M pretrain --train data/jawiki/train.jsonl --validation data/jawiki/validation.jsonl \
-  --tokenizer models/tokenizer.model --output models/agent-pretrain \
-  --steps 100000 --token-budget 15000000 --batch-size 2 --accumulation 8
+$M tokenizer-balanced --jawiki-train data/jawiki-20260901/train.jsonl \
+  --conversation-train data/conversation/train.jsonl \
+  --output models/agent_v3/tokenizer.model --vocabulary 8192
+$M pretrain-sharded --shard-manifest data/jawiki-20260901-shards/manifest.json \
+  --validation data/jawiki-20260901/validation.jsonl \
+  --tokenizer models/agent_v3/tokenizer.model \
+  --output models/agent_v3_pretrain_jawiki --max-shards 36 \
+  --layers 6 --embedding 320 --heads 5 --feed-forward 1280 \
+  --batch-size 2 --accumulation 4
 $M generate-sft --conversation-train data/conversation/train.jsonl \
   --output data/realpersona-chat-sft/train.jsonl --seed 42 --profile chat --split train
-$M sft --train data/agent-v2-sft/train.jsonl --validation data/agent-v2-sft/validation.jsonl \
-  --source models/agent-pretrain --output models/agent_v2_sft --steps 50000 --accumulation 4
-$M resume --kind sft --train data/agent-v2-sft/train.jsonl \
-  --validation data/agent-v2-sft/validation.jsonl --model models/agent_v2_sft --steps 1000
-$M validate --kind sft --data data/agent-v2-sft/validation.jsonl \
-  --model models/agent_v2_sft --batch-size 2
+$M sft --train data/realpersona-chat-sft/train.jsonl \
+  --validation data/realpersona-chat-sft/validation.jsonl \
+  --source models/agent_v3_pretrain_jawiki \
+  --output models/agent_v3_chat_sft --steps 5000 --accumulation 4
+$M validate --kind sft --data data/realpersona-chat-sft/validation.jsonl \
+  --model models/agent_v3_chat_sft --batch-size 1 --autoregressive false
 ```
 
 ### 議論データを追加する場合（事前学習は再開不要）
@@ -176,6 +181,7 @@ WSL2でメモリ使用量を抑えて順番に実行する場合は、次のス�
 ./scripts/run_00_status.sh
 ./scripts/run_01_build.sh
 ./scripts/run_02_tokenizer.sh
+./scripts/run_03_shard_jawiki.sh
 ./scripts/run_03_pretrain.sh
 ./scripts/run_04_generate_sft.sh
 ./scripts/run_05_sft.sh
@@ -183,10 +189,12 @@ WSL2でメモリ使用量を抑えて順番に実行する場合は、次のス�
 ./scripts/run_07_agent.sh
 ```
 
-保存済みcheckpointへpretrainを追加する場合は `run_03_resume_pretrain.sh`、SFTを追加する場合は
-`run_05_resume_sft.sh` を使います。
-既定tokenizerは検証済みの `models/agent_v1_smoke/tokenizer.model` を再利用します。pathやstep数は
+`run_03_pretrain.sh` は `checkpoint/latest.json` があれば自動再開し、manifestが完了済みなら
+変更せず終了します。SFTは既存bundleを上書きせず、新しい出力先を指定して実行します。
+既定tokenizerは検証済みの `models/agent_v3/tokenizer.model` を再利用します。pathや設定は
 `AI_CPP_TOKENIZER`、`AI_CPP_PRETRAIN_MODEL`、`AI_CPP_SFT_PROFILE`、`AI_CPP_SFT_MODEL`、
-`AI_CPP_PRETRAIN_TOKENS`、`AI_CPP_VALIDATION_TOKENS`、`AI_CPP_SFT_STEPS` などの
-環境変数で変更できます。既定の`AI_CPP_SFT_PROFILE=chat`は旧`agent_v1_sft`を上書きせず`agent_v2_chat_sft`へ保存し、`run_07_agent.sh`をhybridで起動します。第2段階は`AI_CPP_SFT_PROFILE=agent`で別の`agent_v2_sft`へ50,000 steps学習します。既定ではJawiki indexもtrain 15M tokens、validation 26万tokensまでに
-制限し、resume時にも同じfingerprintになるよう同じ制限を適用します。
+`AI_CPP_MAX_SHARDS`、`AI_CPP_VALIDATION_TOKENS`、`AI_CPP_SFT_STEPS` などの環境変数で
+変更できます。既定の`AI_CPP_SFT_PROFILE=chat`は`models/agent_v3_chat_sft`を使い、
+`run_07_agent.sh`をhybridで起動します。第2段階は`AI_CPP_SFT_PROFILE=agent`で別の
+`models/agent_v3_agent_sft`へ学習します。全一覧とsmoke手順は
+[scripts/README.md](scripts/README.md)を参照してください。

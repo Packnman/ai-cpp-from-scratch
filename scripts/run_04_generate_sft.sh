@@ -6,10 +6,15 @@ agent_require_cli
 agent_require_file "$AI_CPP_CONVERSATION_DIR/train.jsonl"
 agent_require_file "$AI_CPP_CONVERSATION_DIR/validation.jsonl"
 mkdir -p "$AI_CPP_SFT_DATA_DIR"
-if [ -e "$AI_CPP_SFT_DATA_DIR/train.jsonl" ] ||
+if [ -e "$AI_CPP_SFT_DATA_DIR/train.jsonl" ] &&
    [ -e "$AI_CPP_SFT_DATA_DIR/validation.jsonl" ]; then
     echo "SFT corpus already exists in $AI_CPP_SFT_DATA_DIR; keeping it" >&2
     exit 0
+fi
+if [ -e "$AI_CPP_SFT_DATA_DIR/train.jsonl" ] ||
+   [ -e "$AI_CPP_SFT_DATA_DIR/validation.jsonl" ]; then
+    echo "incomplete SFT corpus in $AI_CPP_SFT_DATA_DIR; move it aside or finish it explicitly" >&2
+    exit 1
 fi
 if [ "$AI_CPP_SFT_PROFILE" = agent ]; then
     if [ -z "$AI_CPP_JMULTIWOZ_DIR" ] || [ -z "$AI_CPP_JMULTIWOZ_REVISION" ]; then

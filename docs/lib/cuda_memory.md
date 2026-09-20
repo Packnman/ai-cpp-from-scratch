@@ -8,11 +8,11 @@
 
 `AI_CPP_CUDA_MEMORY_POOL=0` は従来の `cudaMalloc` / `cudaFree`。設定はプロセス内の最初の非ゼロ確保時に固定する。不正な設定値は例外。非対応デバイス・ドライバーでは理由を stderr に記録して従来方式へフォールバックする。通常の CUDA エラーやメモリ不足ではフォールバックせず例外を伝える。
 
-`scripts/run_train.sh` と `scripts/run_validation.sh` は `MEMORY_POOL=1` を既定とし、上記環境変数として子プロセスに渡す。例：
+モデルpipelineには上記環境変数を直接渡す。未指定時はpoolが有効である。例：
 
 ```sh
-MEMORY_POOL=0 bash scripts/run_train.sh
-MEMORY_POOL=1 MODE=chat bash scripts/run_validation.sh
+AI_CPP_CUDA_MEMORY_POOL=0 ./scripts/run_03_pretrain.sh
+AI_CPP_CUDA_MEMORY_POOL=1 ./scripts/run_06_validate.sh
 ```
 
 変更は次に起動するプロセスから適用される。稼働中の学習の設定や状態には影響しない。
@@ -37,7 +37,9 @@ MEMORY_POOL=1 MODE=chat bash scripts/run_validation.sh
 ## 検証・性能比較
 
 ```sh
-cmake -S . -B /tmp/ai-cpp-memory-pool-build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B /tmp/ai-cpp-memory-pool-build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release -DAI_CPP_BUILD_CUDA_LIB=ON \
+  -DAI_CPP_BUILD_MODEL=ON -DBUILD_TESTING=ON
 cmake --build /tmp/ai-cpp-memory-pool-build -j2
 AI_CPP_CUDA_MEMORY_POOL=1 ctest --test-dir /tmp/ai-cpp-memory-pool-build --output-on-failure -j1
 AI_CPP_CUDA_MEMORY_POOL=0 ctest --test-dir /tmp/ai-cpp-memory-pool-build --output-on-failure -j1
@@ -45,11 +47,9 @@ AI_CPP_CUDA_MEMORY_POOL=0 ctest --test-dir /tmp/ai-cpp-memory-pool-build --outpu
 
 `cuda_memory_check` は float / 整数、ゼロ要素、サイズ変更、ビュー寿命、例外時解放、同期後の予約保持、ウォームアップ後の予約量安定、明示 trim を確認する。ポインタ一致は要求しない。`cuda_memory_compare` は独立プロセスで同一 seed・重み・入力の Transformer を実行し、初期重み・logits・loss・保持した過去グラフの勾配・Adam 更新後重みを絶対誤差 1e-6 以内で比較する。保存・再読込・追加学習・単独評価・生成は既存 `conversation_check` が検証する。
 
-GPU の学習が終了してから、固定した同一 bundle とデータで以下を実行する。各方式3回、バッチ32、3バッチのウォームアップ後に10バッチを測定し、秒・tokens/s・予約量を JSON で出力する。入力モデルとデータには書き込まない。少なくとも416ウィンドウが必要。スクリプトは各実行前に他の GPU 計算プロセスがある場合に中止する。測定中も別の学習を開始しないこと。
-
-```sh
-BUILD_DIR=/tmp/ai-cpp-memory-pool-build bash scripts/run_memory_benchmark.sh /path/to/stable-bundle data/conversation/train.jsonl > /tmp/memory-benchmark.jsonl
-```
+GPU の性能比較を行う場合は、固定した同一bundleとデータに対して
+`agent_model_cli validate` をpool有効・無効の独立プロセスで各3回実行する。
+現在、専用のbenchmarkスクリプトは保守していないため、学習中のGPUでは測定しない。
 
 方式の参考：[NVIDIA stream-ordered allocator](https://developer.nvidia.com/blog/using-cuda-stream-ordered-memory-allocator-part-1/)。
 

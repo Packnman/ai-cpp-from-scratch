@@ -58,28 +58,28 @@ build/discussion/agent_cli --backend rule --memory-db /tmp/agent.sqlite3
 
 ```sh
 ./scripts/mix_discussion_sft.py \
-  --base data/agent-v2-sft/train.jsonl \
+  --base data/agent-v3-base-sft/train.jsonl \
   --discussion data/discussion-reasoning/train.sft.jsonl \
-  --output data/agent-v2-discussion-sft/train.jsonl --seed 20260918
+  --output data/agent-v3-discussion-sft/train.jsonl --seed 20260918
 ./scripts/mix_discussion_sft.py \
-  --base data/agent-v2-sft/validation.jsonl \
+  --base data/agent-v3-base-sft/validation.jsonl \
   --discussion data/discussion-reasoning/validation.sft.jsonl \
-  --output data/agent-v2-discussion-sft/validation.jsonl --seed 20260918
+  --output data/agent-v3-discussion-sft/validation.jsonl --seed 20260918
 
 # smoke（既存pretrain bundleを変更せず別出力へ1 update）
 build/model/agent_model_cli sft \
-  --train data/agent-v2-discussion-sft/train.jsonl \
-  --validation data/agent-v2-discussion-sft/validation.jsonl \
-  --source models/agent_v2_pretrain_jawiki_full \
-  --output models/agent_v2_discussion_smoke --steps 1 --batch-size 1 \
+  --train data/agent-v3-discussion-sft/train.jsonl \
+  --validation data/agent-v3-discussion-sft/validation.jsonl \
+  --source models/agent_v3_pretrain_jawiki \
+  --output models/agent_v3_discussion_smoke --steps 1 --batch-size 1 \
   --accumulation 1 --seed 20260918
 
 # 本学習例
 build/model/agent_model_cli sft \
-  --train data/agent-v2-discussion-sft/train.jsonl \
-  --validation data/agent-v2-discussion-sft/validation.jsonl \
-  --source models/agent_v2_pretrain_jawiki_full \
-  --output models/agent_v2_discussion_sft --steps 50000 --batch-size 1 \
+  --train data/agent-v3-discussion-sft/train.jsonl \
+  --validation data/agent-v3-discussion-sft/validation.jsonl \
+  --source models/agent_v3_pretrain_jawiki \
+  --output models/agent_v3_discussion_sft --steps 50000 --batch-size 1 \
   --accumulation 4 --seed 20260918
 ```
 

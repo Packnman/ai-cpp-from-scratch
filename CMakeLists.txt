@@ -78,6 +78,9 @@ if(BUILD_TESTING)
     add_executable(brain_phase5_8_check tests/brain/brain_phase5_8_check.cpp)
     target_link_libraries(brain_phase5_8_check PRIVATE brain_core)
     add_test(NAME brain_phase5_8_check COMMAND brain_phase5_8_check)
+    set_tests_properties(
+        brain_common_check brain_phase2_check brain_phase3_4_check brain_phase5_8_check
+        PROPERTIES LABELS "brain;regression")
     function(add_brain_spec_test target source)
         add_executable(${target} ${source})
         target_link_libraries(${target} PRIVATE brain_core)
@@ -119,6 +122,8 @@ if(BUILD_TESTING)
     if(Python3_Interpreter_FOUND)
         add_test(NAME ner_conversion_check COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/ner/test_convert_ner.py)
         add_test(NAME discussion_data_check COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/agent/test_generate_discussion_data.py)
+        set_tests_properties(ner_conversion_check discussion_data_check PROPERTIES
+            ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
     endif()
     add_executable(agent_check tests/agent/agent_check.cpp)
     target_link_libraries(agent_check PRIVATE agent_core)
