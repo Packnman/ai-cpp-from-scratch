@@ -9,6 +9,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(AI_CPP_BUILD_CUDA_LIB "Build the legacy lib/ CUDA library" OFF)
 option(AI_CPP_BUILD_MODEL "Build the CUDA Agent Transformer and training tools" OFF)
 option(AI_CPP_ENABLE_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
+option(AI_CPP_ENABLE_QWEN_INTEGRATION_TESTS
+       "Build tests that require a running Qwen OpenAI-compatible server" OFF)
 set(AI_CPP_CUDA_ARCHITECTURES "86" CACHE STRING "CUDA architectures")
 
 find_package(Threads REQUIRED)
@@ -23,8 +25,11 @@ add_library(brain_core STATIC
     src/brain/memory/MemoryManager.cpp src/brain/memory/SQLiteMemoryBackend.cpp
     src/brain/policy/PolicyManager.cpp src/brain/planning/Planner.cpp
     src/brain/execution/ExecutionManager.cpp src/brain/postprocess/PostProcessor.cpp
-    src/brain/external/ExternalAIAdapter.cpp src/brain/preprocess/Preprocessor.cpp)
-target_include_directories(brain_core PUBLIC include third_party/sqlite)
+    src/brain/external/ExternalAIAdapter.cpp src/brain/preprocess/Preprocessor.cpp
+    src/brain/preprocess/ContextModelBackend.cpp
+    src/brain/preprocess/ModelContextRecognizer.cpp
+    src/brain/preprocess/QwenContextBackend.cpp)
+target_include_directories(brain_core PUBLIC include third_party third_party/sqlite)
 target_link_libraries(brain_core PUBLIC brain_common Threads::Threads)
 target_compile_options(brain_core PRIVATE -Wall -Wextra -Wpedantic)
 
@@ -92,6 +97,15 @@ if(BUILD_TESTING)
     add_brain_spec_test(ut_brn_mod_011_external_ai_adapter tests/brain/ut_brn_mod_011_external_ai_adapter.cpp)
     add_brain_spec_test(ut_brn_mod_012_log_trace_manager tests/brain/ut_brn_mod_012_log_trace_manager.cpp)
     add_brain_spec_test(it_brain_integration tests/brain/it_brain_integration.cpp)
+    add_brain_spec_test(brain_context_model_check tests/brain/brain_context_model_check.cpp)
+    if(AI_CPP_ENABLE_QWEN_INTEGRATION_TESTS)
+        add_executable(brain_qwen_integration_test
+            tests/brain/brain_qwen_integration_test.cpp)
+        target_link_libraries(brain_qwen_integration_test PRIVATE brain_core)
+        add_test(NAME brain_qwen_integration_test COMMAND brain_qwen_integration_test)
+        set_tests_properties(brain_qwen_integration_test PROPERTIES
+            LABELS "qwen;integration" TIMEOUT 120)
+    endif()
     add_executable(discussion_check tests/agent/discussion_check.cpp)
     target_link_libraries(discussion_check PRIVATE agent_core)
     add_test(NAME discussion_check COMMAND discussion_check)

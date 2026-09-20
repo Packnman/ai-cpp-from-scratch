@@ -17,6 +17,8 @@ struct BrainCycleResult {
 class BrainSystem final {
     public:
         explicit BrainSystem(std::string memoryPath = ":memory:");
+        BrainSystem(std::unique_ptr<IContextRecognizer> contextRecognizer,
+                    std::string memoryPath = ":memory:");
         Result<void> push(const ExternalMessage &);
         BrainCycleResult runOnce(TimePoint now = steady_now());
         IWorldStateManager &world() noexcept { return _world; }

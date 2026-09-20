@@ -68,15 +68,47 @@ std::vector<SemanticItem> Preprocessor::process(const BrainInput &i) {
                    true,
                    {},
                    {{"text", text}, {"intent", context.intent}}});
-    for (const auto &g : context.goals)
-        out.push_back(
-            {_nextId++,
-             SemanticType::Goal,
-             i.timestamp,
-             context.confidence,
-             true,
-             g.target,
-             {{"goal_type", g.type}, {"priority", std::int64_t(g.priority)}}});
+    for (const auto &g : context.goals) {
+        AttributeMap attributes{{"goal_type", g.type},
+                                {"priority", std::int64_t(g.priority)}};
+        const auto targetName =
+            g.completionCondition.arguments.find("target_name");
+        if (targetName != g.completionCondition.arguments.end())
+            attributes["target_name"] = targetName->second;
+        out.push_back({_nextId++, SemanticType::Goal, i.timestamp,
+                       context.confidence, true, g.target,
+                       std::move(attributes)});
+    }
+    for (const auto &condition : context.conditions) {
+        auto attributes = condition.attributes;
+        attributes["condition_type"] = condition.type;
+        out.push_back({_nextId++,
+                       SemanticType::Condition,
+                       condition.timestamp,
+                       condition.confidence,
+                       condition.active,
+                       {},
+                       std::move(attributes)});
+    }
+    for (const auto &constraint : context.constraints) {
+        AttributeMap attributes{
+            {"constraint_type", constraint.type},
+            {"critical", constraint.critical},
+            {"scope_type", std::int64_t(constraint.scope.type)},
+            {"source", std::int64_t(constraint.source)},
+            {"expression", constraint.expression.expression}};
+        if (constraint.scope.targetId)
+            attributes["scope_target_id"] = *constraint.scope.targetId;
+        for (const auto &[key, value] : constraint.expression.arguments)
+            attributes["argument." + key] = value;
+        out.push_back({_nextId++,
+                       SemanticType::Constraint,
+                       constraint.timestamp,
+                       context.confidence,
+                       constraint.active,
+                       {},
+                       std::move(attributes)});
+    }
     return out;
 }
 } // namespace ai::brain

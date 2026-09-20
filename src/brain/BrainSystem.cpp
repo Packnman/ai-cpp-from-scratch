@@ -14,6 +14,14 @@ int int_attr(const AttributeMap &a, const std::string &k) {
                ? int(std::get<std::int64_t>(i->second))
                : 0;
 }
+std::optional<std::uint64_t> uint_attr(const AttributeMap &attributes,
+                                       const std::string &key) {
+    const auto found = attributes.find(key);
+    if (found == attributes.end() ||
+        !std::holds_alternative<std::uint64_t>(found->second))
+        return {};
+    return std::get<std::uint64_t>(found->second);
+}
 bool bool_attr(const AttributeMap &a, const std::string &key, bool fallback) {
     const auto found = a.find(key);
     return found != a.end() && std::holds_alternative<bool>(found->second)
@@ -36,10 +44,16 @@ SafetyLevel safety_level(const AttributeMap &attributes) {
 }
 } // namespace
 BrainSystem::BrainSystem(std::string path)
+    : BrainSystem(std::make_unique<RuleContextRecognizer>(), std::move(path)) {}
+
+BrainSystem::BrainSystem(std::unique_ptr<IContextRecognizer> contextRecognizer,
+                         std::string path)
     : _log(std::make_shared<InMemoryLogManager>()), _input({}, _log),
       _preprocessor(std::make_unique<FakeObjectDetector>(),
                     std::make_unique<FakeSpeechRecognizer>(),
-                    std::make_unique<RuleContextRecognizer>()),
+                    contextRecognizer
+                        ? std::move(contextRecognizer)
+                        : std::make_unique<RuleContextRecognizer>()),
       _memory(std::make_unique<SQLiteMemoryBackend>(path)),
       _planner(_constraints),
       _control(std::make_shared<MockControlDispatcher>()), _execution(_control),
@@ -99,6 +113,10 @@ BrainCycleResult BrainSystem::runOnce(TimePoint now) {
                     g.type = *type;
                     g.target = s.target;
                     g.priority = int_attr(s.attributes, "priority");
+                    if (const auto targetName =
+                            string_attr(s.attributes, "target_name"))
+                        g.completionCondition.arguments["target_name"] =
+                            *targetName;
                     g.source = GoalSource::Human;
                     g.createdAt = s.timestamp;
                     g.updatedAt = s.timestamp;
@@ -112,6 +130,33 @@ BrainCycleResult BrainSystem::runOnce(TimePoint now) {
                 m.confidence = s.confidence;
                 m.tags = {"conversation"};
                 _memory.remember(m);
+            } else if (s.type == SemanticType::Constraint) {
+                const auto type = string_attr(s.attributes, "constraint_type");
+                const auto expression = string_attr(s.attributes, "expression");
+                const auto scope = int_attr(s.attributes, "scope_type");
+                const auto source = int_attr(s.attributes, "source");
+                if (!type || !expression || scope < 0 ||
+                    scope > int(ConstraintScopeType::Entity) || source < 0 ||
+                    source > int(ConstraintSource::Policy))
+                    continue;
+                Constraint constraint;
+                constraint.id = s.id;
+                constraint.type = *type;
+                constraint.critical =
+                    bool_attr(s.attributes, "critical", false);
+                constraint.active = s.valid;
+                constraint.scope.type = static_cast<ConstraintScopeType>(scope);
+                constraint.scope.targetId =
+                    uint_attr(s.attributes, "scope_target_id");
+                constraint.expression.expression = *expression;
+                constexpr std::string_view prefix = "argument.";
+                for (const auto &[key, value] : s.attributes)
+                    if (key.starts_with(prefix))
+                        constraint.expression.arguments.emplace(
+                            key.substr(prefix.size()), value);
+                constraint.source = static_cast<ConstraintSource>(source);
+                constraint.timestamp = s.timestamp;
+                _constraints.add(constraint);
             }
         }
     }

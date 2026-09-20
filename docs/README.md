@@ -23,6 +23,7 @@ docs/
 ├── lib/                         lib/include の数値・CUDA基盤設計書
 ├── train/                       汎用trainerの設計書
 ├── validation/                  実測を含む検証記録
+├── design_subsystem/Brain/      Brain仕様、テスト仕様、外部Context認識
 ├── agent_overview.md            現行Agentの全体設計
 ├── agent_uml.md                 クラス図・sequence図
 ├── conversation_summary.md      内部要約の形式、学習、評価
@@ -101,6 +102,7 @@ docs/
 | 比較・判断評価 | [discussion_evaluation.md](discussion_evaluation.md) | scenario生成、CLI、SFT混合、導入前後評価 |
 | 汎用trainer | [train/trainer.md](train/trainer.md) | template trainerの型契約と処理 |
 | 会話モデル検証 | [validation/conversation_validation.md](validation/conversation_validation.md) | データ分割、GPU実測、保存・再読込 |
+| Brain Qwen Context認識 | [design_subsystem/Brain/qwen_context_recognition.md](design_subsystem/Brain/qwen_context_recognition.md) | 構造化出力、検証、fallback、実モデル接続 |
 
 学習コマンドの実行順と現在利用するCLI例は、リポジトリ直下の
 [README.md](../README.md)も参照する。

@@ -1,6 +1,15 @@
 #include "brain/world/WorldStateManager.hpp"
 #include <mutex>
 namespace ai::brain {
+namespace {
+std::string semantic_type(const SemanticItem &item, const char *attribute) {
+    const auto found = item.attributes.find(attribute);
+    return found != item.attributes.end() &&
+                   std::holds_alternative<std::string>(found->second)
+               ? std::get<std::string>(found->second)
+               : "semantic";
+}
+} // namespace
 WorldStateManager::WorldStateManager() {
     _state.timestamp = steady_now();
     _state.safetyState.level = SafetyLevel::SafeStop;
@@ -23,8 +32,10 @@ bool WorldStateManager::update(const SemanticItem &i) {
         auto f = _state.conditions.find(i.id);
         if (f == _state.conditions.end() ||
             i.timestamp >= f->second.timestamp) {
-            _state.conditions[i.id] = {i.id,         "semantic",  i.valid,
-                                       i.confidence, i.timestamp, i.attributes};
+            _state.conditions[i.id] = {
+                i.id,        semantic_type(i, "condition_type"),
+                i.valid,     i.confidence,
+                i.timestamp, i.attributes};
             changed = true;
         }
     } else if (i.type == SemanticType::RobotState &&
