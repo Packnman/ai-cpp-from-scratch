@@ -6,6 +6,9 @@
     },
     "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
     "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+    "mounts": [
+        "source=/tmp/.X11-unix,target=/tmp/.X11-unix,type=bind"
+    ],
     "runArgs": [
         "--gpus=all"
     ],
@@ -16,8 +19,9 @@
     "containerEnv": {
         "CODEX_HOME": "${containerWorkspaceFolder}/.codex-logs",
         "TZ": "Asia/Tokyo",
+        "DISPLAY": "${localEnv:DISPLAY}",
         "NVIDIA_VISIBLE_DEVICES": "all",
-        "NVIDIA_DRIVER_CAPABILITIES": "compute,utility"
+        "NVIDIA_DRIVER_CAPABILITIES": "compute,utility,graphics,display"
     },
     "customizations": {
         "vscode": {

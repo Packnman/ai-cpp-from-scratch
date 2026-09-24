@@ -145,10 +145,12 @@ int main() {
     SimMuscleActuator limitedMuscle{
         muscle(1, -1e-6, 1e-6), std::make_unique<ConstantMomentArmModel>(0.03)};
     run(limitedMuscle, 24.0, 2'000);
-    test.expect(limitedMuscle.state().upperLimit &&
-                    limitedMuscle.state().fault ==
-                        ActuatorFaultCode::OverTravel,
-                "MUS-004", "muscle stroke limit reports over-travel");
+    test.expect(
+        limitedMuscle.state().upperLimit &&
+            actuator_test::near(
+                limitedMuscle.state().motors.front().angularVelocity, 0.0) &&
+            limitedMuscle.state().fault == ActuatorFaultCode::OverTravel,
+        "MUS-004", "muscle stroke limit reports over-travel");
     multiple.injectFault({.tendonBreak = true});
     multiple.step(1e-5, 0.0, 0.0);
     test.expect(actuator_test::near(multiple.state().tendonForce, 0.0) &&

@@ -3,6 +3,7 @@
 #include "simulation/MuJoCoPlant.hpp"
 #include "simulation/SimulationManager.hpp"
 
+#include <filesystem>
 #include <memory>
 
 namespace ai::simulation {
@@ -18,6 +19,9 @@ class MuJoCoViewer {
         MuJoCoViewer &operator=(const MuJoCoViewer &) = delete;
         /// Runs the interactive render loop until the window closes.
         void run(MuJoCoPlant &, SimulationManager &);
+        /// Renders the current Plant pose to a binary PPM image.
+        void saveFrame(MuJoCoPlant &, const std::filesystem::path &,
+                       int width = 1280, int height = 720);
 
     private:
         class Impl; ///< Hides GLFW types from the public header.

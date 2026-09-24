@@ -16,6 +16,16 @@ RUN apt-get update \
         ninja-build \
         pciutils \
         pkg-config \
+        libgl1-mesa-dev \
+        libglfw3-dev \
+        libosmesa6-dev \
+        libx11-dev \
+        libxcursor-dev \
+        libxi-dev \
+        libxinerama-dev \
+        libxrandr-dev \
+        xauth \
+        xvfb \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

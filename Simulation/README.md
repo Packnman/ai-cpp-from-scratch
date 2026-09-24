@@ -46,6 +46,15 @@ cmake --build build-viewer -j --target simulation_cli
 build-viewer/Simulation/simulation_cli --viewer --model Simulation/model/humanoid/robot.xml
 ```
 
+Phase-1 humanoid demo can also render its final pose offscreen to a binary PPM
+image. This uses OSMesa and does not require a host display.
+
+```sh
+cmake --build build-viewer -j --target humanoid_demo
+build-viewer/Simulation/humanoid_demo --headless --command "右手を上げて" \
+  --steps 2000 --snapshot Simulation/output/humanoid_raise.ppm
+```
+
 Linux の viewer build には X11 または Wayland の開発 package が必要です。GLFW 3.4 がなければ取得します。CI では viewer を OFF にして headless test を使用します。
 
 ## Test

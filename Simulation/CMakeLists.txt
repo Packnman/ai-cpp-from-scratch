@@ -19,6 +19,19 @@ target_link_libraries(simulation_cli PRIVATE simulation_core)
 target_compile_definitions(simulation_cli PRIVATE
     AI_CPP_SIMULATION_DEFAULT_MODEL="${CMAKE_CURRENT_SOURCE_DIR}/model/test/single_joint.xml")
 
+# The visible Phase-1 demo keeps Brain dependencies outside simulation_core so
+# the reusable Plant remains independent from task interpretation.
+add_library(humanoid_demo_core STATIC src/HumanoidDemo.cpp)
+target_include_directories(humanoid_demo_core PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(humanoid_demo_core PUBLIC simulation_core brain_core)
+target_compile_options(humanoid_demo_core PRIVATE -Wall -Wextra -Wpedantic)
+
+add_executable(humanoid_demo src/humanoid_demo_main.cpp)
+target_link_libraries(humanoid_demo PRIVATE humanoid_demo_core)
+target_compile_definitions(humanoid_demo PRIVATE
+    AI_CPP_HUMANOID_DEMO_MODEL="${CMAKE_CURRENT_SOURCE_DIR}/model/demo/humanoid_supported.xml")
+
 if(AI_CPP_ENABLE_MUJOCO_VIEWER)
     find_package(glfw3 ${AI_CPP_GLFW_VERSION} EXACT CONFIG QUIET)
     if(NOT TARGET glfw)
@@ -41,10 +54,11 @@ if(AI_CPP_ENABLE_MUJOCO_VIEWER)
     target_sources(simulation_core PRIVATE src/MuJoCoViewer.cpp)
     target_link_libraries(simulation_core PRIVATE glfw)
     target_compile_definitions(simulation_cli PRIVATE AI_CPP_MUJOCO_VIEWER=1)
+    target_compile_definitions(humanoid_demo PRIVATE AI_CPP_MUJOCO_VIEWER=1)
 endif()
 
 if(AI_CPP_ENABLE_SANITIZERS)
-    foreach(target simulation_core simulation_cli)
+    foreach(target simulation_core simulation_cli humanoid_demo_core humanoid_demo)
         target_compile_options(${target} PUBLIC
             -fsanitize=address,undefined -fno-omit-frame-pointer)
         target_link_options(${target} PUBLIC -fsanitize=address,undefined)
@@ -77,4 +91,14 @@ if(BUILD_TESTING)
         test/integration/IT-SIM_actuator_plant.cpp "simulation;integration;mujoco")
     add_simulation_test(it_sim_control_actuator_plant
         test/integration/IT-SIM_control_actuator_plant.cpp "simulation;integration;mujoco")
+
+    add_executable(it_sim_brain_humanoid_demo
+        test/integration/IT-SIM_brain_humanoid_demo.cpp)
+    target_link_libraries(it_sim_brain_humanoid_demo PRIVATE humanoid_demo_core)
+    target_compile_definitions(it_sim_brain_humanoid_demo PRIVATE
+        AI_CPP_SIMULATION_MODEL_DIR="${CMAKE_CURRENT_SOURCE_DIR}/model")
+    add_test(NAME it_sim_brain_humanoid_demo
+        COMMAND it_sim_brain_humanoid_demo)
+    set_tests_properties(it_sim_brain_humanoid_demo PROPERTIES
+        LABELS "simulation;brain;integration;mujoco")
 endif()

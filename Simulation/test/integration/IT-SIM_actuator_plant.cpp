@@ -52,8 +52,10 @@ int main() {
     adapter.bind({descriptor.actuatorId, "elbow", {}, {}, {}, {}});
     double maxCurrent{};
     double maxForce{};
+    double maxJointVelocity{};
     for (int i = 0; i < 1'000; ++i) {
         const auto joint = elbow(plant.getState());
+        maxJointVelocity = std::max(maxJointVelocity, std::abs(joint.velocity));
         driver.advance(0.001, {joint.position, joint.velocity, 0.0, true});
         adapter.apply(descriptor.actuatorId, driver.plantOutput(), plant);
         plant.step(0.001);
@@ -64,9 +66,8 @@ int main() {
     const auto state = elbow(plant.getState());
     test.expect(maxCurrent > 0.0 && maxForce > 0.0, "IT-SIM-002-001",
                 "motor current produces tendon force");
-    test.expect(std::abs(state.position) > 1e-4 &&
-                    std::abs(state.velocity) > 1e-4,
-                "IT-SIM-002-002", "actuator effort moves MuJoCo elbow");
+    test.expect(std::abs(state.position) > 1e-4 && maxJointVelocity > 1e-4,
+                "IT-SIM-002-002", "actuator effort moved MuJoCo elbow");
     test.expect(simulation_test::near(driver.readState().position,
                                       state.position, 0.02),
                 "IT-SIM-002-003", "MuJoCo feedback returns to actuator state");

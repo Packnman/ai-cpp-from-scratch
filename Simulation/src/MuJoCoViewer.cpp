@@ -6,7 +6,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <fstream>
 #include <stdexcept>
+#include <vector>
 
 namespace ai::simulation {
 
@@ -154,6 +156,74 @@ void MuJoCoViewer::run(MuJoCoPlant &plant, SimulationManager &manager) {
         glfwSwapBuffers(_impl->window);
         glfwPollEvents();
     }
+}
+
+void MuJoCoViewer::saveFrame(MuJoCoPlant &plant,
+                             const std::filesystem::path &output, int width,
+                             int height) {
+    if (width <= 0 || height <= 0)
+        throw std::invalid_argument("snapshot dimensions must be positive");
+
+    glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_NULL);
+    if (!glfwInit())
+        throw std::runtime_error("GLFW offscreen initialization failed");
+    struct GlfwGuard {
+            ~GlfwGuard() { glfwTerminate(); }
+    } glfwGuard;
+
+    glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_OSMESA_CONTEXT_API);
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    auto *window = glfwCreateWindow(width, height, "ai_cpp MuJoCo snapshot",
+                                    nullptr, nullptr);
+    if (!window)
+        throw std::runtime_error("GLFW offscreen context creation failed");
+    glfwMakeContextCurrent(window);
+
+    auto *model = plant.model().model();
+    auto *data = plant.model().data();
+    mjvCamera camera;
+    mjvOption option;
+    mjvScene scene;
+    mjrContext context;
+    mjv_defaultCamera(&camera);
+    mjv_defaultFreeCamera(model, &camera);
+    mjv_defaultOption(&option);
+    mjv_defaultScene(&scene);
+    mjr_defaultContext(&context);
+    mjv_makeScene(model, &scene, 2'000);
+    mjr_makeContext(model, &context, mjFONTSCALE_150);
+    struct RenderGuard {
+            GLFWwindow *window;
+            mjvScene &scene;
+            mjrContext &context;
+            ~RenderGuard() {
+                mjr_freeContext(&context);
+                mjv_freeScene(&scene);
+                glfwDestroyWindow(window);
+            }
+    } renderGuard{window, scene, context};
+
+    const mjrRect viewport{0, 0, width, height};
+    mjv_updateScene(model, data, &option, nullptr, &camera, mjCAT_ALL, &scene);
+    mjr_render(viewport, &scene, &context);
+    std::vector<unsigned char> pixels(static_cast<std::size_t>(width) *
+                                      static_cast<std::size_t>(height) * 3);
+    mjr_readPixels(pixels.data(), nullptr, viewport, &context);
+
+    if (!output.parent_path().empty())
+        std::filesystem::create_directories(output.parent_path());
+    std::ofstream image{output, std::ios::binary};
+    if (!image)
+        throw std::runtime_error("failed to open snapshot output");
+    image << "P6\n" << width << ' ' << height << "\n255\n";
+    const auto rowBytes = static_cast<std::size_t>(width) * 3;
+    for (int row = height - 1; row >= 0; --row)
+        image.write(
+            reinterpret_cast<const char *>(
+                pixels.data() + static_cast<std::size_t>(row) * rowBytes),
+            static_cast<std::streamsize>(rowBytes));
+    if (!image)
+        throw std::runtime_error("failed to write snapshot output");
 }
 
 } // namespace ai::simulation

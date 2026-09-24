@@ -155,7 +155,8 @@ void SimActuatorDriver::advance(double dtSeconds,
         const double target =
             clampToRange(_command.target, _descriptor.positionLimit);
         const double torque =
-            _config.positionGain * (target - feedback.jointPosition);
+            _config.positionGain * (target - feedback.jointPosition) -
+            _config.velocityGain * feedback.jointVelocity;
         _actuator.commandJointTorque(
             clampToRange(torque, _descriptor.torqueLimit),
             feedback.jointPosition);

@@ -76,6 +76,8 @@ class SimBLDCMotor {
         [[nodiscard]] const MotorState &state() const noexcept;
 
     private:
+        // The owning transmission clamps rotor motion at a mechanical stop.
+        friend class SimMuscleActuator;
         MotorParameters _parameters; ///< Validated physical parameters.
         MotorState _state;           ///< Integrated motor state.
         double _requestedVoltage{};  ///< Unclamped requested terminal voltage.

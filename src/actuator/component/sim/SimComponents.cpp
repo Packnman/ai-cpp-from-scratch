@@ -137,12 +137,16 @@ void SimBLDCMotor::step(double dtSeconds, double loadTorque) {
     const double voltage =
         std::clamp(_requestedVoltage, -_parameters.nominalVoltage,
                    _parameters.nominalVoltage);
-    // Integrate the RL winding equation with back-EMF and clamp current safely.
-    const double currentDerivative =
-        (voltage - _parameters.resistance * _state.current -
-         _parameters.backEmfConstant * _state.angularVelocity) /
-        _parameters.inductance;
-    const double rawCurrent = _state.current + currentDerivative * dtSeconds;
+    // Solve the RL winding response exactly over this step while voltage and
+    // back-EMF are held constant. This stays stable when the simulation step
+    // is longer than the electrical time constant.
+    const double steadyCurrent =
+        (voltage - _parameters.backEmfConstant * _state.angularVelocity) /
+        _parameters.resistance;
+    const double decay =
+        std::exp(-_parameters.resistance * dtSeconds / _parameters.inductance);
+    const double rawCurrent =
+        steadyCurrent + (_state.current - steadyCurrent) * decay;
     _state.current = std::clamp(rawCurrent, -_parameters.continuousCurrent,
                                 _parameters.continuousCurrent);
     _state.currentLimited = rawCurrent != _state.current;
@@ -329,6 +333,16 @@ void SimMuscleActuator::step(double dtSeconds, double jointPosition,
     velocity /= static_cast<double>(_motors.size());
     const auto transmission =
         _transmission.evaluate(position, velocity, torque);
+    const bool stoppedAtLimit = (transmission.lowerLimit && velocity < 0.0) ||
+                                (transmission.upperLimit && velocity > 0.0);
+    if (stoppedAtLimit) {
+        // The screw cannot keep accelerating through its finite travel stop.
+        // Retaining current preserves the available holding force.
+        for (auto &motor : _motors)
+            motor._state.angularVelocity = 0.0;
+        for (auto &motor : _state.motors)
+            motor.angularVelocity = 0.0;
+    }
     _state.displacement = transmission.displacement;
     _state.velocity = transmission.velocity;
     _state.tendonForce = _faultInjection.tendonBreak ? 0.0 : transmission.force;
