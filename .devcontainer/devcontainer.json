@@ -6,12 +6,7 @@
     },
     "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
     "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
-    "mounts": [
-        "source=/tmp/.X11-unix,target=/tmp/.X11-unix,type=bind"
-    ],
-    "runArgs": [
-        "--gpus=all"
-    ],
+
     "hostRequirements": {
         "gpu": true
     },
