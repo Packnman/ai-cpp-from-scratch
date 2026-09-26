@@ -17,6 +17,9 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <unordered_map>
+#include <vector>
 
 namespace ai::simulation::demo {
 
@@ -51,12 +54,14 @@ class JointTargetDispatcher final : public brain::IControlDispatcher {
         dispatch(const brain::ActionCommand &command) override;
         /// Removes a target when its originating action is cancelled.
         void cancel(brain::ActionId actionId) override;
-        /// Returns the latest target as a thread-safe value copy.
-        [[nodiscard]] std::optional<JointTarget> target() const;
+        /// Returns one joint's latest target as a thread-safe value copy.
+        [[nodiscard]] std::optional<JointTarget>
+        target(std::string_view jointId) const;
 
     private:
         mutable std::mutex _mutex; ///< Protects viewer/control thread access.
-        std::optional<JointTarget> _target; ///< Most recently accepted target.
+        std::unordered_map<JointId, JointTarget>
+            _targets; ///< Latest accepted target for each joint.
 };
 
 /// Minimal Brain pipeline used to turn visible-demo text into Control action.
@@ -92,8 +97,12 @@ class HumanoidDemo {
         BrainCommandResult command(const std::string &text);
         /// Advances a fixed number of headless physics steps.
         void runSteps(std::size_t count);
+        /// Restores the initial pose and actuator state for replay.
+        void replay();
         /// Returns the current right-elbow joint position.
         [[nodiscard]] double rightElbowPosition() const;
+        /// Returns one scalar prototype joint position.
+        [[nodiscard]] double jointPosition(std::string_view jointId) const;
         /// Returns the current Control target, when one has been issued.
         [[nodiscard]] std::optional<JointTarget> target() const;
         /// Exposes the scheduler to the optional viewer.
@@ -102,16 +111,28 @@ class HumanoidDemo {
         [[nodiscard]] MuJoCoPlant &plant() noexcept { return *_plant; }
 
     private:
+        /// One configured muscle group driving one scalar prototype joint.
+        struct ControlledActuator {
+                actuator::ActuatorId actuatorId;
+                JointId jointId;
+                actuator::sim::SimActuatorDriver *driver{};
+        };
+        /// Configures native tendon actuators when the selected MJCF has them.
+        void initializeNativeTendonControl();
+        /// Distributes desired joint effort across pull-only tendon actuators.
+        void applyNativeTendonControl(const RobotPlantState &state);
         std::shared_ptr<JointTargetDispatcher>
             _dispatcher;            ///< Brain-to-Control target mailbox.
         HumanoidBrainBridge _brain; ///< Deterministic Phase-1 Brain pipeline.
         MuJoCoPlant *_plant{};      ///< Non-owning view of manager-owned Plant.
         SimulationManager _manager; ///< Multi-rate physics scheduler.
         actuator::ActuatorManager _actuators; ///< Right-arm drive registry.
-        actuator::sim::SimActuatorDriver
-            *_rightElbowDriver{};       ///< Non-owning registered driver view.
+        std::vector<ControlledActuator>
+            _controlledActuators; ///< Non-owning views of registered drivers.
         MuJoCoActuatorAdapter _adapter; ///< Mechanical output to Plant mapping.
         actuator::CommandId _nextCommandId{1}; ///< Control command sequence.
+        bool _nativeTendonControl{}; ///< Uses MJCF tendons instead of joint effort.
+        std::vector<int> _nativeMuscleIds; ///< Pull-only MuJoCo actuator IDs.
 };
 
 } // namespace ai::simulation::demo

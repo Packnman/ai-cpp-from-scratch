@@ -38,7 +38,7 @@ build/Simulation/simulation_cli --headless --model Simulation/model/humanoid/rob
 
 ## Viewer
 
-GLFW がある環境では `-DAI_CPP_ENABLE_MUJOCO_VIEWER=ON` でビューアを有効化できます。Space で pause/resume、Right で一ステップ、Backspace で reset、Esc で終了します。
+GLFW がある環境では `-DAI_CPP_ENABLE_MUJOCO_VIEWER=ON` でビューアを有効化できます。通常のviewerはSpaceでpause/resume、Rightで一ステップ、Backspaceでreset、Escで終了します。`humanoid_demo --viewer`ではSpaceで最初の姿勢から同じ動作を再生します。
 
 ```sh
 cmake -S . -B build-viewer -DAI_CPP_BUILD_SIMULATION=ON -DAI_CPP_ENABLE_MUJOCO_VIEWER=ON

@@ -1,0 +1,11 @@
+it_sim_brain_humanoid_demo 6 0.22947
+actuator_sim_component_check 1 0.00791762
+ut_simulation_manager 1 0.0245035
+ut_mujoco_plant 1 0.0804478
+ut_actuator_adapter 1 0.0199884
+ut_state_adapter 1 0.0618858
+ut_contact_manager 1 0.0651545
+it_sim_single_joint 1 0.0777279
+it_sim_actuator_plant 1 0.0774256
+it_sim_control_actuator_plant 1 0.0908036
+---

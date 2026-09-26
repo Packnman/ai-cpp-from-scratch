@@ -16,6 +16,25 @@ ut_simulation_manager ut_mujoco_plant ut_actuator_adapter \
 ut_state_adapter ut_contact_manager it_sim_single_joint \
 it_sim_actuator_plant it_sim_control_actuator_plant"
 
+simulation_prepare_x11() {
+    if [ -n "${AI_CPP_X11_DISPLAY:-}" ]; then
+        DISPLAY=$AI_CPP_X11_DISPLAY
+    else
+        case "${DISPLAY:-}" in
+        *:*) ;;
+        *) DISPLAY=host.docker.internal:0.0 ;;
+        esac
+    fi
+    export DISPLAY
+
+    # VcXsrv's -wgl path exposes the OpenGL version required by MuJoCo. Forcing
+    # indirect GLX limits this setup to OpenGL 1.4 and MuJoCo rejects it.
+    LIBGL_ALWAYS_INDIRECT=${LIBGL_ALWAYS_INDIRECT:-0}
+    export LIBGL_ALWAYS_INDIRECT
+
+    echo "X11 viewer: DISPLAY=$DISPLAY LIBGL_ALWAYS_INDIRECT=$LIBGL_ALWAYS_INDIRECT"
+}
+
 simulation_configure() {
     simulation_build_dir=$1
     simulation_sanitizers=$2
@@ -66,12 +85,22 @@ headless)
         --steps "${AI_CPP_SIMULATION_STEPS:-1000}" "$@"
     ;;
 viewer)
+    simulation_prepare_x11
     simulation_build_dir=${AI_CPP_SIMULATION_BUILD_DIR:-"$simulation_repo_root/build/simulation-viewer"}
     simulation_configure "$simulation_build_dir" OFF ON
     cmake --build "$simulation_build_dir" -j"$simulation_jobs" \
         --target simulation_cli
     exec "$simulation_build_dir/Simulation/simulation_cli" \
         --viewer --model "$simulation_model_dir/humanoid/robot.xml" "$@"
+    ;;
+humanoid-viewer)
+    simulation_prepare_x11
+    simulation_build_dir=${AI_CPP_SIMULATION_BUILD_DIR:-"$simulation_repo_root/build/simulation-viewer"}
+    simulation_configure "$simulation_build_dir" OFF ON
+    cmake --build "$simulation_build_dir" -j"$simulation_jobs" \
+        --target humanoid_demo
+    exec "$simulation_build_dir/Simulation/humanoid_demo" \
+        --viewer "$@"
     ;;
 smoke)
     simulation_build_dir=${AI_CPP_SIMULATION_BUILD_DIR:-"$simulation_repo_root/build/simulation"}
@@ -90,7 +119,7 @@ smoke)
     done
     ;;
 *)
-    echo "usage: $0 [test|sanitizer|headless|viewer|smoke] [options...]" >&2
+    echo "usage: $0 [test|sanitizer|headless|viewer|humanoid-viewer|smoke] [options...]" >&2
     exit 2
     ;;
 esac

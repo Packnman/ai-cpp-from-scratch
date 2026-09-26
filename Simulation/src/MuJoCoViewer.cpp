@@ -6,11 +6,28 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <fstream>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace ai::simulation {
+
+namespace {
+
+std::runtime_error glfwError(const std::string &operation) {
+    const char *description{};
+    const int code = glfwGetError(&description);
+    const char *display = std::getenv("DISPLAY");
+    std::string message = operation + " failed";
+    if (description)
+        message += " (GLFW " + std::to_string(code) + ": " + description + ")";
+    message += "; DISPLAY=" + std::string(display ? display : "<unset>");
+    return std::runtime_error(message);
+}
+
+} // namespace
 
 /// GLFW and MuJoCo rendering state hidden from the public interface.
 class MuJoCoViewer::Impl {
@@ -37,9 +54,10 @@ MuJoCoViewer::MuJoCoViewer() : _impl(std::make_unique<Impl>()) {}
 
 MuJoCoViewer::~MuJoCoViewer() = default;
 
-void MuJoCoViewer::run(MuJoCoPlant &plant, SimulationManager &manager) {
+void MuJoCoViewer::run(MuJoCoPlant &plant, SimulationManager &manager,
+                       ReplayCallback replay) {
     if (!glfwInit())
-        throw std::runtime_error("GLFW initialization failed");
+        throw glfwError("GLFW initialization");
     // Ensures GLFW global state is released on every exit path.
     struct GlfwGuard {
             ~GlfwGuard() { glfwTerminate(); }
@@ -48,7 +66,7 @@ void MuJoCoViewer::run(MuJoCoPlant &plant, SimulationManager &manager) {
     _impl->window =
         glfwCreateWindow(1280, 720, "ai_cpp MuJoCo", nullptr, nullptr);
     if (!_impl->window)
-        throw std::runtime_error("GLFW window creation failed");
+        throw glfwError("GLFW window creation");
     glfwMakeContextCurrent(_impl->window);
     glfwSwapInterval(1);
     glfwSetWindowUserPointer(_impl->window, _impl.get());
@@ -132,7 +150,13 @@ void MuJoCoViewer::run(MuJoCoPlant &plant, SimulationManager &manager) {
         }
 
         if (glfwGetKey(_impl->window, GLFW_KEY_SPACE) == GLFW_PRESS) {
-            manager.setPaused(!manager.paused());
+            if (replay) {
+                replay();
+                manager.setPaused(false);
+                accumulator = 0.0;
+            } else {
+                manager.setPaused(!manager.paused());
+            }
             while (glfwGetKey(_impl->window, GLFW_KEY_SPACE) == GLFW_PRESS)
                 glfwPollEvents();
         }

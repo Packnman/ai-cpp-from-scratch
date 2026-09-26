@@ -64,7 +64,8 @@ int main(int argc, char **argv) {
         if (options.viewer) {
 #ifdef AI_CPP_MUJOCO_VIEWER
             ai::simulation::MuJoCoViewer viewer;
-            viewer.run(demo.plant(), demo.manager());
+            viewer.run(demo.plant(), demo.manager(),
+                       [&demo] { demo.replay(); });
 #else
             throw std::runtime_error(
                 "viewer support was not enabled at build time");
@@ -86,7 +87,42 @@ int main(int argc, char **argv) {
                       << demo.manager().plant().getState().simulationTime
                       << " joint=right_elbow target="
                       << (target ? target->position : 0.0)
-                      << " position=" << demo.rightElbowPosition() << '\n';
+                      << " position=" << demo.rightElbowPosition()
+                      << " shoulder_abduction="
+                      << demo.jointPosition("right_shoulder_abduction")
+                      << " shoulder_flexion="
+                      << demo.jointPosition("right_shoulder_flexion")
+                      << " shoulder_rotation="
+                      << demo.jointPosition("right_shoulder_rotation")
+                      << " scapula_rotation="
+                      << demo.jointPosition("right_scapula_rotation") << '\n';
+            const auto *model = demo.plant().model().model();
+            const auto *data = demo.plant().model().data();
+            if (model->nu > 0) {
+                const int abductionDof = demo.plant()
+                                             .model()
+                                             .jointBinding(
+                                                 "right_shoulder_abduction")
+                                             .dofAddress;
+                std::cout << "native_muscles";
+                for (int id = 0; id < model->nu; ++id) {
+                    const char *name = mj_id2name(model, mjOBJ_ACTUATOR, id);
+                    double abductionMoment{};
+                    const int start = data->moment_rowadr[id];
+                    const int count = data->moment_rownnz[id];
+                    for (int offset = 0; offset < count; ++offset) {
+                        const int entry = start + offset;
+                        if (data->moment_colind[entry] == abductionDof) {
+                            abductionMoment = data->actuator_moment[entry];
+                            break;
+                        }
+                    }
+                    std::cout << ' ' << (name ? name : "unnamed")
+                              << ":force=" << data->actuator_force[id]
+                              << ",moment=" << abductionMoment;
+                }
+                std::cout << '\n';
+            }
         }
         return EXIT_SUCCESS;
     } catch (const std::exception &error) {

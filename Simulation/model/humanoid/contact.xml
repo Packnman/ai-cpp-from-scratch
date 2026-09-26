@@ -2,5 +2,8 @@
   <contact>
     <exclude body1="left_thigh" body2="left_shin"/>
     <exclude body1="right_thigh" body2="right_shin"/>
+    <exclude body1="right_scapula" body2="right_upper_arm"/>
+    <exclude body1="right_upper_arm" body2="right_forearm"/>
+    <exclude body1="right_forearm" body2="right_hand"/>
   </contact>
 </mujocoinclude>

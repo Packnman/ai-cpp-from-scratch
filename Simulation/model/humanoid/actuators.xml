@@ -4,6 +4,10 @@
   <actuator>
     <motor name="debug_waist" joint="waist_pitch" gear="1"/>
     <motor name="debug_left_elbow" joint="left_elbow" gear="1"/>
+    <motor name="debug_right_scapula" joint="right_scapula_rotation" gear="1"/>
+    <motor name="debug_right_shoulder_abduction" joint="right_shoulder_abduction" gear="1"/>
+    <motor name="debug_right_shoulder_flexion" joint="right_shoulder_flexion" gear="1"/>
+    <motor name="debug_right_shoulder_rotation" joint="right_shoulder_rotation" gear="1"/>
     <motor name="debug_right_elbow" joint="right_elbow" gear="1"/>
   </actuator>
 </mujocoinclude>

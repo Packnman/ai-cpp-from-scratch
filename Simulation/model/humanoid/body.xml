@@ -5,53 +5,198 @@
     <geom name="floor" type="plane" size="5 5 0.1" rgba="0.7 0.7 0.7 1"/>
     <body name="pelvis" pos="0 0 1.0">
       <freejoint name="pelvis_free"/>
-      <geom name="pelvis_collision" type="box" size="0.14 0.10 0.10" mass="3.0"/>
+      <geom name="pelvis_collision" type="box" size="0.14 0.10 0.10"
+            mass="3.0" rgba="0 0 0 0"/>
       <body name="torso" pos="0 0 0.25">
         <joint name="waist_pitch" type="hinge" axis="0 1 0" range="-0.5 0.5"/>
-        <geom name="torso_collision" type="box" size="0.18 0.10 0.25" mass="5.0"/>
+        <geom name="torso_collision" type="box" size="0.18 0.10 0.25"
+              mass="5.0" rgba="0 0 0 0"/>
+
+        <!-- Egg-shaped rib cage. Each rib is an open six-segment oval around
+             the transparent torso collision body. x=front, y=left, z=up. -->
+        <geom name="sternum" type="capsule" fromto="0.105 0 -0.16 0.085 0 0.19"
+              size="0.012" mass="0" contype="0" conaffinity="0"
+              rgba="0.88 0.84 0.70 1"/>
+        <geom name="spine_thoracic" type="capsule" fromto="-0.085 0 -0.18 -0.080 0 0.20"
+              size="0.014" mass="0" contype="0" conaffinity="0"
+              rgba="0.82 0.78 0.65 1"/>
+
+        <!-- Rib 1: narrow upper end of the egg. -->
+        <geom name="rib_1_lf" type="capsule" fromto="0.085 0 0.16 0.070 0.115 0.16" size="0.009" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_1_ls" type="capsule" fromto="0.070 0.115 0.16 -0.055 0.115 0.16" size="0.009" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_1_lb" type="capsule" fromto="-0.055 0.115 0.16 -0.080 0 0.16" size="0.009" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_1_rf" type="capsule" fromto="0.085 0 0.16 0.070 -0.115 0.16" size="0.009" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_1_rs" type="capsule" fromto="0.070 -0.115 0.16 -0.055 -0.115 0.16" size="0.009" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_1_rb" type="capsule" fromto="-0.055 -0.115 0.16 -0.080 0 0.16" size="0.009" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+
+        <!-- Rib 2. -->
+        <geom name="rib_2_lf" type="capsule" fromto="0.105 0 0.08 0.085 0.155 0.08" size="0.010" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_2_ls" type="capsule" fromto="0.085 0.155 0.08 -0.070 0.155 0.08" size="0.010" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_2_lb" type="capsule" fromto="-0.070 0.155 0.08 -0.085 0 0.08" size="0.010" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_2_rf" type="capsule" fromto="0.105 0 0.08 0.085 -0.155 0.08" size="0.010" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_2_rs" type="capsule" fromto="0.085 -0.155 0.08 -0.070 -0.155 0.08" size="0.010" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_2_rb" type="capsule" fromto="-0.070 -0.155 0.08 -0.085 0 0.08" size="0.010" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+
+        <!-- Rib 3: widest part. -->
+        <geom name="rib_3_lf" type="capsule" fromto="0.120 0 0 0.095 0.180 0" size="0.011" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_3_ls" type="capsule" fromto="0.095 0.180 0 -0.075 0.180 0" size="0.011" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_3_lb" type="capsule" fromto="-0.075 0.180 0 -0.090 0 0" size="0.011" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_3_rf" type="capsule" fromto="0.120 0 0 0.095 -0.180 0" size="0.011" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_3_rs" type="capsule" fromto="0.095 -0.180 0 -0.075 -0.180 0" size="0.011" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_3_rb" type="capsule" fromto="-0.075 -0.180 0 -0.090 0 0" size="0.011" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+
+        <!-- Rib 4. -->
+        <geom name="rib_4_lf" type="capsule" fromto="0.115 0 -0.08 0.090 0.165 -0.08" size="0.010" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_4_ls" type="capsule" fromto="0.090 0.165 -0.08 -0.070 0.165 -0.08" size="0.010" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_4_lb" type="capsule" fromto="-0.070 0.165 -0.08 -0.085 0 -0.08" size="0.010" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_4_rf" type="capsule" fromto="0.115 0 -0.08 0.090 -0.165 -0.08" size="0.010" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_4_rs" type="capsule" fromto="0.090 -0.165 -0.08 -0.070 -0.165 -0.08" size="0.010" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_4_rb" type="capsule" fromto="-0.070 -0.165 -0.08 -0.085 0 -0.08" size="0.010" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+
+        <!-- Rib 5: narrow lower end of the egg. -->
+        <geom name="rib_5_lf" type="capsule" fromto="0.095 0 -0.15 0.075 0.125 -0.15" size="0.009" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_5_ls" type="capsule" fromto="0.075 0.125 -0.15 -0.060 0.125 -0.15" size="0.009" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_5_lb" type="capsule" fromto="-0.060 0.125 -0.15 -0.080 0 -0.15" size="0.009" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_5_rf" type="capsule" fromto="0.095 0 -0.15 0.075 -0.125 -0.15" size="0.009" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_5_rs" type="capsule" fromto="0.075 -0.125 -0.15 -0.060 -0.125 -0.15" size="0.009" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
+        <geom name="rib_5_rb" type="capsule" fromto="-0.060 -0.125 -0.15 -0.080 0 -0.15" size="0.009" mass="0" contype="0" conaffinity="0" rgba="0.88 0.84 0.70 1"/>
         <body name="head" pos="0 0 0.38">
           <joint name="neck_yaw" type="hinge" axis="0 0 1" range="-1.0 1.0"/>
-          <geom name="head_collision" type="sphere" size="0.10" mass="1.0"/>
+          <geom name="head_collision" type="sphere" size="0.10" mass="1.0"
+                rgba="0 0 0 0"/>
         </body>
-        <body name="left_upper_arm" pos="0 0.22 0.20">
-          <joint name="left_shoulder" type="ball"/>
-          <geom type="capsule" fromto="0 0 0 0 0.30 0" size="0.035" mass="0.7"/>
-          <body name="left_forearm" pos="0 0.30 0">
-            <joint name="left_elbow" type="hinge" axis="1 0 0" range="0 2.4"/>
-            <geom type="capsule" fromto="0 0 0 0 0.28 0" size="0.03" mass="0.5"/>
+        <body name="left_clavicle">
+          <geom name="left_clavicle_bone" type="capsule"
+                fromto="0.040 0 0.19 0.010 0.20 0.17" size="0.015"
+                mass="0" contype="0" conaffinity="0" rgba="0.90 0.86 0.72 1"/>
+          <body name="left_scapula" pos="0 0.20 0.17">
+            <geom name="left_scapula_upper" type="capsule"
+                  fromto="-0.075 -0.01 0.06 -0.080 0.055 -0.055" size="0.014"
+                  mass="0" contype="0" conaffinity="0" rgba="0.86 0.82 0.69 1"/>
+            <geom name="left_scapula_medial" type="capsule"
+                  fromto="-0.080 0.055 -0.055 -0.080 -0.035 -0.055" size="0.014"
+                  mass="0" contype="0" conaffinity="0" rgba="0.86 0.82 0.69 1"/>
+            <geom name="left_scapula_lateral" type="capsule"
+                  fromto="-0.080 -0.035 -0.055 -0.075 -0.01 0.06" size="0.014"
+                  mass="0" contype="0" conaffinity="0" rgba="0.86 0.82 0.69 1"/>
+            <body name="left_upper_arm" pos="0 0.02 0">
+              <joint name="left_shoulder" type="ball"/>
+              <geom name="left_humerus_collision" type="capsule"
+                    fromto="0 0 0 0 0 -0.30" size="0.035" mass="0.7" rgba="0 0 0 0"/>
+              <geom name="left_humerus_bone" type="capsule"
+                    fromto="0 0 -0.015 0 0 -0.285" size="0.022" mass="0"
+                    contype="0" conaffinity="0" rgba="0.90 0.86 0.72 1"/>
+              <geom name="left_humerus_head" type="sphere" pos="0 0 0"
+                    size="0.035" mass="0" contype="0" conaffinity="0"
+                    rgba="0.90 0.86 0.72 1"/>
+              <body name="left_forearm" pos="0 0 -0.30">
+                <joint name="left_elbow" type="hinge" axis="1 0 0" range="0 2.4"/>
+                <geom name="left_ulna_collision" type="capsule"
+                      fromto="0 0 0 0 0 -0.28" size="0.03" mass="0.5" rgba="0 0 0 0"/>
+                <geom name="left_ulna_bone" type="capsule"
+                      fromto="0 0 -0.01 0.012 0 -0.275" size="0.018" mass="0"
+                      contype="0" conaffinity="0" rgba="0.90 0.86 0.72 1"/>
+                <geom name="left_elbow_bone" type="sphere" pos="0 0 0"
+                      size="0.028" mass="0" contype="0" conaffinity="0"
+                      rgba="0.90 0.86 0.72 1"/>
+              </body>
+            </body>
           </body>
         </body>
-        <body name="right_upper_arm" pos="0 -0.22 0.20">
-          <joint name="right_shoulder" type="ball"/>
-          <geom type="capsule" fromto="0 0 0 0 -0.30 0" size="0.035" mass="0.7"/>
-          <body name="right_forearm" pos="0 -0.30 0">
-            <joint name="right_elbow" type="hinge" axis="1 0 0" range="-2.4 0"/>
-            <geom type="capsule" fromto="0 0 0 0 -0.28 0" size="0.03" mass="0.5"/>
+        <!-- Prototype-1 right shoulder is decomposed into scalar coordinates
+             so each muscle group crosses an explicit Plant boundary. Link
+             values remain provisional until CAD mass properties arrive. -->
+        <body name="right_clavicle">
+          <geom name="right_clavicle_bone" type="capsule"
+                fromto="0.040 0 0.19 0.010 -0.20 0.17" size="0.015" mass="0"
+                contype="0" conaffinity="0" rgba="0.90 0.86 0.72 1"/>
+          <body name="right_scapula" pos="0 -0.20 0.17">
+            <joint name="right_scapula_rotation" type="hinge" axis="1 0 0"
+                   range="-0.35 0.35" damping="0.20"/>
+            <geom name="right_scapula_collision" type="ellipsoid"
+                  size="0.035 0.055 0.085" mass="0.20" rgba="0 0 0 0"/>
+            <geom name="right_scapula_upper" type="capsule"
+                  fromto="-0.075 0.01 0.06 -0.080 -0.055 -0.055" size="0.014"
+                  mass="0" contype="0" conaffinity="0" rgba="0.86 0.82 0.69 1"/>
+            <geom name="right_scapula_medial" type="capsule"
+                  fromto="-0.080 -0.055 -0.055 -0.080 0.035 -0.055" size="0.014"
+                  mass="0" contype="0" conaffinity="0" rgba="0.86 0.82 0.69 1"/>
+            <geom name="right_scapula_lateral" type="capsule"
+                  fromto="-0.080 0.035 -0.055 -0.075 0.01 0.06" size="0.014"
+                  mass="0" contype="0" conaffinity="0" rgba="0.86 0.82 0.69 1"/>
+            <site name="right_serratus_origin" pos="0.02 0.03 -0.05" size="0.008"/>
+            <site name="right_trapezius_insertion" pos="-0.02 0 0.06" size="0.008"/>
+            <body name="right_upper_arm" pos="0 -0.02 0">
+              <joint name="right_shoulder_abduction" type="hinge" axis="1 0 0"
+                     range="-2.10 0.35" damping="0.25"/>
+              <joint name="right_shoulder_flexion" type="hinge" axis="0 1 0"
+                     range="-1.80 1.80" damping="0.25"/>
+              <joint name="right_shoulder_rotation" type="hinge" axis="0 0 1"
+                     range="-1.20 1.20" damping="0.20"/>
+              <geom name="right_upper_arm_collision" type="capsule"
+                    fromto="0 0 0 0 0 -0.30" size="0.042" mass="0.90"
+                    rgba="0 0 0 0"/>
+              <geom name="right_humerus_bone" type="capsule"
+                    fromto="0 0 -0.015 0 0 -0.285" size="0.022" mass="0"
+                    contype="0" conaffinity="0" rgba="0.90 0.86 0.72 1"/>
+              <geom name="right_humerus_head" type="sphere" pos="0 0 0"
+                    size="0.035" mass="0" contype="0" conaffinity="0"
+                    rgba="0.90 0.86 0.72 1"/>
+              <site name="right_deltoid_insertion" pos="0 -0.035 -0.10" size="0.008"/>
+              <site name="right_pectoralis_insertion" pos="0.035 0 -0.07" size="0.008"/>
+              <site name="right_latissimus_insertion" pos="-0.035 0 -0.08" size="0.008"/>
+              <site name="right_biceps_origin" pos="0 -0.025 -0.03" size="0.008"/>
+              <body name="right_forearm" pos="0 0 -0.30">
+                <joint name="right_elbow" type="hinge" axis="1 0 0"
+                       range="-2.4 0" damping="0.18"/>
+                <geom name="right_forearm_collision" type="capsule"
+                      fromto="0 0 0 0 0 -0.28" size="0.035" mass="0.65"
+                      rgba="0 0 0 0"/>
+                <geom name="right_ulna_bone" type="capsule"
+                      fromto="0 0 -0.01 0.012 0 -0.275" size="0.018" mass="0"
+                      contype="0" conaffinity="0" rgba="0.90 0.86 0.72 1"/>
+                <geom name="right_elbow_bone" type="sphere" pos="0 0 0"
+                      size="0.028" mass="0" contype="0" conaffinity="0"
+                      rgba="0.90 0.86 0.72 1"/>
+                <site name="right_biceps_insertion" pos="0 -0.03 -0.05" size="0.008"/>
+                <body name="right_hand" pos="0 0 -0.29">
+                  <geom name="right_hand_collision" type="box"
+                        size="0.035 0.025 0.075" pos="0 0 -0.065"
+                        mass="0.25" rgba="0 0 0 0"/>
+                </body>
+              </body>
+            </body>
           </body>
         </body>
       </body>
       <body name="left_thigh" pos="0 0.09 -0.10">
         <joint name="left_hip" type="ball"/>
-        <geom type="capsule" fromto="0 0 0 0 0 -0.38" size="0.05" mass="1.5"/>
+        <geom type="capsule" fromto="0 0 0 0 0 -0.38" size="0.05"
+              mass="1.5" rgba="0 0 0 0"/>
         <body name="left_shin" pos="0 0 -0.38">
           <joint name="left_knee" type="hinge" axis="0 1 0" range="0 2.2"/>
-          <geom type="capsule" fromto="0 0 0 0 0 -0.38" size="0.045" mass="1.1"/>
+          <geom type="capsule" fromto="0 0 0 0 0 -0.38" size="0.045"
+                mass="1.1" rgba="0 0 0 0"/>
           <body name="left_foot" pos="0 0 -0.40">
             <joint name="left_ankle" type="hinge" axis="0 1 0" range="-0.6 0.6"/>
-            <geom type="box" size="0.12 0.06 0.035" pos="0.07 0 0" mass="0.4"/>
+            <geom type="box" size="0.12 0.06 0.035" pos="0.07 0 0"
+                  mass="0.4" rgba="0 0 0 0"/>
             <site name="left_foot_contact" pos="0.07 0 -0.035" size="0.02"/>
           </body>
         </body>
       </body>
       <body name="right_thigh" pos="0 -0.09 -0.10">
         <joint name="right_hip" type="ball"/>
-        <geom type="capsule" fromto="0 0 0 0 0 -0.38" size="0.05" mass="1.5"/>
+        <geom type="capsule" fromto="0 0 0 0 0 -0.38" size="0.05"
+              mass="1.5" rgba="0 0 0 0"/>
         <body name="right_shin" pos="0 0 -0.38">
           <joint name="right_knee" type="hinge" axis="0 1 0" range="0 2.2"/>
-          <geom type="capsule" fromto="0 0 0 0 0 -0.38" size="0.045" mass="1.1"/>
+          <geom type="capsule" fromto="0 0 0 0 0 -0.38" size="0.045"
+                mass="1.1" rgba="0 0 0 0"/>
           <body name="right_foot" pos="0 0 -0.40">
             <joint name="right_ankle" type="hinge" axis="0 1 0" range="-0.6 0.6"/>
-            <geom type="box" size="0.12 0.06 0.035" pos="0.07 0 0" mass="0.4"/>
+            <geom type="box" size="0.12 0.06 0.035" pos="0.07 0 0"
+                  mass="0.4" rgba="0 0 0 0"/>
             <site name="right_foot_contact" pos="0.07 0 -0.035" size="0.02"/>
           </body>
         </body>

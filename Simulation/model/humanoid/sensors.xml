@@ -4,6 +4,16 @@
     <frameangvel name="pelvis_angular_velocity" objtype="body" objname="pelvis"/>
     <jointpos name="left_elbow_position" joint="left_elbow"/>
     <jointvel name="left_elbow_velocity" joint="left_elbow"/>
+    <jointpos name="right_scapula_position" joint="right_scapula_rotation"/>
+    <jointvel name="right_scapula_velocity" joint="right_scapula_rotation"/>
+    <jointpos name="right_shoulder_abduction_position" joint="right_shoulder_abduction"/>
+    <jointvel name="right_shoulder_abduction_velocity" joint="right_shoulder_abduction"/>
+    <jointpos name="right_shoulder_flexion_position" joint="right_shoulder_flexion"/>
+    <jointvel name="right_shoulder_flexion_velocity" joint="right_shoulder_flexion"/>
+    <jointpos name="right_shoulder_rotation_position" joint="right_shoulder_rotation"/>
+    <jointvel name="right_shoulder_rotation_velocity" joint="right_shoulder_rotation"/>
+    <jointpos name="right_elbow_position" joint="right_elbow"/>
+    <jointvel name="right_elbow_velocity" joint="right_elbow"/>
     <touch name="left_foot_touch" site="left_foot_contact"/>
     <touch name="right_foot_touch" site="right_foot_contact"/>
   </sensor>

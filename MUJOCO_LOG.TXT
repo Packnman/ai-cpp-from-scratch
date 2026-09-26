@@ -1,0 +1,2 @@
+ERROR Sat Sep 26 01:08:33 2026: OpenGL version 1.5 or higher required
+
