@@ -1,7 +1,0 @@
-{
-  "physics_dt_seconds": 0.001,
-  "actuator_dt_seconds": 0.001,
-  "control_dt_seconds": 0.01,
-  "viewer_refresh_hz": 60.0,
-  "headless": true
-}

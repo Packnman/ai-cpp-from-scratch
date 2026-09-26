@@ -1,6 +1,0 @@
-<mujocoinclude>
-  <contact>
-    <exclude body1="left_thigh" body2="left_shin"/>
-    <exclude body1="right_thigh" body2="right_shin"/>
-  </contact>
-</mujocoinclude>

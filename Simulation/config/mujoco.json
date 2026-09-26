@@ -1,6 +1,0 @@
-{
-  "version": "3.13.0",
-  "integrator": "implicitfast",
-  "model": "Simulation/model/test/single_joint.xml",
-  "notes": "Robot mass, inertia and geometry in humanoid MJCF are simulation placeholders pending CAD identification."
-}
