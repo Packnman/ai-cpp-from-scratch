@@ -1,93 +1,79 @@
-# ==============================
-# Build
-# ==============================
-build/
-cmake-build-*/
-
-# CMake generated files
+# Build trees and CMake/Ninja output
+/build/
+/build-*/
+/cmake-build-*/
 CMakeFiles/
 CMakeCache.txt
+CTestTestfile.cmake
+DartConfiguration.tcl
+Testing/
 cmake_install.cmake
-Makefile
+install_manifest.txt
 compile_commands.json
+build.ninja
+.ninja_deps
+.ninja_log
+Makefile
+CMakeUserPresets.json
 
-# ==============================
-# C / C++ / CUDA binaries
-# ==============================
+# C / C++ / CUDA build products
 *.o
 *.obj
 *.a
 *.lib
 *.so
+*.so.*
 *.dll
 *.dylib
 *.exe
 *.out
-
-# CUDA generated files
 *.ptx
 *.cubin
 *.fatbin
 
-# ==============================
-# Debug / profiling
-# ==============================
+# Debugging and profiling
+core
+core.*
+vgcore.*
 *.log
 *.prof
 *.nsys-rep
 *.ncu-rep
 
-# ==============================
-# VSCode project configuration
-# ==============================
-!.vscode/
-!.vscode/*.json
+# Local datasets, model bundles, and experiment output
+/data/
+/models/
+/experiments/
+/output/
+*.bin
+*.sqlite
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
 
-# ==============================
-# Codex
-# ==============================
-.codex-logs/
-
-# ==============================
-# OS
-# ==============================
-.DS_Store
-Thumbs.db
-
-# ==============================
-# Temporary files
-# ==============================
-*.tmp
-*.temp
-*~
+# Python and virtual environments
 __pycache__/
 *.py[cod]
-.venv-qwen/
-/tmp/
-/output/
+.venv/
+.venv-*/
 
-# ==============================
-# data/outputs
-# ==============================
-data/
-/experiments/jawiki-pretrain-sample/
-/models/
-*.bin
-docs/*
-!docs/*.md
-!docs/agent/
-!docs/agent/**
-!docs/design_subsystem/
-!docs/design_subsystem/**
-!docs/design_system/
-!docs/design_system/**
-!docs/lib/
-!docs/lib/**
-!docs/model/
-!docs/model/**
-!docs/ner/
-!docs/ner/**
-!docs/train/
-!docs/train/**
-!docs/validation/
-!docs/validation/**
+# Editor configuration is tracked; only transient editor state is ignored
+.vscode/*.log
+.vscode/ipch/
+.idea/
+*.swp
+*.swo
+*~
+
+# Codex local state
+/.codex-logs/
+
+# Temporary files
+/.cache/
+/tmp/
+*.tmp
+*.temp
+
+# OS metadata
+.DS_Store
+Thumbs.db
